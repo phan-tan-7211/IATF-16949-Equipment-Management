@@ -71,60 +71,68 @@ function doPost(e) {
       throw new Error('CONTRACT_VERSION_MISMATCH')
     }
 
-    if (body.action !== 'appendRecord') {
-      throw new Error('UNKNOWN_ACTION')
+    if (body.action === 'appendRecord') {
+      return json_(executeAppendRecord_(body, actor))
     }
 
-    const table = String(body.table || '')
-    const operationId = String(body.operationId || '')
-    const entityType = String(body.entityType || '')
-    const entityId = String(body.entityId || '')
-    const record = body.record
-
-    assertAllowedTable_(table)
-    assertWriteRole_(table, actor.role)
-
-    if (!operationId) throw new Error('OPERATION_ID_REQUIRED')
-    if (!entityType) throw new Error('ENTITY_TYPE_REQUIRED')
-    if (!entityId) throw new Error('ENTITY_ID_REQUIRED')
-    if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('RECORD_REQUIRED')
-
-    const lock = LockService.getScriptLock()
-    lock.waitLock(30000)
-
-    try {
-      const previous = findOperationResult_(operationId)
-      if (previous) {
-        return json_({ ok: true, duplicate: true, operationId: operationId, result: previous })
-      }
-
-      const appended = appendRecord_(table, record)
-      const auditId = Utilities.getUuid()
-      const result = {
-        table: table,
-        rowNumber: appended.rowNumber,
-        auditId: auditId,
-      }
-
-      appendAudit_({
-        auditId: auditId,
-        userId: actor.email,
-        action: operationAuditAction_(operationId),
-        entityType: entityType,
-        entityId: entityId,
-        newValueJson: JSON.stringify({
-          operationId: operationId,
-          result: result,
-          record: record,
-        }),
-      })
-
-      return json_({ ok: true, duplicate: false, operationId: operationId, result: result })
-    } finally {
-      lock.releaseLock()
+    if (body.action === 'maintenanceTransition') {
+      return json_(executeMaintenanceTransition_(body, actor))
     }
+
+    throw new Error('UNKNOWN_ACTION')
   } catch (error) {
     return errorJson_(error)
+  }
+}
+
+function executeAppendRecord_(body, actor) {
+  const table = String(body.table || '')
+  const operationId = String(body.operationId || '')
+  const entityType = String(body.entityType || '')
+  const entityId = String(body.entityId || '')
+  const record = body.record
+
+  assertAllowedTable_(table)
+  assertWriteRole_(table, actor.role)
+
+  if (!operationId) throw new Error('OPERATION_ID_REQUIRED')
+  if (!entityType) throw new Error('ENTITY_TYPE_REQUIRED')
+  if (!entityId) throw new Error('ENTITY_ID_REQUIRED')
+  if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('RECORD_REQUIRED')
+
+  const lock = LockService.getScriptLock()
+  lock.waitLock(30000)
+
+  try {
+    const previous = findOperationResult_('APPEND_RECORD', operationId)
+    if (previous) {
+      return { ok: true, duplicate: true, operationId: operationId, result: previous }
+    }
+
+    const appended = appendRecord_(table, record)
+    const auditId = Utilities.getUuid()
+    const result = {
+      table: table,
+      rowNumber: appended.rowNumber,
+      auditId: auditId,
+    }
+
+    appendAudit_({
+      auditId: auditId,
+      userId: actor.email,
+      action: operationAuditAction_('APPEND_RECORD', operationId),
+      entityType: entityType,
+      entityId: entityId,
+      newValueJson: JSON.stringify({
+        operationId: operationId,
+        result: result,
+        record: record,
+      }),
+    })
+
+    return { ok: true, duplicate: false, operationId: operationId, result: result }
+  } finally {
+    lock.releaseLock()
   }
 }
 
@@ -223,11 +231,11 @@ function getActiveUserEmail_() {
   return String(Session.getActiveUser().getEmail() || '').trim().toLowerCase()
 }
 
-function operationAuditAction_(operationId) {
-  return 'APPEND_RECORD:' + operationId
+function operationAuditAction_(kind, operationId) {
+  return kind + ':' + operationId
 }
 
-function findOperationResult_(operationId) {
+function findOperationResult_(kind, operationId) {
   const sheet = getSheet_('Audit_Log')
   const lastRow = sheet.getLastRow()
   if (lastRow < 2) return null
@@ -239,7 +247,7 @@ function findOperationResult_(operationId) {
 
   const match = sheet
     .getRange(2, actionColumn, lastRow - 1, 1)
-    .createTextFinder(operationAuditAction_(operationId))
+    .createTextFinder(operationAuditAction_(kind, operationId))
     .matchEntireCell(true)
     .findNext()
 
