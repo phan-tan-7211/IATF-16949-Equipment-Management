@@ -23,23 +23,30 @@ describe('equipment app shell', () => {
     const desktopNav = screen.getByLabelText('Điều hướng desktop')
     fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi phê duyệt' }))
-    expect(screen.getByText('Chờ phê duyệt', { selector: '.badge' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Phê duyệt' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu sửa chữa' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất sửa chữa' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chạy thử' }))
-    fireEvent.click(screen.getByRole('button', { name: 'BM-05: xác nhận & bàn giao' }))
+    const targetWorkOrder = screen.getByText('WO-20260828-01').closest('article')
+    expect(targetWorkOrder).not.toBeNull()
+    if (!targetWorkOrder) return
 
-    expect(screen.getByText('Đã bàn giao', { selector: '.badge' })).toBeInTheDocument()
-    expect(screen.getByText(/Bên nhận đã chấp nhận/)).toBeInTheDocument()
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Gửi phê duyệt' }))
+    expect(within(targetWorkOrder).getByText('Chờ phê duyệt', { selector: '.badge' })).toBeInTheDocument()
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Phê duyệt' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Bắt đầu sửa chữa' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Hoàn tất sửa chữa' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Xác nhận chạy thử' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'BM-05: xác nhận & bàn giao' }))
+
+    expect(within(targetWorkOrder).getByText('Đã bàn giao', { selector: '.badge' })).toBeInTheDocument()
+    expect(within(targetWorkOrder).getByText(/Bên nhận đã chấp nhận/)).toBeInTheDocument()
   })
 
   it('records workflow actions in the local audit trail', () => {
     render(<App />)
     const desktopNav = screen.getByLabelText('Điều hướng desktop')
     fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi phê duyệt' }))
+    const targetWorkOrder = screen.getByText('WO-20260828-01').closest('article')
+    expect(targetWorkOrder).not.toBeNull()
+    if (!targetWorkOrder) return
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Gửi phê duyệt' }))
     fireEvent.click(within(desktopNav).getByRole('button', { name: 'Audit & Cấu hình' }))
 
     expect(screen.getByRole('heading', { name: 'Audit Trail & BM-05' })).toBeInTheDocument()
@@ -54,6 +61,6 @@ describe('equipment app shell', () => {
     expect(screen.getByRole('heading', { name: 'Calibration Master' })).toBeInTheDocument()
     expect(screen.getByText(/dữ liệu lịch sử để đối chiếu và lập kế hoạch/i)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'So sánh chi phí hiệu chuẩn 2024' })).toBeInTheDocument()
-    expect(screen.getByText('G.TECH')).toBeInTheDocument()
+    expect(screen.getAllByText('G.TECH').length).toBeGreaterThanOrEqual(1)
   })
 })
