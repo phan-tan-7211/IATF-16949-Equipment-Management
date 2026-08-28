@@ -28,8 +28,27 @@ export const CalibrationMasterSchema = z.object({
   active: z.boolean(),
 })
 
+export const CalibrationVendorQuoteSchema = z.object({
+  calibrationEquipmentId: NonEmpty,
+  provider: NonEmpty,
+  amountVnd: z.number().int().nonnegative(),
+  sourceDate: IsoDate,
+  sourceDocument: NonEmpty,
+})
+
+export const CalibrationQuoteSummarySchema = z.object({
+  provider: NonEmpty,
+  itemCount: z.number().int().nonnegative(),
+  subtotalVnd: z.number().int().nonnegative(),
+  vatRate: z.number().min(0).max(1),
+  totalVnd: z.number().int().nonnegative(),
+  sourceDate: IsoDate,
+})
+
 export type CalibrationMaster = z.infer<typeof CalibrationMasterSchema>
 export type CalibrationDueStatus = z.infer<typeof CalibrationDueStatusSchema>
+export type CalibrationVendorQuote = z.infer<typeof CalibrationVendorQuoteSchema>
+export type CalibrationQuoteSummary = z.infer<typeof CalibrationQuoteSummarySchema>
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
