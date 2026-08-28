@@ -39,6 +39,12 @@ function doGet(e) {
   try {
     const action = String((e && e.parameter && e.parameter.action) || 'health')
 
+    if (action === 'app') {
+      const template = HtmlService.createTemplateFromFile('AppShell')
+      template.contractVersion = APP_CONFIG.contractVersion
+      return template.evaluate().setTitle('CEV Equipment · Apps Script')
+    }
+
     if (action === 'bridge') {
       const template = HtmlService.createTemplateFromFile('Bridge')
       template.allowedOriginsJson = JSON.stringify(getAllowedParentOrigins_())
