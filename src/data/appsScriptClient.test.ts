@@ -1,0 +1,76 @@
+import { describe, expect, it, vi } from 'vitest'
+import { AppsScriptPersistenceError, createAppsScriptClient } from './appsScriptClient'
+
+const WEB_APP_URL = 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec'
+
+function jsonResponse(payload: unknown) {
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+describe('Apps Script persistence client', () => {
+  it('fails closed when the deployment URL is missing', async () => {
+    const client = createAppsScriptClient({ webAppUrl: '' })
+    await expect(client.health()).rejects.toEqual(new AppsScriptPersistenceError('APPS_SCRIPT_WEB_APP_URL_NOT_CONFIGURED'))
+  })
+
+  it('rejects non Apps Script deployment URLs', async () => {
+    const client = createAppsScriptClient({ webAppUrl: 'https://example.com/exec' })
+    await expect(client.health()).rejects.toEqual(new AppsScriptPersistenceError('APPS_SCRIPT_WEB_APP_URL_NOT_ALLOWED'))
+  })
+
+  it('reads an allowlisted G1 table', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input))
+      expect(url.searchParams.get('action')).toBe('readTable')
+      expect(url.searchParams.get('table')).toBe('Equipment_Master')
+      return jsonResponse({ ok: true, table: 'Equipment_Master', actor: 'user@example.com', rows: [{ equipmentId: 'CNC-001' }] })
+    })
+
+    const client = createAppsScriptClient({ webAppUrl: WEB_APP_URL, fetchImpl: fetchImpl as typeof fetch })
+    await expect(client.readTable<{ equipmentId: string }>('Equipment_Master')).resolves.toEqual([{ equipmentId: 'CNC-001' }])
+  })
+
+  it('posts JSON as text/plain and carries the frozen contract plus operation id', async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method).toBe('POST')
+      expect(init?.headers).toEqual({ 'Content-Type': 'text/plain;charset=UTF-8' })
+      const body = JSON.parse(String(init?.body))
+      expect(body.contractVersion).toBe('G1-frozen-2026-08-28')
+      expect(body.operationId).toBe('op-001')
+      expect(body.table).toBe('Maintenance_Work_Order')
+      return jsonResponse({
+        ok: true,
+        duplicate: false,
+        operationId: 'op-001',
+        result: { table: 'Maintenance_Work_Order', rowNumber: 2, auditId: 'audit-001' },
+      })
+    })
+
+    const client = createAppsScriptClient({ webAppUrl: WEB_APP_URL, fetchImpl: fetchImpl as typeof fetch })
+    const result = await client.appendRecord({
+      table: 'Maintenance_Work_Order',
+      operationId: 'op-001',
+      entityType: 'MAINTENANCE',
+      entityId: 'WO-001',
+      record: { workOrderId: 'WO-001' },
+    })
+
+    expect(result.result.auditId).toBe('audit-001')
+  })
+
+  it('surfaces Apps Script domain errors without treating them as successful writes', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ ok: false, error: 'ROLE_NOT_ALLOWED' }))
+    const client = createAppsScriptClient({ webAppUrl: WEB_APP_URL, fetchImpl: fetchImpl as typeof fetch })
+
+    await expect(client.appendRecord({
+      table: 'Maintenance_Work_Order',
+      operationId: 'op-002',
+      entityType: 'MAINTENANCE',
+      entityId: 'WO-002',
+      record: { workOrderId: 'WO-002' },
+    })).rejects.toEqual(new AppsScriptPersistenceError('ROLE_NOT_ALLOWED'))
+  })
+})
