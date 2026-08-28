@@ -33,4 +33,4 @@ export const EVIDENCE_FOLDERS = [
   'official-pdf-snapshots',
 ] as const
 
-export const PERSISTENCE_CONTRACT_VERSION = 'G1-candidate-2026-08-28'
+export const PERSISTENCE_CONTRACT_VERSION = 'G1-frozen-2026-08-28'
