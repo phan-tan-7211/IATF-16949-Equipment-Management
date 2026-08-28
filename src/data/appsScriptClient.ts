@@ -1,5 +1,6 @@
 import { GOOGLE_PERSISTENCE_CONFIG } from '../domain/persistenceConfig'
 import { PERSISTENCE_TABLES } from '../domain/persistenceContract'
+import type { MaintenanceWorkflowAction } from '../domain/workflow'
 
 type PersistenceTable = (typeof PERSISTENCE_TABLES)[number]
 
@@ -38,6 +39,25 @@ type AppendRecordResponse = {
   result: {
     table: string
     rowNumber: number
+    auditId: string
+  }
+}
+
+type MaintenanceTransitionInput = {
+  workOrderId: string
+  workflowAction: MaintenanceWorkflowAction
+  operationId: string
+}
+
+type MaintenanceTransitionResponse = {
+  ok: true
+  duplicate: boolean
+  operationId: string
+  result: {
+    workOrderId: string
+    previousStatus: string
+    status: string
+    executionId: string | null
     auditId: string
   }
 }
@@ -89,6 +109,18 @@ export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl
   const fetchImpl = options?.fetchImpl ?? fetch
   const getUrl = () => resolveWebAppUrl(options?.webAppUrl)
 
+  const postJson = async <T>(payload: Record<string, unknown>): Promise<T> => parseResponse<T>(await fetchImpl(getUrl(), {
+    method: 'POST',
+    redirect: 'follow',
+    headers: {
+      'Content-Type': 'text/plain;charset=UTF-8',
+    },
+    body: JSON.stringify({
+      ...payload,
+      contractVersion: GOOGLE_PERSISTENCE_CONFIG.contractVersion,
+    }),
+  }))
+
   return {
     async health(): Promise<AppsScriptHealthResponse> {
       const url = new URL(getUrl())
@@ -116,22 +148,26 @@ export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl
       assertAllowedTable(input.table)
       if (!input.operationId.trim()) throw new AppsScriptPersistenceError('OPERATION_ID_REQUIRED')
 
-      return parseResponse<AppendRecordResponse>(await fetchImpl(getUrl(), {
-        method: 'POST',
-        redirect: 'follow',
-        headers: {
-          'Content-Type': 'text/plain;charset=UTF-8',
-        },
-        body: JSON.stringify({
-          action: 'appendRecord',
-          contractVersion: GOOGLE_PERSISTENCE_CONFIG.contractVersion,
-          table: input.table,
-          operationId: input.operationId,
-          entityType: input.entityType,
-          entityId: input.entityId,
-          record: input.record,
-        }),
-      }))
+      return postJson<AppendRecordResponse>({
+        action: 'appendRecord',
+        table: input.table,
+        operationId: input.operationId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        record: input.record,
+      })
+    },
+
+    async transitionMaintenance(input: MaintenanceTransitionInput): Promise<MaintenanceTransitionResponse> {
+      if (!input.workOrderId.trim()) throw new AppsScriptPersistenceError('WORK_ORDER_ID_REQUIRED')
+      if (!input.operationId.trim()) throw new AppsScriptPersistenceError('OPERATION_ID_REQUIRED')
+
+      return postJson<MaintenanceTransitionResponse>({
+        action: 'maintenanceTransition',
+        workOrderId: input.workOrderId,
+        workflowAction: input.workflowAction,
+        operationId: input.operationId,
+      })
     },
   }
 }
