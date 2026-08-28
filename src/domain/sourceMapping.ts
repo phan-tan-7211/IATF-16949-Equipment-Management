@@ -11,6 +11,7 @@ export const SOURCE_DOCUMENTS = [
   { code: 'CEV-BM-TBSX-10', name: 'Kế hoạch kiểm tra, bảo trì jig và thay mới dụng cụ nhanh hỏng', module: 'TOOLING', recordType: 'PLAN' },
   { code: 'CEV-BM-TBSX-11', name: 'Hồ sơ thay đổi thiết kế, sửa đổi dụng cụ', module: 'TOOLING', recordType: 'CHANGE_CONTROL' },
   { code: 'CEV-BM-KTTBHN', name: 'Kiểm tra thiết bị hàng ngày', module: 'INSPECTION', recordType: 'DAILY_CHECK' },
+  { code: 'CEV-BM-STCL-03', name: 'Danh mục thiết bị kiểm tra / hiệu chuẩn', module: 'CALIBRATION', recordType: 'MASTER_AND_VENDOR_QUOTE' },
 ] as const
 
 export const SOURCE_FIRST_WORKFLOW = [
@@ -27,6 +28,6 @@ export const SOURCE_FIRST_WORKFLOW = [
 export const SOURCE_POLICY = {
   sourceOfTruth: 'source/',
   principle: 'Nhập dữ liệu một lần, tái sử dụng để tạo biểu mẫu và KPI.',
-  financialScope: 'Không quản lý giá tiền/chi phí trong V1 dù biểu mẫu gốc có trường tài chính.',
+  financialScope: 'Giữ dữ liệu chi phí/báo giá khi có trong source; tách khỏi master vận hành và ghi rõ mốc lịch sử để không bị hiểu là giá live.',
   persistencePhase: 'Chỉ kết nối Google Sheets/Drive sau khi schema và workflow được chốt.',
 } as const
