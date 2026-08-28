@@ -63,4 +63,17 @@ describe('equipment app shell', () => {
     expect(screen.getByRole('heading', { name: 'So sánh chi phí hiệu chuẩn 2024' })).toBeInTheDocument()
     expect(screen.getAllByText('G.TECH').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('exposes every workspace from the mobile navigation', () => {
+    render(<App />)
+    const mobileNav = screen.getByLabelText('Điều hướng mobile')
+    const expectedItems = ['Tổng quan', 'Thiết bị', 'Kiểm tra ngày', 'Bảo trì', 'Jig & Tooling', 'Hiệu chuẩn', 'Audit & Cấu hình']
+
+    expectedItems.forEach((label) => {
+      expect(within(mobileNav).getByRole('button', { name: label })).toBeInTheDocument()
+    })
+
+    fireEvent.click(within(mobileNav).getByRole('button', { name: 'Audit & Cấu hình' }))
+    expect(screen.getByRole('heading', { name: 'Audit Trail & BM-05' })).toBeInTheDocument()
+  })
 })
