@@ -4,6 +4,8 @@ import { PwaStatus } from './PwaStatus'
 import { CALIBRATION_SOURCE_SNAPSHOT, mockCalibrationMaster } from './data/calibrationData'
 import { mockEquipment, mockInspections, mockPlans, mockTooling, mockWorkOrders } from './data/mockData'
 import { getCalibrationDueStatus } from './domain/calibration'
+import type { MaintenanceWorkOrder } from './domain/models'
+import { transitionMaintenanceStatus, type MaintenanceWorkflowAction, type MaintenanceWorkflowStatus } from './domain/workflow'
 
 type View = 'dashboard' | 'equipment' | 'inspection' | 'maintenance' | 'tooling' | 'calibration' | 'settings'
 const NAV: Array<{ id: View; label: string }> = [
@@ -12,16 +14,23 @@ const NAV: Array<{ id: View; label: string }> = [
 ]
 const statusLabel: Record<string, string> = {
   RUNNING: 'Hoạt động', DOWN: 'DOWN', MAINTENANCE: 'Bảo trì', STOPPED: 'Dừng', DISPOSED: 'Thanh lý',
-  OPEN: 'Mở', IN_PROGRESS: 'Đang xử lý', VERIFIED: 'Đã xác nhận', DUE_SOON: 'Sắp đến hạn', OVERDUE: 'Quá hạn',
-  VALID: 'Còn hiệu lực', NO_PLAN: 'Chưa có kế hoạch', V: 'V · Tốt', STOP_REPAIR: 'X · Dừng sửa chữa',
+  OPEN: 'Mở', IN_PROGRESS: 'Đang xử lý', COMPLETED: 'Đã hoàn tất', VERIFIED: 'Đã xác nhận', RELEASED: 'Đã bàn giao',
+  DUE_SOON: 'Sắp đến hạn', OVERDUE: 'Quá hạn', VALID: 'Còn hiệu lực', NO_PLAN: 'Chưa có kế hoạch',
+  V: 'V · Tốt', STOP_REPAIR: 'X · Dừng sửa chữa',
 }
 const CALIBRATION_AS_OF_DATE = '2026-08-28'
+const workflowActionByStatus: Partial<Record<MaintenanceWorkflowStatus, { action: MaintenanceWorkflowAction; label: string }>> = {
+  OPEN: { action: 'START', label: 'Bắt đầu sửa chữa' },
+  IN_PROGRESS: { action: 'COMPLETE', label: 'Hoàn tất sửa chữa' },
+  COMPLETED: { action: 'VERIFY', label: 'Xác nhận chạy thử' },
+  VERIFIED: { action: 'RELEASE', label: 'Bàn giao thiết bị' },
+}
 
-function Dashboard() {
+function Dashboard({ workOrders }: { workOrders: MaintenanceWorkOrder[] }) {
   const running = mockEquipment.filter((x) => x.status === 'RUNNING').length
   const down = mockEquipment.filter((x) => x.status === 'DOWN').length
   const overdue = mockPlans.filter((x) => x.status === 'OVERDUE').length
-  const criticalWo = mockWorkOrders.filter((x) => x.priority === 'CRITICAL' && x.status !== 'RELEASED').length
+  const criticalWo = workOrders.filter((x) => x.priority === 'CRITICAL' && x.status !== 'RELEASED').length
   return <div className="stack">
     <section className="hero-card" aria-labelledby="dashboard-title"><div><p className="eyebrow">IATF 16949 · Source-driven</p><h2 id="dashboard-title">Thiết bị trong tầm kiểm soát</h2><p>Dữ liệu demo đang chạy local theo BM-01~11 và BM-KTTBHN. Chưa kết nối Google Sheets/Drive.</p></div><button className="primary-action" type="button" aria-label="Quét mã QR thiết bị">Quét QR</button></section>
     <section className="metric-grid" aria-label="KPI kỹ thuật"><article><span>Thiết bị hoạt động</span><strong>{running}</strong><small>Equipment Master</small></article><article><span>Máy đang DOWN</span><strong>{down}</strong><small>BM-06 / downtime</small></article><article><span>PM quá hạn</span><strong>{overdue}</strong><small>BM-TBSX-03</small></article><article><span>WO khẩn cấp</span><strong>{criticalWo}</strong><small>BM-KTTBHN → WO</small></article></section>
@@ -37,8 +46,11 @@ function InspectionView() {
   return <div className="stack"><section className="content-card" aria-labelledby="inspection-title"><div className="section-heading"><div><p className="eyebrow">BM-KTTBHN</p><h2 id="inspection-title">Kiểm tra thiết bị hàng ngày</h2></div><button className="secondary-action" type="button">Quét QR & kiểm tra</button></div><p className="muted">V = tốt · ○ = sửa gấp · △ = cần bảo trì · X = hư hỏng, dừng máy. Kết quả X sẽ tạo Work Order và Downtime Event.</p></section>{mockInspections.map(i=><article className="record-card" key={i.inspectionId}><div><b>{i.equipmentId}</b><span>{i.inspectionDate} · {i.shift}</span></div><span className={`badge ${i.overallMark === 'STOP_REPAIR' ? 'down' : 'running'}`}>{statusLabel[i.overallMark]}</span><p>{i.note ?? 'Không có bất thường'}</p></article>)}</div>
 }
 
-function MaintenanceView() {
-  return <div className="stack"><section className="content-card" aria-labelledby="maintenance-title"><div className="section-heading"><div><p className="eyebrow">BM-03 · 07 · 08 · 04 · 05</p><h2 id="maintenance-title">Bảo trì & sửa chữa</h2></div><button className="secondary-action" type="button">+ Work Order</button></div><div className="kanban" aria-label="Trạng thái Work Order">{['OPEN','IN_PROGRESS','VERIFIED'].map(s=><section className="kanban-col" key={s} aria-labelledby={`wo-${s}`}><h3 id={`wo-${s}`}>{statusLabel[s] ?? s}</h3>{mockWorkOrders.filter(w=>w.status===s).map(w=><article key={w.workOrderId}><b>{w.workOrderId}</b><span>{w.equipmentId}</span><p>{w.reason}</p><small>{w.priority} · {w.sourceType}</small></article>)}</section>)}</div></section><section className="content-card" aria-labelledby="pm-title"><p className="eyebrow">BM-TBSX-03</p><h3 id="pm-title">Kế hoạch PM</h3><div className="list">{mockPlans.map(p=><div key={p.planId}><span><b>{p.equipmentId}</b> · {p.maintenanceType}</span><span>{p.plannedDate} <em className={`badge ${p.status === 'OVERDUE' ? 'down' : ''}`}>{statusLabel[p.status]}</em></span></div>)}</div></section></div>
+function MaintenanceView({ workOrders, onAdvance, message }: { workOrders: MaintenanceWorkOrder[]; onAdvance: (id: string, action: MaintenanceWorkflowAction) => void; message: string }) {
+  return <div className="stack">
+    <section className="content-card" aria-labelledby="maintenance-title"><div className="section-heading"><div><p className="eyebrow">BM-03 · 07 · 08 · 04 · 05</p><h2 id="maintenance-title">Bảo trì & sửa chữa</h2></div><button className="secondary-action" type="button">+ Work Order</button></div><p className="muted">Trình tự bắt buộc: Bắt đầu → Hoàn tất sửa chữa → Xác nhận chạy thử → Bàn giao. Không cho phép bỏ qua bước.</p><div className="stack" aria-label="Danh sách Work Order">{workOrders.map(w=>{ const status = w.status as MaintenanceWorkflowStatus; const next = workflowActionByStatus[status]; return <article className="record-card" key={w.workOrderId}><div><b>{w.workOrderId}</b><span>{w.equipmentId} · {w.priority} · {w.sourceType}</span></div><span className={`badge ${status === 'RELEASED' ? 'running' : status === 'OPEN' ? 'down' : 'maintenance'}`}>{statusLabel[status] ?? status}</span><p>{w.reason}</p>{next ? <button className="secondary-action" type="button" onClick={()=>onAdvance(w.workOrderId,next.action)}>{next.label}</button> : <span className="muted">Workflow hoàn tất</span>}</article>})}</div><div className="sr-only" aria-live="polite" aria-atomic="true">{message}</div></section>
+    <section className="content-card" aria-labelledby="pm-title"><p className="eyebrow">BM-TBSX-03</p><h3 id="pm-title">Kế hoạch PM</h3><div className="list">{mockPlans.map(p=><div key={p.planId}><span><b>{p.equipmentId}</b> · {p.maintenanceType}</span><span>{p.plannedDate} <em className={`badge ${p.status === 'OVERDUE' ? 'down' : ''}`}>{statusLabel[p.status]}</em></span></div>)}</div></section>
+  </div>
 }
 
 function ToolingView() {
@@ -52,10 +64,7 @@ function CalibrationView() {
   const missingControl = rows.filter((item) => !item.controlNumber).length
 
   return <div className="stack">
-    <section className="content-card" aria-labelledby="calibration-title">
-      <div className="section-heading"><div><p className="eyebrow">CEV-BM-STCL-03 · Source snapshot</p><h2 id="calibration-title">Calibration Master</h2></div><span className="status-pill">SOURCE {CALIBRATION_SOURCE_SNAPSHOT}</span></div>
-      <p className="muted">Dữ liệu dưới đây là mẫu lịch sử trích từ danh mục hiệu chuẩn 2024 để xác nhận schema/UI, không phải trạng thái thiết bị live hiện tại. Chi phí nhà cung cấp không được đưa vào hệ thống.</p>
-    </section>
+    <section className="content-card" aria-labelledby="calibration-title"><div className="section-heading"><div><p className="eyebrow">CEV-BM-STCL-03 · Source snapshot</p><h2 id="calibration-title">Calibration Master</h2></div><span className="status-pill">SOURCE {CALIBRATION_SOURCE_SNAPSHOT}</span></div><p className="muted">Dữ liệu dưới đây là mẫu lịch sử trích từ danh mục hiệu chuẩn 2024 để xác nhận schema/UI, không phải trạng thái thiết bị live hiện tại. Chi phí nhà cung cấp không được đưa vào hệ thống.</p></section>
     <section className="metric-grid" aria-label="Tóm tắt dữ liệu hiệu chuẩn mẫu"><article><span>Mẫu đang hiển thị</span><strong>{rows.length}</strong><small>Trong 48 dòng nguồn 2024</small></article><article><span>Quá hạn theo 28/08/2026</span><strong>{overdue}</strong><small>Chỉ tính từ snapshot lịch sử</small></article><article><span>Chưa có kế hoạch</span><strong>{noPlan}</strong><small>Không có next due trong nguồn</small></article><article><span>Thiếu số kiểm soát</span><strong>{missingControl}</strong><small>Dùng ID nội bộ ổn định</small></article></section>
     <section className="content-card" aria-labelledby="calibration-list-title"><div className="section-heading"><div><p className="eyebrow">Master + due status</p><h3 id="calibration-list-title">Thiết bị đo & kế hoạch hiệu chuẩn</h3></div><button className="secondary-action" type="button">+ Thiết bị đo</button></div><div className="table-wrap"><table><caption className="sr-only">Danh sách thiết bị đo lấy mẫu từ nguồn hiệu chuẩn 2024</caption><thead><tr><th scope="col">Số kiểm soát</th><th scope="col">Thiết bị</th><th scope="col">Bộ phận</th><th scope="col">Thông số / chính xác</th><th scope="col">Hiệu chuẩn gần nhất</th><th scope="col">Kế hoạch tiếp theo</th><th scope="col">Trạng thái</th></tr></thead><tbody>{rows.map(item=><tr key={item.calibrationEquipmentId}><td><b>{item.controlNumber ?? 'Chưa cấp'}</b><small>{item.calibrationEquipmentId}</small></td><td>{item.instrumentName}<small>{[item.model,item.manufacturer,item.serialNumber].filter(Boolean).join(' · ') || '—'}</small></td><td>{item.department ?? '—'}</td><td>{item.specification ?? '—'}<small>{item.accuracy ? `Độ chính xác: ${item.accuracy}` : item.purpose ?? '—'}</small></td><td>{item.lastCalibrationDate ?? '—'}</td><td>{item.nextDueDate ?? '—'}</td><td><span className={`badge ${item.dueStatus === 'OVERDUE' ? 'down' : item.dueStatus === 'VALID' ? 'running' : 'maintenance'}`}>{statusLabel[item.dueStatus]}</span></td></tr>)}</tbody></table></div></section>
   </div>
@@ -67,6 +76,18 @@ function Placeholder({title,description}:{title:string;description:string}) {
 
 export default function App() {
   const [view,setView]=useState<View>('dashboard')
+  const [workOrders,setWorkOrders]=useState<MaintenanceWorkOrder[]>(mockWorkOrders)
+  const [workflowMessage,setWorkflowMessage]=useState('')
   const active=useMemo(()=>NAV.find(i=>i.id===view)??NAV[0],[view])
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Bỏ qua điều hướng</a><PwaStatus/><aside className="sidebar" aria-label="Điều hướng desktop"><div className="brand"><span className="brand-mark" aria-hidden="true">CEV</span><div><strong>Equipment</strong><small>IATF 16949</small></div></div><nav>{NAV.map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav><div className="sidebar-note">Source-first · Local phase<br/>Google: chưa kết nối</div></aside><div className="app-body"><header className="topbar"><div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div><span className="connection-pill" aria-label="Trạng thái dữ liệu: local workflow">LOCAL WORKFLOW</span></header><main id="main-content" className="main-content" tabIndex={-1}>{view==='dashboard'?<Dashboard/>:null}{view==='equipment'?<EquipmentView/>:null}{view==='inspection'?<InspectionView/>:null}{view==='maintenance'?<MaintenanceView/>:null}{view==='tooling'?<ToolingView/>:null}{view==='calibration'?<CalibrationView/>:null}{view==='settings'?<Placeholder title="Cấu hình hệ thống" description="Google Sheets/Drive chỉ được bật sau Schema Freeze (G1)."/>:null}</main></div><nav className="bottom-nav" aria-label="Điều hướng mobile">{NAV.slice(0,4).map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav></div>
+
+  const advanceWorkOrder = (id: string, action: MaintenanceWorkflowAction) => {
+    setWorkOrders(current => current.map(workOrder => {
+      if (workOrder.workOrderId !== id) return workOrder
+      const nextStatus = transitionMaintenanceStatus(workOrder.status as MaintenanceWorkflowStatus, action)
+      setWorkflowMessage(`${id}: ${statusLabel[nextStatus]}`)
+      return { ...workOrder, status: nextStatus }
+    }))
+  }
+
+  return <div className="app-shell"><a className="skip-link" href="#main-content">Bỏ qua điều hướng</a><PwaStatus/><aside className="sidebar" aria-label="Điều hướng desktop"><div className="brand"><span className="brand-mark" aria-hidden="true">CEV</span><div><strong>Equipment</strong><small>IATF 16949</small></div></div><nav>{NAV.map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav><div className="sidebar-note">Source-first · Local phase<br/>Google: chưa kết nối</div></aside><div className="app-body"><header className="topbar"><div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div><span className="connection-pill" aria-label="Trạng thái dữ liệu: local workflow">LOCAL WORKFLOW</span></header><main id="main-content" className="main-content" tabIndex={-1}>{view==='dashboard'?<Dashboard workOrders={workOrders}/>:null}{view==='equipment'?<EquipmentView/>:null}{view==='inspection'?<InspectionView/>:null}{view==='maintenance'?<MaintenanceView workOrders={workOrders} onAdvance={advanceWorkOrder} message={workflowMessage}/>:null}{view==='tooling'?<ToolingView/>:null}{view==='calibration'?<CalibrationView/>:null}{view==='settings'?<Placeholder title="Cấu hình hệ thống" description="Google Sheets/Drive chỉ được bật sau Schema Freeze (G1)."/>:null}</main></div><nav className="bottom-nav" aria-label="Điều hướng mobile">{NAV.slice(0,4).map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav></div>
 }
