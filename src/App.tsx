@@ -1,84 +1,32 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import './App.css'
 import { PwaStatus } from './PwaStatus'
-import { CORE_SHEET_NAMES } from './domain/models'
+import { mockEquipment, mockInspections, mockPlans, mockTooling, mockWorkOrders } from './data/mockData'
 
-type View = 'dashboard' | 'equipment' | 'maintenance' | 'calibration' | 'settings'
-
+type View = 'dashboard' | 'equipment' | 'inspection' | 'maintenance' | 'tooling' | 'calibration' | 'settings'
 const NAV: Array<{ id: View; label: string }> = [
-  { id: 'dashboard', label: 'Tổng quan' },
-  { id: 'equipment', label: 'Thiết bị' },
-  { id: 'maintenance', label: 'Bảo trì' },
-  { id: 'calibration', label: 'Hiệu chuẩn' },
-  { id: 'settings', label: 'Cài đặt' },
+  { id: 'dashboard', label: 'Tổng quan' }, { id: 'equipment', label: 'Thiết bị' }, { id: 'inspection', label: 'Kiểm tra ngày' },
+  { id: 'maintenance', label: 'Bảo trì' }, { id: 'tooling', label: 'Jig & Tooling' }, { id: 'calibration', label: 'Hiệu chuẩn' }, { id: 'settings', label: 'Cài đặt' },
 ]
+const statusLabel: Record<string, string> = { RUNNING: 'Hoạt động', DOWN: 'DOWN', MAINTENANCE: 'Bảo trì', STOPPED: 'Dừng', DISPOSED: 'Thanh lý', OPEN: 'Mở', IN_PROGRESS: 'Đang xử lý', DUE_SOON: 'Sắp đến hạn', OVERDUE: 'Quá hạn', V: 'V · Tốt', STOP_REPAIR: 'X · Dừng sửa chữa' }
 
 function Dashboard() {
-  return (
-    <div className="stack">
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">IATF 16949 · Equipment Control</p>
-          <h2>Thiết bị trong tầm kiểm soát</h2>
-          <p>Khung ứng dụng đã sẵn sàng cho Equipment Master, bảo trì, hiệu chuẩn, PM, di dời và audit trail.</p>
-        </div>
-        <button className="primary-action" type="button">Quét QR</button>
-      </section>
-
-      <section className="metric-grid" aria-label="KPI kỹ thuật">
-        <article><span>Thiết bị hoạt động</span><strong>—</strong><small>Chờ kết nối dữ liệu</small></article>
-        <article><span>Máy đang DOWN</span><strong>—</strong><small>Maintenance status</small></article>
-        <article><span>PM quá hạn</span><strong>—</strong><small>Preventive maintenance</small></article>
-        <article><span>Calibration sắp hạn</span><strong>—</strong><small>QC equipment</small></article>
-      </section>
-
-      <section className="content-card">
-        <div className="section-heading"><div><p className="eyebrow">Phase 1</p><h3>Database cốt lõi</h3></div><span className="status-pill">SCHEMA READY</span></div>
-        <div className="chip-list">{CORE_SHEET_NAMES.map((name) => <span key={name}>{name}</span>)}</div>
-        <p className="muted">Frontend chưa chứa Google credential. Kết nối Google Sheets sẽ đi qua backend API ở phase tiếp theo.</p>
-      </section>
-    </div>
-  )
+  const running = mockEquipment.filter((x) => x.status === 'RUNNING').length
+  const down = mockEquipment.filter((x) => x.status === 'DOWN').length
+  const overdue = mockPlans.filter((x) => x.status === 'OVERDUE').length
+  const criticalWo = mockWorkOrders.filter((x) => x.priority === 'CRITICAL' && x.status !== 'RELEASED').length
+  return <div className="stack">
+    <section className="hero-card"><div><p className="eyebrow">IATF 16949 · Source-driven</p><h2>Thiết bị trong tầm kiểm soát</h2><p>Dữ liệu demo đang chạy local theo BM-01~11 và BM-KTTBHN. Chưa kết nối Google Sheets/Drive.</p></div><button className="primary-action" type="button">Quét QR</button></section>
+    <section className="metric-grid" aria-label="KPI kỹ thuật"><article><span>Thiết bị hoạt động</span><strong>{running}</strong><small>Equipment Master</small></article><article><span>Máy đang DOWN</span><strong>{down}</strong><small>BM-06 / downtime</small></article><article><span>PM quá hạn</span><strong>{overdue}</strong><small>BM-TBSX-03</small></article><article><span>WO khẩn cấp</span><strong>{criticalWo}</strong><small>BM-KTTBHN → WO</small></article></section>
+    <section className="content-card"><div className="section-heading"><div><p className="eyebrow">Workflow</p><h3>Luồng hồ sơ số hóa</h3></div><span className="status-pill">LOCAL DATA</span></div><div className="flow">Kiểm tra ngày <b>→</b> Work Order <b>→</b> Thực hiện <b>→</b> Kết quả <b>→</b> Bàn giao <b>→</b> KPI</div></section>
+  </div>
 }
-
-function Placeholder({ title, description, action }: { title: string; description: string; action: string }) {
-  return (
-    <section className="content-card empty-state">
-      <p className="eyebrow">Workspace</p>
-      <h2>{title}</h2>
-      <p>{description}</p>
-      <button type="button" className="secondary-action">{action}</button>
-    </section>
-  )
-}
-
+function EquipmentView() { return <section className="content-card"><div className="section-heading"><div><p className="eyebrow">BM-TBSX-01 · 02</p><h2>Equipment Master</h2></div><button className="secondary-action">+ Thiết bị</button></div><div className="table-wrap"><table><thead><tr><th>Mã</th><th>Thiết bị</th><th>Khu vực</th><th>Criticality</th><th>Trạng thái</th></tr></thead><tbody>{mockEquipment.map(e=><tr key={e.equipmentId}><td><b>{e.equipmentId}</b></td><td>{e.equipmentName}<small>{e.model ?? '—'}</small></td><td>{e.currentArea}</td><td>{e.criticality}</td><td><span className={`badge ${e.status.toLowerCase()}`}>{statusLabel[e.status]}</span></td></tr>)}</tbody></table></div></section> }
+function InspectionView() { return <div className="stack"><section className="content-card"><div className="section-heading"><div><p className="eyebrow">BM-KTTBHN</p><h2>Kiểm tra thiết bị hàng ngày</h2></div><button className="secondary-action">Quét QR & kiểm tra</button></div><p className="muted">V = tốt · ○ = sửa gấp · △ = cần bảo trì · X = hư hỏng, dừng máy. Kết quả X sẽ tạo Work Order và Downtime Event.</p></section>{mockInspections.map(i=><section className="record-card" key={i.inspectionId}><div><b>{i.equipmentId}</b><span>{i.inspectionDate} · {i.shift}</span></div><span className={`badge ${i.overallMark === 'STOP_REPAIR' ? 'down' : 'running'}`}>{statusLabel[i.overallMark]}</span><p>{i.note ?? 'Không có bất thường'}</p></section>)}</div> }
+function MaintenanceView() { return <div className="stack"><section className="content-card"><div className="section-heading"><div><p className="eyebrow">BM-03 · 07 · 08 · 04 · 05</p><h2>Bảo trì & sửa chữa</h2></div><button className="secondary-action">+ Work Order</button></div><div className="kanban">{['OPEN','IN_PROGRESS','VERIFIED'].map(s=><div className="kanban-col" key={s}><h3>{statusLabel[s] ?? s}</h3>{mockWorkOrders.filter(w=>w.status===s).map(w=><article key={w.workOrderId}><b>{w.workOrderId}</b><span>{w.equipmentId}</span><p>{w.reason}</p><small>{w.priority} · {w.sourceType}</small></article>)}</div>)}</div></section><section className="content-card"><p className="eyebrow">BM-TBSX-03</p><h3>Kế hoạch PM</h3><div className="list">{mockPlans.map(p=><div key={p.planId}><span><b>{p.equipmentId}</b> · {p.maintenanceType}</span><span>{p.plannedDate} <em className={`badge ${p.status === 'OVERDUE' ? 'down' : ''}`}>{statusLabel[p.status]}</em></span></div>)}</div></section></div> }
+function ToolingView() { return <section className="content-card"><div className="section-heading"><div><p className="eyebrow">BM-TBSX-09 · 10 · 11</p><h2>Jig, Gá & Dụng cụ</h2></div><button className="secondary-action">+ Tooling</button></div><div className="card-grid">{mockTooling.map(t=><article className="mini-card" key={t.toolingId}><span className="eyebrow">{t.toolingType}</span><h3>{t.toolingName}</h3><b>{t.toolingId}</b><p>{t.usedFor}</p><small>{t.ownership === 'CUSTOMER' ? `Customer-owned · ${t.customerName}` : 'Company-owned'} · Chu kỳ {t.inspectionCycleDays ?? '—'} ngày</small></article>)}</div></section> }
+function Placeholder({title,description}:{title:string;description:string}) { return <section className="content-card empty-state"><p className="eyebrow">Workspace</p><h2>{title}</h2><p>{description}</p></section> }
 export default function App() {
-  const [view, setView] = useState<View>('dashboard')
-  const active = NAV.find((item) => item.id === view) ?? NAV[0]
-
-  return (
-    <div className="app-shell">
-      <PwaStatus />
-      <aside className="sidebar" aria-label="Điều hướng desktop">
-        <div className="brand"><span className="brand-mark">CEV</span><div><strong>Equipment</strong><small>IATF 16949</small></div></div>
-        <nav>{NAV.map((item) => <button key={item.id} type="button" className={item.id === view ? 'active' : ''} aria-current={item.id === view ? 'page' : undefined} onClick={() => setView(item.id)}>{item.label}</button>)}</nav>
-        <div className="sidebar-note">PC + Mobile PWA<br />Không quản lý giá tiền</div>
-      </aside>
-
-      <div className="app-body">
-        <header className="topbar"><div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div><span className="connection-pill">LOCAL UI</span></header>
-        <main id="main-content" className="main-content">
-          {view === 'dashboard' ? <Dashboard /> : null}
-          {view === 'equipment' ? <Placeholder title="Danh mục thiết bị" description="Tra cứu theo mã nội bộ, model, serial, khu vực và QR. Equipment Master sẽ là nguồn chuẩn duy nhất cho vị trí hiện tại." action="Thêm thiết bị" /> : null}
-          {view === 'maintenance' ? <Placeholder title="Bảo trì & sửa chữa" description="Báo hỏng, chụp ảnh, theo dõi thời điểm bắt đầu/hoàn thành và nguyên nhân để tính downtime, MTTR và lỗi lặp lại." action="Báo sự cố" /> : null}
-          {view === 'calibration' ? <Placeholder title="Hiệu chuẩn thiết bị đo" description="Quản lý từng lần hiệu chuẩn, hạn tiếp theo, kết quả và link certificate/ảnh tem kiểm định." action="Ghi hiệu chuẩn" /> : null}
-          {view === 'settings' ? <Placeholder title="Cấu hình hệ thống" description="Phase tiếp theo sẽ cấu hình backend Google Sheets/Drive, phân quyền Technician · Maintenance · QC · Manager · Admin." action="Cấu hình dữ liệu" /> : null}
-        </main>
-      </div>
-
-      <nav className="bottom-nav" aria-label="Điều hướng mobile">
-        {NAV.slice(0, 4).map((item) => <button key={item.id} type="button" className={item.id === view ? 'active' : ''} aria-current={item.id === view ? 'page' : undefined} onClick={() => setView(item.id)}>{item.label}</button>)}
-      </nav>
-    </div>
-  )
+ const [view,setView]=useState<View>('dashboard'); const active=useMemo(()=>NAV.find(i=>i.id===view)??NAV[0],[view])
+ return <div className="app-shell"><PwaStatus/><aside className="sidebar" aria-label="Điều hướng desktop"><div className="brand"><span className="brand-mark">CEV</span><div><strong>Equipment</strong><small>IATF 16949</small></div></div><nav>{NAV.map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav><div className="sidebar-note">Source-first · Local phase<br/>Google: chưa kết nối</div></aside><div className="app-body"><header className="topbar"><div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div><span className="connection-pill">LOCAL WORKFLOW</span></header><main className="main-content">{view==='dashboard'?<Dashboard/>:null}{view==='equipment'?<EquipmentView/>:null}{view==='inspection'?<InspectionView/>:null}{view==='maintenance'?<MaintenanceView/>:null}{view==='tooling'?<ToolingView/>:null}{view==='calibration'?<Placeholder title="Hiệu chuẩn thiết bị đo" description="Sẽ hoàn thiện sau khi đối chiếu danh sách hiệu chuẩn trong source."/>:null}{view==='settings'?<Placeholder title="Cấu hình hệ thống" description="Google Sheets/Drive chỉ được bật sau Schema Freeze (G1)."/>:null}</main></div><nav className="bottom-nav" aria-label="Điều hướng mobile">{NAV.slice(0,4).map(i=><button key={i.id} type="button" className={i.id===view?'active':''} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav></div>
 }
