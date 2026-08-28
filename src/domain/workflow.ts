@@ -20,11 +20,27 @@ export function getInspectionEscalation(mark: DailyInspection['overallMark']): I
   }
 }
 
-export type MaintenanceWorkflowStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'VERIFIED' | 'RELEASED'
-export type MaintenanceWorkflowAction = 'START' | 'COMPLETE' | 'VERIFY' | 'RELEASE'
+export type MaintenanceWorkflowStatus =
+  | 'OPEN'
+  | 'WAITING_APPROVAL'
+  | 'APPROVED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'VERIFIED'
+  | 'RELEASED'
+
+export type MaintenanceWorkflowAction =
+  | 'REQUEST_APPROVAL'
+  | 'APPROVE'
+  | 'START'
+  | 'COMPLETE'
+  | 'VERIFY'
+  | 'RELEASE'
 
 const TRANSITIONS: Record<MaintenanceWorkflowStatus, Partial<Record<MaintenanceWorkflowAction, MaintenanceWorkflowStatus>>> = {
-  OPEN: { START: 'IN_PROGRESS' },
+  OPEN: { REQUEST_APPROVAL: 'WAITING_APPROVAL' },
+  WAITING_APPROVAL: { APPROVE: 'APPROVED' },
+  APPROVED: { START: 'IN_PROGRESS' },
   IN_PROGRESS: { COMPLETE: 'COMPLETED' },
   COMPLETED: { VERIFY: 'VERIFIED' },
   VERIFIED: { RELEASE: 'RELEASED' },
