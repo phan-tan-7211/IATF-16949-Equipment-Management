@@ -3,15 +3,17 @@ import './App.css'
 import { PwaStatus } from './PwaStatus'
 import { CALIBRATION_SOURCE_SNAPSHOT, calibrationQuoteSummary, calibrationVendorQuotes, mockCalibrationMaster } from './data/calibrationData'
 import { mockDowntimeEvents, mockEquipment, mockInspections, mockPlans, mockTooling, mockWorkOrders } from './data/mockData'
+import { appendAuditEvent, createAuditEvent } from './domain/audit'
 import { getCalibrationDueStatus } from './domain/calibration'
+import { canReleaseEquipment } from './domain/handover'
 import { calculateDowntimeKpi, DOWNTIME_TARGET_RATE } from './domain/kpi'
-import type { MaintenanceWorkOrder } from './domain/models'
+import type { AuditLog, EquipmentHandover, MaintenanceWorkOrder } from './domain/models'
 import { transitionMaintenanceStatus, type MaintenanceWorkflowAction, type MaintenanceWorkflowStatus } from './domain/workflow'
 
 type View = 'dashboard' | 'equipment' | 'inspection' | 'maintenance' | 'tooling' | 'calibration' | 'settings'
 const NAV: Array<{ id: View; label: string }> = [
   { id: 'dashboard', label: 'Tổng quan' }, { id: 'equipment', label: 'Thiết bị' }, { id: 'inspection', label: 'Kiểm tra ngày' },
-  { id: 'maintenance', label: 'Bảo trì' }, { id: 'tooling', label: 'Jig & Tooling' }, { id: 'calibration', label: 'Hiệu chuẩn' }, { id: 'settings', label: 'Cài đặt' },
+  { id: 'maintenance', label: 'Bảo trì' }, { id: 'tooling', label: 'Jig & Tooling' }, { id: 'calibration', label: 'Hiệu chuẩn' }, { id: 'settings', label: 'Audit & Cấu hình' },
 ]
 const statusLabel: Record<string, string> = {
   RUNNING: 'Hoạt động', DOWN: 'DOWN', MAINTENANCE: 'Bảo trì', STOPPED: 'Dừng', DISPOSED: 'Thanh lý',
@@ -20,6 +22,7 @@ const statusLabel: Record<string, string> = {
   V: 'V · Tốt', STOP_REPAIR: 'X · Dừng sửa chữa',
 }
 const CALIBRATION_AS_OF_DATE = '2026-08-28'
+const CURRENT_USER_ID = 'supervisor-demo'
 const formatVnd = (value: number) => new Intl.NumberFormat('vi-VN').format(value)
 const formatMinutes = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value)
 const workflowActionByStatus: Partial<Record<MaintenanceWorkflowStatus, { action: MaintenanceWorkflowAction; label: string }>> = {
@@ -28,7 +31,7 @@ const workflowActionByStatus: Partial<Record<MaintenanceWorkflowStatus, { action
   APPROVED: { action: 'START', label: 'Bắt đầu sửa chữa' },
   IN_PROGRESS: { action: 'COMPLETE', label: 'Hoàn tất sửa chữa' },
   COMPLETED: { action: 'VERIFY', label: 'Xác nhận chạy thử' },
-  VERIFIED: { action: 'RELEASE', label: 'Bàn giao thiết bị' },
+  VERIFIED: { action: 'RELEASE', label: 'BM-05: xác nhận & bàn giao' },
 }
 
 function Dashboard({ workOrders }: { workOrders: MaintenanceWorkOrder[] }) {
@@ -42,7 +45,7 @@ function Dashboard({ workOrders }: { workOrders: MaintenanceWorkOrder[] }) {
     <section className="hero-card" aria-labelledby="dashboard-title"><div><p className="eyebrow">IATF 16949 · Source-driven</p><h2 id="dashboard-title">Thiết bị trong tầm kiểm soát</h2><p>Dữ liệu demo đang chạy local theo BM-01~11, BM-KTTBHN và nguồn hiệu chuẩn. Chưa kết nối Google Sheets/Drive.</p></div><button className="primary-action" type="button" aria-label="Quét mã QR thiết bị">Quét QR</button></section>
     <section className="metric-grid" aria-label="KPI kỹ thuật"><article><span>Thiết bị hoạt động</span><strong>{running}</strong><small>Equipment Master</small></article><article><span>Máy đang DOWN</span><strong>{down}</strong><small>BM-06 / downtime</small></article><article><span>PM quá hạn</span><strong>{overdue}</strong><small>BM-TBSX-03</small></article><article><span>WO khẩn cấp</span><strong>{criticalWo}</strong><small>BM-KTTBHN → WO</small></article></section>
     <section className="metric-grid" aria-label="Chỉ số BM-TBSX-06"><article><span>Downtime rate</span><strong>{(kpi.downtimeRate * 100).toFixed(2)}%</strong><small>Mục tiêu ≤ {(DOWNTIME_TARGET_RATE * 100).toFixed(0)}% · {downtimeTargetMet ? 'Đạt' : 'Không đạt'}</small></article><article><span>MTBF</span><strong>{formatMinutes(kpi.mtbfMinutes)}</strong><small>phút / lần hỏng</small></article><article><span>MTTR</span><strong>{formatMinutes(kpi.mttrMinutes)}</strong><small>phút / lần hỏng</small></article><article><span>Số lần hỏng</span><strong>{kpi.failureCount}</strong><small>{kpi.downtimeMinutes} phút dừng</small></article></section>
-    <section className="content-card" aria-labelledby="workflow-title"><div className="section-heading"><div><p className="eyebrow">Workflow</p><h3 id="workflow-title">Luồng hồ sơ số hóa</h3></div><span className="status-pill">LOCAL DATA</span></div><div className="flow">Kiểm tra ngày <b>→</b> Work Order <b>→</b> Phê duyệt <b>→</b> Thực hiện <b>→</b> Xác nhận <b>→</b> Bàn giao <b>→</b> KPI</div></section>
+    <section className="content-card" aria-labelledby="workflow-title"><div className="section-heading"><div><p className="eyebrow">Workflow</p><h3 id="workflow-title">Luồng hồ sơ số hóa</h3></div><span className="status-pill">LOCAL DATA</span></div><div className="flow">Kiểm tra ngày <b>→</b> Work Order <b>→</b> Phê duyệt <b>→</b> Thực hiện <b>→</b> Xác nhận <b>→</b> BM-05 bàn giao <b>→</b> KPI</div></section>
   </div>
 }
 
@@ -54,9 +57,9 @@ function InspectionView() {
   return <div className="stack"><section className="content-card" aria-labelledby="inspection-title"><div className="section-heading"><div><p className="eyebrow">BM-KTTBHN</p><h2 id="inspection-title">Kiểm tra thiết bị hàng ngày</h2></div><button className="secondary-action" type="button">Quét QR & kiểm tra</button></div><p className="muted">V = tốt · ○ = sửa gấp · △ = cần bảo trì · X = hư hỏng, dừng máy. Kết quả X sẽ tạo Work Order và Downtime Event.</p></section>{mockInspections.map(i=><article className="record-card" key={i.inspectionId}><div><b>{i.equipmentId}</b><span>{i.inspectionDate} · {i.shift}</span></div><span className={`badge ${i.overallMark === 'STOP_REPAIR' ? 'down' : 'running'}`}>{statusLabel[i.overallMark]}</span><p>{i.note ?? 'Không có bất thường'}</p></article>)}</div>
 }
 
-function MaintenanceView({ workOrders, onAdvance, message }: { workOrders: MaintenanceWorkOrder[]; onAdvance: (id: string, action: MaintenanceWorkflowAction) => void; message: string }) {
+function MaintenanceView({ workOrders, handovers, onAdvance, message }: { workOrders: MaintenanceWorkOrder[]; handovers: EquipmentHandover[]; onAdvance: (id: string, action: MaintenanceWorkflowAction) => void; message: string }) {
   return <div className="stack">
-    <section className="content-card" aria-labelledby="maintenance-title"><div className="section-heading"><div><p className="eyebrow">BM-03 · 07 · 08 · 04 · 05</p><h2 id="maintenance-title">Bảo trì & sửa chữa</h2></div><button className="secondary-action" type="button">+ Work Order</button></div><p className="muted">Trình tự bắt buộc: Gửi phê duyệt → Phê duyệt → Bắt đầu → Hoàn tất sửa chữa → Xác nhận chạy thử → Bàn giao. Không cho phép bỏ qua bước.</p><div className="stack" aria-label="Danh sách Work Order">{workOrders.map(w=>{ const status = w.status as MaintenanceWorkflowStatus; const next = workflowActionByStatus[status]; return <article className="record-card" key={w.workOrderId}><div><b>{w.workOrderId}</b><span>{w.equipmentId} · {w.priority} · {w.sourceType}</span></div><span className={`badge ${status === 'RELEASED' ? 'running' : status === 'OPEN' ? 'down' : 'maintenance'}`}>{statusLabel[status] ?? status}</span><p>{w.reason}</p>{next ? <button className="secondary-action" type="button" onClick={()=>onAdvance(w.workOrderId,next.action)}>{next.label}</button> : <span className="muted">Workflow hoàn tất</span>}</article>})}</div><div className="sr-only" aria-live="polite" aria-atomic="true">{message}</div></section>
+    <section className="content-card" aria-labelledby="maintenance-title"><div className="section-heading"><div><p className="eyebrow">BM-03 · 07 · 08 · 04 · 05</p><h2 id="maintenance-title">Bảo trì & sửa chữa</h2></div><button className="secondary-action" type="button">+ Work Order</button></div><p className="muted">Trình tự bắt buộc: Gửi phê duyệt → Phê duyệt → Bắt đầu → Hoàn tất sửa chữa → Xác nhận chạy thử → BM-05 bàn giao. Release chỉ xảy ra khi bên nhận chấp nhận thiết bị còn vận hành được.</p><div className="stack" aria-label="Danh sách Work Order">{workOrders.map(w=>{ const status = w.status as MaintenanceWorkflowStatus; const next = workflowActionByStatus[status]; const handover = handovers.find(h => h.equipmentId === w.equipmentId); return <article className="record-card" key={w.workOrderId}><div><b>{w.workOrderId}</b><span>{w.equipmentId} · {w.priority} · {w.sourceType}</span></div><span className={`badge ${status === 'RELEASED' ? 'running' : status === 'OPEN' ? 'down' : 'maintenance'}`}>{statusLabel[status] ?? status}</span><p>{w.reason}</p>{handover ? <small>BM-05 {handover.handoverId} · {handover.accepted ? 'Bên nhận đã chấp nhận' : 'Chờ bên nhận'}</small> : null}{next ? <button className="secondary-action" type="button" onClick={()=>onAdvance(w.workOrderId,next.action)}>{next.label}</button> : <span className="muted">Workflow hoàn tất</span>}</article>})}</div><div className="sr-only" aria-live="polite" aria-atomic="true">{message}</div></section>
     <section className="content-card" aria-labelledby="pm-title"><p className="eyebrow">BM-TBSX-03</p><h3 id="pm-title">Kế hoạch PM</h3><div className="list">{mockPlans.map(p=><div key={p.planId}><span><b>{p.equipmentId}</b> · {p.maintenanceType}</span><span>{p.plannedDate} <em className={`badge ${p.status === 'OVERDUE' ? 'down' : ''}`}>{statusLabel[p.status]}</em></span></div>)}</div></section>
   </div>
 }
@@ -71,7 +74,6 @@ function CalibrationView() {
   const noPlan = rows.filter((item) => item.dueStatus === 'NO_PLAN').length
   const missingControl = rows.filter((item) => !item.controlNumber).length
   const providers = calibrationQuoteSummary.map((item) => item.provider)
-
   return <div className="stack">
     <section className="content-card" aria-labelledby="calibration-title"><div className="section-heading"><div><p className="eyebrow">CEV-BM-STCL-03 · Source snapshot</p><h2 id="calibration-title">Calibration Master</h2></div><span className="status-pill">SOURCE {CALIBRATION_SOURCE_SNAPSHOT}</span></div><p className="muted">Dữ liệu hiệu chuẩn và chi phí dưới đây được giữ theo tài liệu source 2024. Đây là dữ liệu lịch sử để đối chiếu và lập kế hoạch, không được hiểu là trạng thái live hoặc báo giá hiện hành của nhà cung cấp.</p></section>
     <section className="metric-grid" aria-label="Tóm tắt dữ liệu hiệu chuẩn mẫu"><article><span>Mẫu đang hiển thị</span><strong>{rows.length}</strong><small>Trong 48 dòng nguồn 2024</small></article><article><span>Quá hạn theo 28/08/2026</span><strong>{overdue}</strong><small>Chỉ tính từ snapshot lịch sử</small></article><article><span>Chưa có kế hoạch</span><strong>{noPlan}</strong><small>Không có next due trong nguồn</small></article><article><span>Thiếu số kiểm soát</span><strong>{missingControl}</strong><small>Dùng ID nội bộ ổn định</small></article></section>
@@ -81,24 +83,35 @@ function CalibrationView() {
   </div>
 }
 
-function Placeholder({title,description}:{title:string;description:string}) {
-  return <section className="content-card empty-state"><p className="eyebrow">Workspace</p><h2>{title}</h2><p>{description}</p></section>
+function AuditView({ auditLogs, handovers }: { auditLogs: AuditLog[]; handovers: EquipmentHandover[] }) {
+  return <div className="stack"><section className="content-card" aria-labelledby="audit-title"><div className="section-heading"><div><p className="eyebrow">Audit-ready local phase</p><h2 id="audit-title">Audit Trail & BM-05</h2></div><span className="status-pill">APPEND ONLY</span></div><p className="muted">Mỗi thay đổi workflow ghi actor, action, entity và before/after. Google persistence sẽ chỉ thay nơi lưu, không thay hợp đồng dữ liệu này.</p></section><section className="metric-grid" aria-label="Tóm tắt audit local"><article><span>Audit events</span><strong>{auditLogs.length}</strong><small>Phiên local hiện tại</small></article><article><span>BM-05 handover</span><strong>{handovers.length}</strong><small>Biên bản đã tạo</small></article><article><span>Đã chấp nhận</span><strong>{handovers.filter(h=>h.accepted).length}</strong><small>Bên nhận xác nhận</small></article><article><span>Google persistence</span><strong>G1</strong><small>Chưa kết nối</small></article></section><section className="content-card" aria-labelledby="audit-log-title"><h3 id="audit-log-title">Sự kiện gần nhất</h3><div className="table-wrap"><table><caption className="sr-only">Audit events của phiên local hiện tại</caption><thead><tr><th scope="col">Thời gian</th><th scope="col">Người thao tác</th><th scope="col">Hành động</th><th scope="col">Đối tượng</th></tr></thead><tbody>{auditLogs.length ? [...auditLogs].reverse().map(log=><tr key={log.auditId}><td>{log.timestamp}</td><td>{log.userId}</td><td><b>{log.action}</b></td><td>{log.entityType} · {log.entityId}</td></tr>) : <tr><td colSpan={4}>Chưa có thao tác workflow trong phiên này.</td></tr>}</tbody></table></div></section></div>
 }
 
 export default function App() {
   const [view,setView]=useState<View>('dashboard')
   const [workOrders,setWorkOrders]=useState<MaintenanceWorkOrder[]>(mockWorkOrders)
+  const [handovers,setHandovers]=useState<EquipmentHandover[]>([])
+  const [auditLogs,setAuditLogs]=useState<AuditLog[]>([])
   const [workflowMessage,setWorkflowMessage]=useState('')
   const active=useMemo(()=>NAV.find(i=>i.id===view)??NAV[0],[view])
 
   const advanceWorkOrder = (id: string, action: MaintenanceWorkflowAction) => {
     setWorkOrders(current => current.map(workOrder => {
       if (workOrder.workOrderId !== id) return workOrder
-      const nextStatus = transitionMaintenanceStatus(workOrder.status as MaintenanceWorkflowStatus, action)
+      const previousStatus = workOrder.status as MaintenanceWorkflowStatus
+      if (action === 'RELEASE') {
+        const handover: EquipmentHandover = { handoverId: `HO-${id}`, equipmentId: workOrder.equipmentId, handoverAt: new Date().toISOString(), fromPerson: 'maintenance-demo', fromDepartment: 'Bảo trì', toPerson: 'production-demo', toDepartment: 'Sản xuất', reason: 'Hoàn thành sửa chữa và chạy thử', condition: 'NORMAL', attachmentNote: 'BM-TBSX-08 + kết quả chạy thử', receiverComment: 'Đã kiểm tra thực tế và chấp nhận bàn giao', accepted: true }
+        const decision = canReleaseEquipment(handover)
+        if (!decision.allowed) { setWorkflowMessage(decision.reason ?? 'Không thể bàn giao'); return workOrder }
+        setHandovers(items => [...items.filter(h => h.handoverId !== handover.handoverId), handover])
+        setAuditLogs(logs => appendAuditEvent(logs, createAuditEvent({ userId: CURRENT_USER_ID, action: 'ACCEPT_HANDOVER', entityType: 'HANDOVER', entityId: handover.handoverId, newValue: handover })))
+      }
+      const nextStatus = transitionMaintenanceStatus(previousStatus, action)
+      setAuditLogs(logs => appendAuditEvent(logs, createAuditEvent({ userId: CURRENT_USER_ID, action, entityType: action === 'APPROVE' ? 'APPROVAL' : 'MAINTENANCE', entityId: id, oldValue: { status: previousStatus }, newValue: { status: nextStatus } })))
       setWorkflowMessage(`${id}: ${statusLabel[nextStatus]}`)
       return { ...workOrder, status: nextStatus }
     }))
   }
 
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Bỏ qua điều hướng</a><PwaStatus/><aside className="sidebar" aria-label="Điều hướng desktop"><div className="brand"><span className="brand-mark" aria-hidden="true">CEV</span><div><strong>Equipment</strong><small>IATF 16949</small></div></div><nav>{NAV.map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav><div className="sidebar-note">Source-first · Local phase<br/>Google: chưa kết nối</div></aside><div className="app-body"><header className="topbar"><div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div><span className="connection-pill" aria-label="Trạng thái dữ liệu: local workflow">LOCAL WORKFLOW</span></header><main id="main-content" className="main-content" tabIndex={-1}>{view==='dashboard'?<Dashboard workOrders={workOrders}/>:null}{view==='equipment'?<EquipmentView/>:null}{view==='inspection'?<InspectionView/>:null}{view==='maintenance'?<MaintenanceView workOrders={workOrders} onAdvance={advanceWorkOrder} message={workflowMessage}/>:null}{view==='tooling'?<ToolingView/>:null}{view==='calibration'?<CalibrationView/>:null}{view==='settings'?<Placeholder title="Cấu hình hệ thống" description="Google Sheets/Drive chỉ được bật sau Schema Freeze (G1)."/>:null}</main></div><nav className="bottom-nav" aria-label="Điều hướng mobile">{NAV.slice(0,4).map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav></div>
+  return <div className="app-shell"><a className="skip-link" href="#main-content">Bỏ qua điều hướng</a><PwaStatus/><aside className="sidebar" aria-label="Điều hướng desktop"><div className="brand"><span className="brand-mark" aria-hidden="true">CEV</span><div><strong>Equipment</strong><small>IATF 16949</small></div></div><nav>{NAV.map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav><div className="sidebar-note">Source-first · Local phase<br/>Google: chưa kết nối</div></aside><div className="app-body"><header className="topbar"><div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div><span className="connection-pill" aria-label="Trạng thái dữ liệu: local workflow">LOCAL WORKFLOW</span></header><main id="main-content" className="main-content" tabIndex={-1}>{view==='dashboard'?<Dashboard workOrders={workOrders}/>:null}{view==='equipment'?<EquipmentView/>:null}{view==='inspection'?<InspectionView/>:null}{view==='maintenance'?<MaintenanceView workOrders={workOrders} handovers={handovers} onAdvance={advanceWorkOrder} message={workflowMessage}/>:null}{view==='tooling'?<ToolingView/>:null}{view==='calibration'?<CalibrationView/>:null}{view==='settings'?<AuditView auditLogs={auditLogs} handovers={handovers}/>:null}</main></div><nav className="bottom-nav" aria-label="Điều hướng mobile">{NAV.slice(0,4).map(i=><button key={i.id} type="button" className={i.id===view?'active':''} aria-current={i.id===view?'page':undefined} onClick={()=>setView(i.id)}>{i.label}</button>)}</nav></div>
 }
