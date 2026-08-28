@@ -1,6 +1,8 @@
 # Gate G1 — Schema Freeze Checklist
 
-Status: **CANDIDATE — chưa mở Google persistence**
+Status: **FROZEN — sẵn sàng mở Google persistence**
+
+Freeze date: **2026-08-28**
 
 ## 1. Mapping source → schema/UI/report
 
@@ -38,17 +40,30 @@ Zero-failure cases return null for MTBF/MTTR instead of NaN/Infinity.
 - Release requires accepted BM-TBSX-05 and operable condition.
 - Workflow changes append Audit_Log events with actor/action/entity/before/after.
 
-## 5. Persistence contract candidate
+## 5. Frozen persistence contract
 
-Structured tables are defined in `src/domain/persistenceContract.ts`.
-Evidence folders are defined separately for Drive-like binary/document storage.
+`src/domain/persistenceContract.ts` is the authoritative storage contract.
+`CORE_SHEET_NAMES` is retained only as a compatibility alias to `PERSISTENCE_TABLES`; there is no second independent list.
+
+Structured data contains 20 tables, including:
+
+- Calibration_Master / Calibration_Log.
+- Calibration_Vendor_Quote / Calibration_Quote_Summary.
+- Equipment_Handover.
+- Downtime_Event.
+- Audit_Log.
+
+File/document evidence is separated into 9 evidence folders for Drive-like storage.
 
 Calibration financial data from `source/` is retained as historical quotation evidence and structured comparison data; it is not labeled as current/live vendor pricing.
 
-## Remaining before G1 is declared frozen
+## G1 verification
 
-1. Reconcile legacy `CORE_SHEET_NAMES` in `models.ts` with the new authoritative `PERSISTENCE_TABLES` list.
-2. Confirm Quality Gate passes Test + Build + Lint on the final candidate commit.
-3. Confirm Vercel Preview deployment succeeds.
+- [x] Legacy `CORE_SHEET_NAMES` reconciled with authoritative `PERSISTENCE_TABLES`.
+- [x] Workflow/state/KPI/governance/handover/audit tests implemented.
+- [x] Quality Gate passed Test + Build + Lint on the final candidate before freeze.
+- [x] Vercel Preview deployment succeeded on the final candidate before freeze.
 
-Only after all three are green should Google Sheets/Drive integration begin.
+## Phase 3 entry
+
+Gate G1 is frozen. The next implementation phase may connect Google Sheets for the 20 structured tables and Google Drive for the 9 evidence folders. Credentials must remain backend-only; the frontend must never store Google credentials.
