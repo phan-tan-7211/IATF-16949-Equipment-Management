@@ -1,4 +1,5 @@
 import { createAuditEvent } from './audit'
+import { canRolePerform, canApproveWorkOrder, governedActionForWorkflowAction, type SystemRole } from './governance'
 import { canReleaseEquipment } from './handover'
 import type { AuditLog, EquipmentHandover, MaintenanceWorkOrder } from './models'
 import { transitionMaintenanceStatus, type MaintenanceWorkflowAction, type MaintenanceWorkflowStatus } from './workflow'
@@ -8,12 +9,14 @@ export type MaintenanceTransitionResult = {
   handover?: EquipmentHandover
   auditEvents: AuditLog[]
   message: string
+  allowed: boolean
 }
 
 type ExecuteMaintenanceTransitionInput = {
   workOrder: MaintenanceWorkOrder
   action: MaintenanceWorkflowAction
   actorUserId: string
+  actorRole: SystemRole
   now: string
 }
 
@@ -21,11 +24,32 @@ export function executeMaintenanceTransition({
   workOrder,
   action,
   actorUserId,
+  actorRole,
   now,
 }: ExecuteMaintenanceTransitionInput): MaintenanceTransitionResult {
   const previousStatus = workOrder.status as MaintenanceWorkflowStatus
-  let handover: EquipmentHandover | undefined
+  const governedAction = governedActionForWorkflowAction(action)
   const auditEvents: AuditLog[] = []
+
+  if (!canRolePerform(actorRole, governedAction)) {
+    return {
+      workOrder,
+      auditEvents,
+      allowed: false,
+      message: `Vai trò ${actorRole} không được phép thực hiện ${action}.`,
+    }
+  }
+
+  if (action === 'APPROVE' && !canApproveWorkOrder({ requesterId: workOrder.requestedBy, approverId: actorUserId, approverRole: actorRole })) {
+    return {
+      workOrder,
+      auditEvents,
+      allowed: false,
+      message: 'Người yêu cầu Work Order không được tự phê duyệt.',
+    }
+  }
+
+  let handover: EquipmentHandover | undefined
 
   if (action === 'RELEASE') {
     handover = {
@@ -48,6 +72,7 @@ export function executeMaintenanceTransition({
       return {
         workOrder,
         auditEvents,
+        allowed: false,
         message: decision.reason ?? 'Không thể bàn giao',
       }
     }
@@ -79,6 +104,7 @@ export function executeMaintenanceTransition({
     workOrder: updatedWorkOrder,
     handover,
     auditEvents,
+    allowed: true,
     message: `${workOrder.workOrderId}: ${nextStatus}`,
   }
 }
