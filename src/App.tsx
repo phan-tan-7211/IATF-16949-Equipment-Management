@@ -45,6 +45,7 @@ const statusLabel: Record<string, string> = {
 
 const CALIBRATION_AS_OF_DATE = '2026-08-28'
 const CURRENT_USER_ID = 'supervisor-demo'
+const CURRENT_USER_ROLE = 'SUPERVISOR' as const
 const formatVnd = (value: number) => new Intl.NumberFormat('vi-VN').format(value)
 const formatMinutes = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value)
 
@@ -315,8 +316,14 @@ export default function App() {
       workOrder,
       action,
       actorUserId: CURRENT_USER_ID,
+      actorRole: CURRENT_USER_ROLE,
       now: new Date().toISOString(),
     })
+
+    if (!result.allowed) {
+      setWorkflowMessage(result.message)
+      return
+    }
 
     setWorkOrders((current) => current.map((item) => item.workOrderId === id ? result.workOrder : item))
 
