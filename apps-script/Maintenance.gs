@@ -52,7 +52,7 @@ function executeMaintenanceTransition_(body, actor) {
 
     try {
       if (action === 'APPROVE') {
-        if (normalizeIdentity_(workOrder.requestedBy) === actor.email) throw new Error('SELF_APPROVAL_FORBIDDEN')
+        assertNotSelfApproval_(workOrder, actor)
         workOrder.approvedBy = actor.email
         workOrder.approvedAt = now
       }
@@ -93,7 +93,7 @@ function executeMaintenanceTransition_(body, actor) {
         oldExecution = Object.assign({}, executionMatch.record)
         execution = Object.assign({}, executionMatch.record)
         if (String(execution.status || '') !== 'COMPLETED') throw new Error('EXECUTION_STATUS_INVALID')
-        if (normalizeIdentity_(execution.performedBy) === actor.email) throw new Error('SELF_VERIFICATION_FORBIDDEN')
+        assertNotSelfVerification_(execution, actor)
         execution.verifiedBy = actor.email
         execution.verifiedAt = now
         execution.status = 'VERIFIED'
@@ -197,6 +197,18 @@ function assertMaintenanceActionRole_(action, role) {
   const roles = MAINTENANCE_ACTION_ROLES[action]
   if (!roles) throw new Error('WORKFLOW_ACTION_NOT_ALLOWED')
   if (roles.indexOf(role) === -1) throw new Error('ROLE_NOT_ALLOWED')
+}
+
+function assertNotSelfApproval_(workOrder, actor) {
+  if (normalizeIdentity_(workOrder && workOrder.requestedBy) === normalizeIdentity_(actor && actor.email)) {
+    throw new Error('SELF_APPROVAL_FORBIDDEN')
+  }
+}
+
+function assertNotSelfVerification_(execution, actor) {
+  if (normalizeIdentity_(execution && execution.performedBy) === normalizeIdentity_(actor && actor.email)) {
+    throw new Error('SELF_VERIFICATION_FORBIDDEN')
+  }
 }
 
 function findRecordByField_(table, field, expectedValue) {
