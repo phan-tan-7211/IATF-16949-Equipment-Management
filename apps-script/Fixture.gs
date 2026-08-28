@@ -67,7 +67,7 @@ function fixtureIdempotencySmoke() {
 
   if (!passed) throw new Error('FIXTURE_IDEMPOTENCY_ASSERTION_FAILED')
 
-  return {
+  Logger.log(JSON.stringify({
     phase: 'fixture-idempotency',
     ok: true,
     operationId: operationId,
@@ -78,7 +78,59 @@ function fixtureIdempotencySmoke() {
       afterFirst: afterFirst,
       afterSecond: afterSecond,
     },
+  }, null, 2))
+}
+
+function fixtureWorkflowNegativeSmoke() {
+  const actor = requireActor_()
+  if (actor.role !== 'ADMIN') throw new Error('FIXTURE_ADMIN_REQUIRED')
+
+  const cases = []
+
+  cases.push(expectFixtureError_('ROLE_DENIAL', 'ROLE_NOT_ALLOWED', function () {
+    assertMaintenanceActionRole_('APPROVE', 'MAINTENANCE')
+  }))
+
+  cases.push(expectFixtureError_('SELF_APPROVAL', 'SELF_APPROVAL_FORBIDDEN', function () {
+    assertNotSelfApproval_({ requestedBy: actor.email }, actor)
+  }))
+
+  cases.push(expectFixtureError_('SELF_VERIFICATION', 'SELF_VERIFICATION_FORBIDDEN', function () {
+    assertNotSelfVerification_({ performedBy: actor.email }, actor)
+  }))
+
+  assertMaintenanceActionRole_('APPROVE', 'SUPERVISOR')
+  assertMaintenanceActionRole_('VERIFY', 'QUALITY')
+  assertNotSelfApproval_({ requestedBy: 'fixture-requester@example.invalid' }, actor)
+  assertNotSelfVerification_({ performedBy: 'fixture-performer@example.invalid' }, actor)
+
+  const passed = cases.every(function (item) { return item.ok === true })
+  if (!passed) throw new Error('FIXTURE_WORKFLOW_NEGATIVE_ASSERTION_FAILED')
+
+  Logger.log(JSON.stringify({
+    phase: 'fixture-workflow-negative',
+    ok: true,
+    cases: cases,
+    positiveControls: {
+      approveBySupervisor: true,
+      verifyByQuality: true,
+      separatedApproval: true,
+      separatedVerification: true,
+    },
+  }, null, 2))
+}
+
+function expectFixtureError_(name, expectedMessage, action) {
+  try {
+    action()
+  } catch (error) {
+    const actual = error && error.message ? error.message : String(error)
+    if (actual !== expectedMessage) {
+      throw new Error('FIXTURE_EXPECTED_' + expectedMessage + '_GOT_' + actual)
+    }
+    return { name: name, ok: true, error: actual }
   }
+  throw new Error('FIXTURE_EXPECTED_ERROR_NOT_THROWN:' + name)
 }
 
 function fixtureAppendOnce_(dataSheet, auditSheet, operationId, fixtureId, record, actor) {
