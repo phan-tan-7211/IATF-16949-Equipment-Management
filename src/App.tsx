@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import './App.css'
 import { PwaStatus } from './PwaStatus'
 import { CALIBRATION_SOURCE_SNAPSHOT, calibrationQuoteSummary, calibrationVendorQuotes, mockCalibrationMaster } from './data/calibrationData'
-import { mockEquipment, mockInspections, mockPlans, mockTooling, mockWorkOrders } from './data/mockData'
+import { mockDowntimeEvents, mockEquipment, mockInspections, mockPlans, mockTooling, mockWorkOrders } from './data/mockData'
 import { getCalibrationDueStatus } from './domain/calibration'
+import { calculateDowntimeKpi, DOWNTIME_TARGET_RATE } from './domain/kpi'
 import type { MaintenanceWorkOrder } from './domain/models'
 import { transitionMaintenanceStatus, type MaintenanceWorkflowAction, type MaintenanceWorkflowStatus } from './domain/workflow'
 
@@ -14,14 +15,17 @@ const NAV: Array<{ id: View; label: string }> = [
 ]
 const statusLabel: Record<string, string> = {
   RUNNING: 'Hoạt động', DOWN: 'DOWN', MAINTENANCE: 'Bảo trì', STOPPED: 'Dừng', DISPOSED: 'Thanh lý',
-  OPEN: 'Mở', IN_PROGRESS: 'Đang xử lý', COMPLETED: 'Đã hoàn tất', VERIFIED: 'Đã xác nhận', RELEASED: 'Đã bàn giao',
+  OPEN: 'Mở', WAITING_APPROVAL: 'Chờ phê duyệt', APPROVED: 'Đã phê duyệt', IN_PROGRESS: 'Đang xử lý', COMPLETED: 'Đã hoàn tất', VERIFIED: 'Đã xác nhận', RELEASED: 'Đã bàn giao',
   DUE_SOON: 'Sắp đến hạn', OVERDUE: 'Quá hạn', VALID: 'Còn hiệu lực', NO_PLAN: 'Chưa có kế hoạch',
   V: 'V · Tốt', STOP_REPAIR: 'X · Dừng sửa chữa',
 }
 const CALIBRATION_AS_OF_DATE = '2026-08-28'
 const formatVnd = (value: number) => new Intl.NumberFormat('vi-VN').format(value)
+const formatMinutes = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value)
 const workflowActionByStatus: Partial<Record<MaintenanceWorkflowStatus, { action: MaintenanceWorkflowAction; label: string }>> = {
-  OPEN: { action: 'START', label: 'Bắt đầu sửa chữa' },
+  OPEN: { action: 'REQUEST_APPROVAL', label: 'Gửi phê duyệt' },
+  WAITING_APPROVAL: { action: 'APPROVE', label: 'Phê duyệt' },
+  APPROVED: { action: 'START', label: 'Bắt đầu sửa chữa' },
   IN_PROGRESS: { action: 'COMPLETE', label: 'Hoàn tất sửa chữa' },
   COMPLETED: { action: 'VERIFY', label: 'Xác nhận chạy thử' },
   VERIFIED: { action: 'RELEASE', label: 'Bàn giao thiết bị' },
@@ -32,10 +36,13 @@ function Dashboard({ workOrders }: { workOrders: MaintenanceWorkOrder[] }) {
   const down = mockEquipment.filter((x) => x.status === 'DOWN').length
   const overdue = mockPlans.filter((x) => x.status === 'OVERDUE').length
   const criticalWo = workOrders.filter((x) => x.priority === 'CRITICAL' && x.status !== 'RELEASED').length
+  const kpi = calculateDowntimeKpi(mockDowntimeEvents, 28)
+  const downtimeTargetMet = kpi.downtimeRate <= DOWNTIME_TARGET_RATE
   return <div className="stack">
-    <section className="hero-card" aria-labelledby="dashboard-title"><div><p className="eyebrow">IATF 16949 · Source-driven</p><h2 id="dashboard-title">Thiết bị trong tầm kiểm soát</h2><p>Dữ liệu demo đang chạy local theo BM-01~11 và BM-KTTBHN. Chưa kết nối Google Sheets/Drive.</p></div><button className="primary-action" type="button" aria-label="Quét mã QR thiết bị">Quét QR</button></section>
+    <section className="hero-card" aria-labelledby="dashboard-title"><div><p className="eyebrow">IATF 16949 · Source-driven</p><h2 id="dashboard-title">Thiết bị trong tầm kiểm soát</h2><p>Dữ liệu demo đang chạy local theo BM-01~11, BM-KTTBHN và nguồn hiệu chuẩn. Chưa kết nối Google Sheets/Drive.</p></div><button className="primary-action" type="button" aria-label="Quét mã QR thiết bị">Quét QR</button></section>
     <section className="metric-grid" aria-label="KPI kỹ thuật"><article><span>Thiết bị hoạt động</span><strong>{running}</strong><small>Equipment Master</small></article><article><span>Máy đang DOWN</span><strong>{down}</strong><small>BM-06 / downtime</small></article><article><span>PM quá hạn</span><strong>{overdue}</strong><small>BM-TBSX-03</small></article><article><span>WO khẩn cấp</span><strong>{criticalWo}</strong><small>BM-KTTBHN → WO</small></article></section>
-    <section className="content-card" aria-labelledby="workflow-title"><div className="section-heading"><div><p className="eyebrow">Workflow</p><h3 id="workflow-title">Luồng hồ sơ số hóa</h3></div><span className="status-pill">LOCAL DATA</span></div><div className="flow">Kiểm tra ngày <b>→</b> Work Order <b>→</b> Thực hiện <b>→</b> Kết quả <b>→</b> Bàn giao <b>→</b> KPI</div></section>
+    <section className="metric-grid" aria-label="Chỉ số BM-TBSX-06"><article><span>Downtime rate</span><strong>{(kpi.downtimeRate * 100).toFixed(2)}%</strong><small>Mục tiêu ≤ {(DOWNTIME_TARGET_RATE * 100).toFixed(0)}% · {downtimeTargetMet ? 'Đạt' : 'Không đạt'}</small></article><article><span>MTBF</span><strong>{formatMinutes(kpi.mtbfMinutes)}</strong><small>phút / lần hỏng</small></article><article><span>MTTR</span><strong>{formatMinutes(kpi.mttrMinutes)}</strong><small>phút / lần hỏng</small></article><article><span>Số lần hỏng</span><strong>{kpi.failureCount}</strong><small>{kpi.downtimeMinutes} phút dừng</small></article></section>
+    <section className="content-card" aria-labelledby="workflow-title"><div className="section-heading"><div><p className="eyebrow">Workflow</p><h3 id="workflow-title">Luồng hồ sơ số hóa</h3></div><span className="status-pill">LOCAL DATA</span></div><div className="flow">Kiểm tra ngày <b>→</b> Work Order <b>→</b> Phê duyệt <b>→</b> Thực hiện <b>→</b> Xác nhận <b>→</b> Bàn giao <b>→</b> KPI</div></section>
   </div>
 }
 
@@ -49,7 +56,7 @@ function InspectionView() {
 
 function MaintenanceView({ workOrders, onAdvance, message }: { workOrders: MaintenanceWorkOrder[]; onAdvance: (id: string, action: MaintenanceWorkflowAction) => void; message: string }) {
   return <div className="stack">
-    <section className="content-card" aria-labelledby="maintenance-title"><div className="section-heading"><div><p className="eyebrow">BM-03 · 07 · 08 · 04 · 05</p><h2 id="maintenance-title">Bảo trì & sửa chữa</h2></div><button className="secondary-action" type="button">+ Work Order</button></div><p className="muted">Trình tự bắt buộc: Bắt đầu → Hoàn tất sửa chữa → Xác nhận chạy thử → Bàn giao. Không cho phép bỏ qua bước.</p><div className="stack" aria-label="Danh sách Work Order">{workOrders.map(w=>{ const status = w.status as MaintenanceWorkflowStatus; const next = workflowActionByStatus[status]; return <article className="record-card" key={w.workOrderId}><div><b>{w.workOrderId}</b><span>{w.equipmentId} · {w.priority} · {w.sourceType}</span></div><span className={`badge ${status === 'RELEASED' ? 'running' : status === 'OPEN' ? 'down' : 'maintenance'}`}>{statusLabel[status] ?? status}</span><p>{w.reason}</p>{next ? <button className="secondary-action" type="button" onClick={()=>onAdvance(w.workOrderId,next.action)}>{next.label}</button> : <span className="muted">Workflow hoàn tất</span>}</article>})}</div><div className="sr-only" aria-live="polite" aria-atomic="true">{message}</div></section>
+    <section className="content-card" aria-labelledby="maintenance-title"><div className="section-heading"><div><p className="eyebrow">BM-03 · 07 · 08 · 04 · 05</p><h2 id="maintenance-title">Bảo trì & sửa chữa</h2></div><button className="secondary-action" type="button">+ Work Order</button></div><p className="muted">Trình tự bắt buộc: Gửi phê duyệt → Phê duyệt → Bắt đầu → Hoàn tất sửa chữa → Xác nhận chạy thử → Bàn giao. Không cho phép bỏ qua bước.</p><div className="stack" aria-label="Danh sách Work Order">{workOrders.map(w=>{ const status = w.status as MaintenanceWorkflowStatus; const next = workflowActionByStatus[status]; return <article className="record-card" key={w.workOrderId}><div><b>{w.workOrderId}</b><span>{w.equipmentId} · {w.priority} · {w.sourceType}</span></div><span className={`badge ${status === 'RELEASED' ? 'running' : status === 'OPEN' ? 'down' : 'maintenance'}`}>{statusLabel[status] ?? status}</span><p>{w.reason}</p>{next ? <button className="secondary-action" type="button" onClick={()=>onAdvance(w.workOrderId,next.action)}>{next.label}</button> : <span className="muted">Workflow hoàn tất</span>}</article>})}</div><div className="sr-only" aria-live="polite" aria-atomic="true">{message}</div></section>
     <section className="content-card" aria-labelledby="pm-title"><p className="eyebrow">BM-TBSX-03</p><h3 id="pm-title">Kế hoạch PM</h3><div className="list">{mockPlans.map(p=><div key={p.planId}><span><b>{p.equipmentId}</b> · {p.maintenanceType}</span><span>{p.plannedDate} <em className={`badge ${p.status === 'OVERDUE' ? 'down' : ''}`}>{statusLabel[p.status]}</em></span></div>)}</div></section>
   </div>
 }
