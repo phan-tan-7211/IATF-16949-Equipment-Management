@@ -9,6 +9,8 @@
 - Time zone: `Asia/Ho_Chi_Minh` (Google có thể hiển thị alias `Asia/Saigon`)
 - Frontend direct Google API: **không cho phép**
 - Persistence boundary: **backend/serverless required**
+- Backend health route: `/api/persistence-health`
+- Server credential gate: `GOOGLE_SERVICE_ACCOUNT_JSON`
 
 ## Dữ liệu đã seed từ source
 
@@ -48,12 +50,27 @@ UI chỉ gọi API nội bộ của ứng dụng. API/serverless layer chịu tr
 5. append `Audit_Log`;
 6. trả kết quả transaction về UI.
 
-Trước khi bật live write cần hoàn tất:
+`/api/persistence-health` hiện chỉ xác nhận backend boundary và tình trạng credential. Endpoint không trả giá trị secret và chưa thực hiện Google write.
 
-- refactor workflow state updater để không có side effect lồng trong React state updater;
-- role-gate các workflow action;
-- backend/serverless adapter;
-- idempotency key cho write;
-- append-only audit write;
-- mobile navigation cho đủ Tooling/Calibration/Audit;
-- integration tests cho Sheet/Drive adapter.
+## Gate đã hoàn tất
+
+- [x] G1 schema/workflow/persistence contract freeze.
+- [x] Canonical Google Sheet + 9 Drive evidence folders.
+- [x] Source seeding Calibration và Equipment.
+- [x] React workflow transition tách thành pure domain execution; không còn side effect lồng trong `setWorkOrders` updater.
+- [x] Mobile navigation truy cập đủ 7 workspace.
+- [x] Workflow action map sang governance policy và role-gate trước transition.
+- [x] Requester self-approval bị chặn.
+- [x] Backend/serverless health boundary được tạo.
+
+## Gate còn lại trước live write
+
+- [ ] Cấu hình `GOOGLE_SERVICE_ACCOUNT_JSON` ở server/deployment environment; không gửi credential qua browser hoặc commit vào GitHub.
+- [ ] Google Sheets/Drive read/write adapter phía backend.
+- [ ] Idempotency key và optimistic/concurrency protection cho write.
+- [ ] Append-only `Audit_Log` write trong cùng transaction boundary logic.
+- [ ] Authentication thực tế để actor ID/role không còn là demo constant.
+- [ ] Segregation `performedBy != verifierId`: domain rule đã có nhưng G1 workflow UI chưa có performer identity authoritative để enforce end-to-end; cần lấy performer từ `Maintenance_Execution` khi backend adapter hoạt động.
+- [ ] Integration tests với Google adapter bằng test fixture/sandbox data, không dùng production rows.
+
+Không bật production live write cho đến khi các gate còn lại được hoàn tất và Quality Gate + preview deployment đều xanh.
