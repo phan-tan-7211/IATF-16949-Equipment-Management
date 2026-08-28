@@ -2,9 +2,9 @@
 
 ## Mục tiêu
 
-Apps Script là persistence boundary duy nhất cho Google Sheets/Drive. Frontend không giữ Google credential và không gọi trực tiếp Sheets/Drive API.
+Apps Script là persistence boundary duy nhất cho Google Sheets/Drive. UI production chạy trực tiếp bằng **Apps Script HTMLService** và gọi server bằng `google.script.run`. Frontend không giữ Google credential và không gọi trực tiếp Sheets/Drive API.
 
-Browser cross-origin `fetch()` trực tiếp tới Apps Script `/exec` không phải transport production vì ContentService redirect/CORS có thể chặn frontend chạy trên Vercel/Netlify. Production browser transport dùng **Apps Script HTMLService bridge** được nhúng bằng iframe, giao tiếp với parent qua `postMessage`, sau đó gọi server-side bằng `google.script.run`.
+Browser cross-origin `fetch()` từ Vercel/Netlify tới Apps Script `/exec` đã được kiểm thử và không được dùng làm production transport vì redirect/CORS. Iframe bridge cũng không được dùng cho production vì embedded Google authentication không ổn định. Production browser path là **first-party Apps Script HTMLService**.
 
 ## Project source
 
@@ -12,7 +12,8 @@ Deploy nội dung trong thư mục `apps-script/`:
 
 - `Code.gs`
 - `Maintenance.gs`
-- `Bridge.html`
+- `AppShell.html`
+- `Bridge.html` — diagnostic/legacy transport, không phải production path
 - `appsscript.json`
 
 Canonical storage:
@@ -23,8 +24,8 @@ Canonical storage:
 
 ## Bắt buộc trước khi deploy
 
-1. Tạo hoặc mở một standalone Apps Script project thuộc tài khoản Google Workspace có quyền với canonical Sheet.
-2. Copy `Code.gs`, `Maintenance.gs`, `Bridge.html` và manifest vào project.
+1. Tạo hoặc mở standalone Apps Script project thuộc tài khoản Google Workspace có quyền với canonical Sheet.
+2. Copy `Code.gs`, `Maintenance.gs`, `AppShell.html` và manifest vào project. Có thể giữ `Bridge.html` cho diagnostic nhưng không dùng cho production UI.
 3. Trong **Project Settings → Script properties**, tạo `RBAC_JSON`.
 4. Giá trị `RBAC_JSON` là JSON map email → role, ví dụ:
 
@@ -36,19 +37,11 @@ Canonical storage:
 }
 ```
 
-5. Tạo thêm `ALLOWED_PARENT_ORIGINS_JSON`. Giá trị là JSON array chứa **origin chính xác** của frontend được phép nhúng bridge, không có path hoặc dấu `/` cuối. Ví dụ:
-
-```json
-[
-  "https://deploy-preview-1--iatf-16949-equipment-management.netlify.app"
-]
-```
-
-Khi thêm production/Vercel origin, thêm từng origin chính xác vào array. Không dùng wildcard.
-
 Role hợp lệ hiện tại: `OPERATOR`, `MAINTENANCE`, `SUPERVISOR`, `QUALITY`, `MANAGER`, `ADMIN`.
 
 Không commit danh sách email thật nếu repo public.
+
+`ALLOWED_PARENT_ORIGINS_JSON` chỉ cần nếu tiếp tục dùng `Bridge.html` cho diagnostic iframe. Nó không còn là yêu cầu của production first-party UI.
 
 ## Deploy Web App
 
@@ -58,21 +51,27 @@ Yêu cầu bảo mật:
 
 - **Execute as:** user accessing the web app.
 - **Who has access:** chỉ nhóm/tổ chức Google Workspace cần dùng hệ thống; không mở public anonymous.
-- URL sử dụng phải là URL production deployment kết thúc bằng `/exec`, không dùng `/dev`.
+- URL production phải kết thúc bằng `/exec`, không dùng `/dev`.
 
 Lý do: RBAC server-side dùng `Session.getActiveUser().getEmail()`. Nếu Apps Script không được phép biết active user, request sẽ fail đóng với `AUTHENTICATION_REQUIRED` thay vì dùng identity giả từ browser.
 
-Bridge HTML dùng `XFrameOptionsMode.ALLOWALL` để có thể nhúng từ frontend ngoài Apps Script. Vì vậy clickjacking protection được thực thi bằng origin allowlist: `Bridge.html` chỉ chấp nhận `postMessage` khi `event.origin` có trong `ALLOWED_PARENT_ORIGINS_JSON`.
+Sau mỗi thay đổi `Code.gs`, `Maintenance.gs` hoặc HTMLService file, phải **Save → Manage deployments → Edit → New version → Deploy**. Save trong editor không tự thay snapshot deployment hiện tại.
 
-## Frontend configuration
+## URL production
 
-Deployment URL thật được đăng ký trong config và có thể override bằng:
+### Health
 
 ```text
-VITE_APPS_SCRIPT_WEB_APP_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+<WEB_APP_URL>?action=health
 ```
 
-Frontend chỉ chấp nhận HTTPS URL trên `script.google.com` kết thúc bằng `/exec`.
+### Production UI
+
+```text
+<WEB_APP_URL>?action=app
+```
+
+`AppShell.html` chạy first-party trong Apps Script và gọi server-side bằng `google.script.run`.
 
 ## Smoke test bắt buộc
 
@@ -96,33 +95,34 @@ Kỳ vọng:
 }
 ```
 
-Nếu `authenticated=false`, không bật live persistence.
+### 2. First-party UI read
 
-### 2. HTML bridge read
-
-Mở frontend smoke page:
+Mở:
 
 ```text
-/apps-script-smoke.html
+<WEB_APP_URL>?action=app
 ```
 
-Trang này tải:
+Production read path:
 
 ```text
-<WEB_APP_URL>?action=bridge
+AppShell.html
+  → google.script.run
+  → bridgeInvoke(request)
+  → executeTransportRequest_
+  → readTable_(Equipment_Master)
+  → canonical Google Sheet
 ```
 
-trong iframe, nhận `ready` bằng `postMessage`, rồi gọi `health` và `readTable(Equipment_Master)` qua `google.script.run`.
+Kỳ vọng với seed hiện tại:
 
-Kỳ vọng cuối:
-
-- `phase = bridge-readTable`
-- `health.authenticated = true`
+- actor là email user được Apps Script xác thực
 - `read.ok = true`
 - `read.table = Equipment_Master`
-- `rowCount = 19` với seed hiện tại
+- `rowCount = 19`
+- UI hiển thị Equipment Master read-only
 
-Nếu nhận `ROLE_NOT_CONFIGURED`, transport bridge đã hoạt động; chỉ còn cấu hình `RBAC_JSON` cho tài khoản đang dùng.
+Live verification ngày 2026-08-28 đã đạt đầy đủ các điều kiện trên.
 
 ### 3. Unauthorized write
 
@@ -130,7 +130,7 @@ Dùng tài khoản role không đủ quyền để gọi write. Kỳ vọng `ROL
 
 ### 4. Idempotency
 
-Gửi cùng một `operationId` hai lần qua bridge. Kỳ vọng lần hai:
+Gửi cùng một `operationId` hai lần trong **isolated test fixture**, không dùng production/source rows. Kỳ vọng lần hai:
 
 ```json
 {
@@ -141,25 +141,25 @@ Gửi cùng một `operationId` hai lần qua bridge. Kỳ vọng lần hai:
 
 Không được phát sinh row dữ liệu hoặc audit thứ hai.
 
-## Production gates còn lại
+## Production gates
 
 - [x] Apps Script-only boundary.
 - [x] Frozen table allowlist.
 - [x] Server-side identity lookup.
-- [x] RBAC role map contract.
+- [x] RBAC role map contract và live RBAC hoạt động.
 - [x] `LockService` critical section.
 - [x] Durable idempotency lookup thông qua append-only `Audit_Log`.
 - [x] Compensating rollback cho append/maintenance multi-step writes.
-- [x] Apps Script Web App đã deploy và direct health xác nhận `authenticated=true`.
-- [x] HTMLService bridge transport đã triển khai trong source.
-- [ ] Copy `Bridge.html` + Code.gs mới vào Apps Script và deploy New version.
-- [ ] Cấu hình `ALLOWED_PARENT_ORIGINS_JSON`.
-- [ ] Cấu hình `RBAC_JSON` thật.
-- [ ] HTML bridge read smoke test đạt từ frontend origin.
+- [x] Apps Script Web App deploy thật và direct health xác nhận `authenticated=true`.
+- [x] First-party HTMLService + `google.script.run` transport được xác nhận live.
+- [x] Canonical `Equipment_Master` read smoke test đạt 19 dòng.
+- [x] Equipment Master live read-only UI đã có trong `AppShell.html`.
 - [ ] End-to-end write/idempotency smoke test bằng fixture riêng.
-- [ ] Nối UI live workflow với bridge response.
+- [ ] Maintenance transition negative-case smoke test.
+- [ ] Nối maintenance UI live với server transition response.
 - [ ] Persist BM-05 thật trước RELEASE.
 - [ ] Optimistic concurrency cho record update ngoài maintenance.
 - [ ] Evidence upload qua Drive adapter.
+- [ ] Hoàn tất các workspace HTMLService còn lại.
 
-Không merge PR vào `main` trước khi các gate live persistence bắt buộc được xác nhận.
+Không merge PR vào `main` trước khi các gate live write bắt buộc được xác nhận.
