@@ -15,11 +15,14 @@ describe('source-driven workflow rules', () => {
     expect(getInspectionEscalation('V').createWorkOrder).toBe(false)
   })
 
-  it('enforces repair -> verify -> release sequence', () => {
-    expect(transitionMaintenanceStatus('OPEN', 'START')).toBe('IN_PROGRESS')
+  it('enforces approval -> repair -> verify -> release sequence', () => {
+    expect(transitionMaintenanceStatus('OPEN', 'REQUEST_APPROVAL')).toBe('WAITING_APPROVAL')
+    expect(transitionMaintenanceStatus('WAITING_APPROVAL', 'APPROVE')).toBe('APPROVED')
+    expect(transitionMaintenanceStatus('APPROVED', 'START')).toBe('IN_PROGRESS')
     expect(transitionMaintenanceStatus('IN_PROGRESS', 'COMPLETE')).toBe('COMPLETED')
     expect(transitionMaintenanceStatus('COMPLETED', 'VERIFY')).toBe('VERIFIED')
     expect(transitionMaintenanceStatus('VERIFIED', 'RELEASE')).toBe('RELEASED')
-    expect(() => transitionMaintenanceStatus('OPEN', 'RELEASE')).toThrow()
+    expect(() => transitionMaintenanceStatus('OPEN', 'START')).toThrow()
+    expect(() => transitionMaintenanceStatus('WAITING_APPROVAL', 'RELEASE')).toThrow()
   })
 })
