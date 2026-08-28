@@ -20,6 +20,7 @@ export const GOOGLE_PERSISTENCE_CONFIG = {
   persistenceBoundary: 'APPS_SCRIPT_WEB_APP',
   transport: 'GOOGLE_APPS_SCRIPT',
   deploymentUrlEnv: 'VITE_APPS_SCRIPT_WEB_APP_URL',
+  deploymentUrl: 'https://script.google.com/macros/s/AKfycbzykTZpW60nZEdwXC3Wn2nRZe1ePrvhUwoER1cHjciiDNGZ34kWv_vfvhEpwSor-f95/exec',
 } as const
 
 export type GooglePersistenceConfig = typeof GOOGLE_PERSISTENCE_CONFIG
