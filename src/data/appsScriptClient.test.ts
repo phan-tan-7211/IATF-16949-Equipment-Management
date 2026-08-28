@@ -33,7 +33,7 @@ describe('Apps Script persistence client', () => {
     await expect(client.readTable<{ equipmentId: string }>('Equipment_Master')).resolves.toEqual([{ equipmentId: 'CNC-001' }])
   })
 
-  it('posts JSON as text/plain and carries the frozen contract plus operation id', async () => {
+  it('posts append JSON as text/plain and carries the frozen contract plus operation id', async () => {
     const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.method).toBe('POST')
       expect(init?.headers).toEqual({ 'Content-Type': 'text/plain;charset=UTF-8' })
@@ -59,6 +59,42 @@ describe('Apps Script persistence client', () => {
     })
 
     expect(result.result.auditId).toBe('audit-001')
+  })
+
+  it('sends workflow transitions without trusting actor identity from the browser', async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      expect(body).toMatchObject({
+        action: 'maintenanceTransition',
+        contractVersion: 'G1-frozen-2026-08-28',
+        workOrderId: 'WO-001',
+        workflowAction: 'VERIFY',
+        operationId: 'transition-001',
+      })
+      expect(body.actor).toBeUndefined()
+      expect(body.role).toBeUndefined()
+      return jsonResponse({
+        ok: true,
+        duplicate: false,
+        operationId: 'transition-001',
+        result: {
+          workOrderId: 'WO-001',
+          previousStatus: 'COMPLETED',
+          status: 'VERIFIED',
+          executionId: 'EX-001',
+          auditId: 'audit-verify',
+        },
+      })
+    })
+
+    const client = createAppsScriptClient({ webAppUrl: WEB_APP_URL, fetchImpl: fetchImpl as typeof fetch })
+    const result = await client.transitionMaintenance({
+      workOrderId: 'WO-001',
+      workflowAction: 'VERIFY',
+      operationId: 'transition-001',
+    })
+
+    expect(result.result.status).toBe('VERIFIED')
   })
 
   it('surfaces Apps Script domain errors without treating them as successful writes', async () => {
