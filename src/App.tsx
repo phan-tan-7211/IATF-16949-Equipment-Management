@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import './App.css'
 import { PwaStatus } from './PwaStatus'
-import { CALIBRATION_SOURCE_SNAPSHOT, mockCalibrationMaster } from './data/calibrationData'
+import { CALIBRATION_SOURCE_SNAPSHOT, calibrationQuoteSummary, calibrationVendorQuotes, mockCalibrationMaster } from './data/calibrationData'
 import { mockEquipment, mockInspections, mockPlans, mockTooling, mockWorkOrders } from './data/mockData'
 import { getCalibrationDueStatus } from './domain/calibration'
 import type { MaintenanceWorkOrder } from './domain/models'
@@ -19,6 +19,7 @@ const statusLabel: Record<string, string> = {
   V: 'V · Tốt', STOP_REPAIR: 'X · Dừng sửa chữa',
 }
 const CALIBRATION_AS_OF_DATE = '2026-08-28'
+const formatVnd = (value: number) => new Intl.NumberFormat('vi-VN').format(value)
 const workflowActionByStatus: Partial<Record<MaintenanceWorkflowStatus, { action: MaintenanceWorkflowAction; label: string }>> = {
   OPEN: { action: 'START', label: 'Bắt đầu sửa chữa' },
   IN_PROGRESS: { action: 'COMPLETE', label: 'Hoàn tất sửa chữa' },
@@ -62,11 +63,14 @@ function CalibrationView() {
   const overdue = rows.filter((item) => item.dueStatus === 'OVERDUE').length
   const noPlan = rows.filter((item) => item.dueStatus === 'NO_PLAN').length
   const missingControl = rows.filter((item) => !item.controlNumber).length
+  const providers = calibrationQuoteSummary.map((item) => item.provider)
 
   return <div className="stack">
-    <section className="content-card" aria-labelledby="calibration-title"><div className="section-heading"><div><p className="eyebrow">CEV-BM-STCL-03 · Source snapshot</p><h2 id="calibration-title">Calibration Master</h2></div><span className="status-pill">SOURCE {CALIBRATION_SOURCE_SNAPSHOT}</span></div><p className="muted">Dữ liệu dưới đây là mẫu lịch sử trích từ danh mục hiệu chuẩn 2024 để xác nhận schema/UI, không phải trạng thái thiết bị live hiện tại. Chi phí nhà cung cấp không được đưa vào hệ thống.</p></section>
+    <section className="content-card" aria-labelledby="calibration-title"><div className="section-heading"><div><p className="eyebrow">CEV-BM-STCL-03 · Source snapshot</p><h2 id="calibration-title">Calibration Master</h2></div><span className="status-pill">SOURCE {CALIBRATION_SOURCE_SNAPSHOT}</span></div><p className="muted">Dữ liệu hiệu chuẩn và chi phí dưới đây được giữ theo tài liệu source 2024. Đây là dữ liệu lịch sử để đối chiếu và lập kế hoạch, không được hiểu là trạng thái live hoặc báo giá hiện hành của nhà cung cấp.</p></section>
     <section className="metric-grid" aria-label="Tóm tắt dữ liệu hiệu chuẩn mẫu"><article><span>Mẫu đang hiển thị</span><strong>{rows.length}</strong><small>Trong 48 dòng nguồn 2024</small></article><article><span>Quá hạn theo 28/08/2026</span><strong>{overdue}</strong><small>Chỉ tính từ snapshot lịch sử</small></article><article><span>Chưa có kế hoạch</span><strong>{noPlan}</strong><small>Không có next due trong nguồn</small></article><article><span>Thiếu số kiểm soát</span><strong>{missingControl}</strong><small>Dùng ID nội bộ ổn định</small></article></section>
     <section className="content-card" aria-labelledby="calibration-list-title"><div className="section-heading"><div><p className="eyebrow">Master + due status</p><h3 id="calibration-list-title">Thiết bị đo & kế hoạch hiệu chuẩn</h3></div><button className="secondary-action" type="button">+ Thiết bị đo</button></div><div className="table-wrap"><table><caption className="sr-only">Danh sách thiết bị đo lấy mẫu từ nguồn hiệu chuẩn 2024</caption><thead><tr><th scope="col">Số kiểm soát</th><th scope="col">Thiết bị</th><th scope="col">Bộ phận</th><th scope="col">Thông số / chính xác</th><th scope="col">Hiệu chuẩn gần nhất</th><th scope="col">Kế hoạch tiếp theo</th><th scope="col">Trạng thái</th></tr></thead><tbody>{rows.map(item=><tr key={item.calibrationEquipmentId}><td><b>{item.controlNumber ?? 'Chưa cấp'}</b><small>{item.calibrationEquipmentId}</small></td><td>{item.instrumentName}<small>{[item.model,item.manufacturer,item.serialNumber].filter(Boolean).join(' · ') || '—'}</small></td><td>{item.department ?? '—'}</td><td>{item.specification ?? '—'}<small>{item.accuracy ? `Độ chính xác: ${item.accuracy}` : item.purpose ?? '—'}</small></td><td>{item.lastCalibrationDate ?? '—'}</td><td>{item.nextDueDate ?? '—'}</td><td><span className={`badge ${item.dueStatus === 'OVERDUE' ? 'down' : item.dueStatus === 'VALID' ? 'running' : 'maintenance'}`}>{statusLabel[item.dueStatus]}</span></td></tr>)}</tbody></table></div></section>
+    <section className="content-card" aria-labelledby="quote-summary-title"><div className="section-heading"><div><p className="eyebrow">Báo giá nguồn · 48 thiết bị</p><h3 id="quote-summary-title">So sánh chi phí hiệu chuẩn 2024</h3></div><span className="status-pill">HISTORICAL COST</span></div><div className="table-wrap"><table><caption className="sr-only">Tổng báo giá hiệu chuẩn theo nhà cung cấp trong tài liệu source 2024</caption><thead><tr><th scope="col">Nhà cung cấp</th><th scope="col">Số lượng</th><th scope="col">Trước VAT</th><th scope="col">VAT</th><th scope="col">Sau VAT</th></tr></thead><tbody>{calibrationQuoteSummary.map(item=><tr key={item.provider}><td><b>{item.provider}</b></td><td>{item.itemCount}</td><td>{formatVnd(item.subtotalVnd)} VND</td><td>{Math.round(item.vatRate * 100)}%</td><td><b>{formatVnd(item.totalVnd)} VND</b></td></tr>)}</tbody></table></div></section>
+    <section className="content-card" aria-labelledby="quote-detail-title"><div className="section-heading"><div><p className="eyebrow">Mẫu chi tiết theo thiết bị</p><h3 id="quote-detail-title">Chi phí nhà cung cấp từ source</h3></div></div><div className="table-wrap"><table><caption className="sr-only">Báo giá mẫu của từng thiết bị hiệu chuẩn theo tài liệu source</caption><thead><tr><th scope="col">Thiết bị</th>{providers.map(provider=><th scope="col" key={provider}>{provider}</th>)}</tr></thead><tbody>{rows.filter(item=>calibrationVendorQuotes.some(q=>q.calibrationEquipmentId===item.calibrationEquipmentId)).map(item=><tr key={item.calibrationEquipmentId}><td><b>{item.controlNumber ?? item.instrumentName}</b><small>{item.instrumentName}</small></td>{providers.map(provider=>{const found=calibrationVendorQuotes.find(q=>q.calibrationEquipmentId===item.calibrationEquipmentId&&q.provider===provider);return <td key={provider}>{found ? `${formatVnd(found.amountVnd)} VND` : '—'}</td>})}</tr>)}</tbody></table></div></section>
   </div>
 }
 
