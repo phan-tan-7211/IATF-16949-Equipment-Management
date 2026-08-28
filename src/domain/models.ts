@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PERSISTENCE_TABLES } from './persistenceContract'
 
 const NonEmpty = z.string().trim().min(1)
 const OptionalText = z.string().trim().optional()
@@ -280,22 +281,5 @@ export type CalibrationLog = z.infer<typeof CalibrationLogSchema>
 export type EquipmentMovement = z.infer<typeof EquipmentMovementSchema>
 export type AuditLog = z.infer<typeof AuditLogSchema>
 
-export const CORE_SHEET_NAMES = [
-  'Equipment_Master',
-  'Daily_Inspection',
-  'Daily_Inspection_Item',
-  'Maintenance_Plan',
-  'Maintenance_Plan_Item',
-  'Maintenance_Work_Order',
-  'Maintenance_Execution',
-  'Maintenance_Result_Item',
-  'Maintenance_Log',
-  'Equipment_Handover',
-  'Downtime_Event',
-  'Tooling_Master',
-  'Tooling_Maintenance_Plan',
-  'Tooling_Modification',
-  'Calibration_Log',
-  'Equipment_Movement_Log',
-  'Audit_Log',
-] as const
+/** @deprecated Use PERSISTENCE_TABLES from persistenceContract.ts for new code. */
+export const CORE_SHEET_NAMES = PERSISTENCE_TABLES
