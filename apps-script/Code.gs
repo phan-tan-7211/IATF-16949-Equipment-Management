@@ -109,28 +109,39 @@ function executeAppendRecord_(body, actor) {
       return { ok: true, duplicate: true, operationId: operationId, result: previous }
     }
 
-    const appended = appendRecord_(table, record)
-    const auditId = Utilities.getUuid()
-    const result = {
-      table: table,
-      rowNumber: appended.rowNumber,
-      auditId: auditId,
+    let appended = null
+
+    try {
+      appended = appendRecord_(table, record)
+      const auditId = Utilities.getUuid()
+      const result = {
+        table: table,
+        rowNumber: appended.rowNumber,
+        auditId: auditId,
+      }
+
+      appendAudit_({
+        auditId: auditId,
+        userId: actor.email,
+        action: operationAuditAction_('APPEND_RECORD', operationId),
+        entityType: entityType,
+        entityId: entityId,
+        newValueJson: JSON.stringify({
+          operationId: operationId,
+          result: result,
+          record: record,
+        }),
+      })
+
+      return { ok: true, duplicate: false, operationId: operationId, result: result }
+    } catch (error) {
+      if (appended) {
+        compensateOrThrow_(error, function () {
+          deleteRecordRow_(table, appended.rowNumber)
+        })
+      }
+      throw error
     }
-
-    appendAudit_({
-      auditId: auditId,
-      userId: actor.email,
-      action: operationAuditAction_('APPEND_RECORD', operationId),
-      entityType: entityType,
-      entityId: entityId,
-      newValueJson: JSON.stringify({
-        operationId: operationId,
-        result: result,
-        record: record,
-      }),
-    })
-
-    return { ok: true, duplicate: false, operationId: operationId, result: result }
   } finally {
     lock.releaseLock()
   }
@@ -166,6 +177,23 @@ function appendRecord_(table, record) {
   })
   sheet.appendRow(row)
   return { rowNumber: sheet.getLastRow() }
+}
+
+function deleteRecordRow_(table, rowNumber) {
+  const sheet = getSheet_(table)
+  const lastRow = sheet.getLastRow()
+  if (rowNumber < 2 || rowNumber > lastRow) throw new Error('ROLLBACK_ROW_NOT_FOUND:' + table + ':' + rowNumber)
+  sheet.deleteRow(rowNumber)
+}
+
+function compensateOrThrow_(originalError, compensation) {
+  try {
+    compensation()
+  } catch (compensationError) {
+    const originalMessage = originalError && originalError.message ? originalError.message : String(originalError)
+    const compensationMessage = compensationError && compensationError.message ? compensationError.message : String(compensationError)
+    throw new Error('WRITE_FAILED:' + originalMessage + ':ROLLBACK_FAILED:' + compensationMessage)
+  }
 }
 
 function appendAudit_(input) {
