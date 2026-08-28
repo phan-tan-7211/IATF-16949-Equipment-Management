@@ -74,7 +74,7 @@ export class AppsScriptPersistenceError extends Error {
 function resolveWebAppUrl(explicitUrl?: string) {
   const configured = explicitUrl !== undefined
     ? explicitUrl
-    : (import.meta.env.VITE_APPS_SCRIPT_WEB_APP_URL || GOOGLE_PERSISTENCE_CONFIG.deploymentUrl)
+    : (import.meta.env.VITE_APPS_SCRIPT_WEB_APP_URL || GOOGLE_PERSISTENCE_CONFIG.defaultWebAppUrl)
   const url = String(configured ?? '').trim()
   if (!url) throw new AppsScriptPersistenceError('APPS_SCRIPT_WEB_APP_URL_NOT_CONFIGURED')
 
@@ -108,6 +108,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T
 }
 
+/**
+ * Direct ContentService client retained for non-browser diagnostics/tests only.
+ * Production browser transport is the Apps Script HTML bridge because cross-origin
+ * fetch to /exec can be blocked by redirect/CORS behavior.
+ */
 export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl?: typeof fetch }) {
   const fetchImpl = options?.fetchImpl ?? fetch
   const getUrl = () => resolveWebAppUrl(options?.webAppUrl)
