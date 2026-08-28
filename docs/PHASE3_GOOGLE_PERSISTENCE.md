@@ -39,18 +39,22 @@
 
 ## Kiến trúc Apps Script
 
-`apps-script/Code.gs` là persistence gateway duy nhất giữa UI và Google Sheets/Drive.
+`apps-script/Code.gs` và `apps-script/Maintenance.gs` tạo persistence/workflow gateway duy nhất giữa UI và Google Sheets/Drive.
 
 Luồng chuẩn:
 
-1. UI gọi Apps Script Web App.
-2. Apps Script lấy người dùng thực tế từ `Session.getActiveUser().getEmail()`.
-3. Role được tra từ Script Property `RBAC_JSON`; browser không được tin cậy để tự khai role.
-4. Apps Script kiểm tra `contractVersion`, table allowlist và role policy.
-5. Write chạy trong `LockService` để tránh ghi đồng thời làm sai transaction logic.
-6. `operationId` được dùng làm idempotency key.
-7. Record được append vào sheet đích theo header G1.
+1. UI gọi Apps Script Web App qua `src/data/appsScriptClient.ts`.
+2. Frontend chỉ chấp nhận HTTPS deployment URL `script.google.com/.../exec`.
+3. Apps Script lấy người dùng thực tế từ `Session.getActiveUser().getEmail()`.
+4. Role được tra từ Script Property `RBAC_JSON`; browser không được tin cậy để tự khai actor hoặc role.
+5. Apps Script kiểm tra `contractVersion`, table allowlist và role policy.
+6. Write/transition chạy trong `LockService`.
+7. `operationId` được dùng làm idempotency key và lưu bền trong append-only `Audit_Log`, không dùng Script Properties làm operation store.
 8. Apps Script tự append `Audit_Log`; client không được ghi trực tiếp `Audit_Log`.
+9. Maintenance state machine được kiểm tra lại phía Apps Script trước khi thay đổi Work Order.
+10. `APPROVE` chặn requester tự phê duyệt.
+11. `VERIFY` lấy `performedBy` authoritative từ `Maintenance_Execution` và chặn performer tự verify.
+12. `RELEASE` yêu cầu BM-05 đã accepted và condition không phải `NOT_OPERABLE`.
 
 Không dùng OAuth token, refresh token, service-account JSON hoặc private key trong repo hay browser bundle.
 
@@ -59,24 +63,33 @@ Không dùng OAuth token, refresh token, service-account JSON hoặc private key
 - [x] G1 schema/workflow/persistence contract freeze.
 - [x] Canonical Google Sheet + 9 Drive evidence folders.
 - [x] Source seeding Calibration và Equipment.
-- [x] React workflow transition tách thành pure domain execution; không còn side effect lồng trong `setWorkOrders` updater.
+- [x] React workflow transition tách thành pure domain execution.
 - [x] Mobile navigation truy cập đủ 7 workspace.
-- [x] Workflow action map sang governance policy và role-gate trước transition.
-- [x] Requester self-approval bị chặn.
-- [x] Apps Script persistence gateway scaffold được tạo.
-- [x] Apps Script có table allowlist, role gate, `LockService`, idempotency và append-only `Audit_Log` path.
+- [x] Workflow action map sang governance policy và role-gate phía domain.
+- [x] Requester self-approval bị chặn phía domain và Apps Script.
+- [x] Apps Script-only persistence gateway.
+- [x] Table allowlist + server-side role gate.
+- [x] `LockService` critical section cho append và maintenance transition.
+- [x] Durable idempotency lookup qua append-only `Audit_Log`.
+- [x] Frontend Apps Script client adapter + deployment URL allowlist.
+- [x] Browser không gửi actor/role trong maintenance transition payload.
+- [x] Maintenance state machine được enforce lại phía Apps Script.
+- [x] `performedBy != verifierId` được enforce phía Apps Script từ `Maintenance_Execution`.
 - [x] Vercel persistence endpoint/service-account architecture đã bị loại bỏ.
+- [x] Checklist deploy Apps Script tại `docs/APPS_SCRIPT_DEPLOYMENT.md`.
 
 ## Gate còn lại trước live write
 
 - [ ] Tạo/deploy Apps Script Web App từ thư mục `apps-script/`.
+- [ ] Deployment phải chạy **as user accessing the web app** để identity server-side khả dụng.
 - [ ] Cấu hình Script Property `RBAC_JSON` bằng email Google Workspace thật và role tương ứng.
-- [ ] Chọn deployment access phù hợp để `Session.getActiveUser().getEmail()` trả identity đáng tin cậy; nếu email trống thì write phải bị chặn.
+- [ ] Xác nhận health trả `authenticated=true`.
 - [ ] Đặt URL deployment vào frontend qua `VITE_APPS_SCRIPT_WEB_APP_URL`.
-- [ ] Tạo Apps Script client adapter phía frontend cho read/write.
-- [ ] Bổ sung optimistic/concurrency check theo record/version nghiệp vụ ngoài `LockService`.
-- [ ] Authentication/authorization UI thực tế để demo actor constant không còn được dùng cho production workflow.
-- [ ] Segregation `performedBy != verifierId`: lấy performer authoritative từ `Maintenance_Execution` và enforce trong Apps Script + domain.
-- [ ] Integration tests với fixture/sandbox data, không dùng production rows.
+- [ ] End-to-end read smoke test với canonical Sheet.
+- [ ] End-to-end append/idempotency smoke test bằng fixture riêng, không dùng production rows.
+- [ ] End-to-end maintenance transition smoke test, bao gồm self-approval/self-verification negative cases.
+- [ ] Tích hợp frontend UI với server transition response thay vì chỉ local transition khi live persistence được bật.
+- [ ] Evidence upload qua Drive adapter Apps Script.
+- [ ] Generic record update ngoài maintenance cần optimistic version/concurrency contract trước khi mở write.
 
-Không bật production live write cho đến khi các gate còn lại hoàn tất và Quality Gate + preview deployment đều xanh.
+Không bật production live write cho đến khi các gate live ở trên hoàn tất và Quality Gate + preview deployment đều xanh.
