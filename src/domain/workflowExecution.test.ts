@@ -20,10 +20,12 @@ describe('executeMaintenanceTransition', () => {
       workOrder: baseWorkOrder,
       action: 'REQUEST_APPROVAL',
       actorUserId: 'supervisor-01',
+      actorRole: 'SUPERVISOR',
       now: '2026-08-28T02:00:00.000Z',
     })
 
     expect(baseWorkOrder.status).toBe('OPEN')
+    expect(result.allowed).toBe(true)
     expect(result.workOrder.status).toBe('WAITING_APPROVAL')
     expect(result.auditEvents).toHaveLength(1)
     expect(result.auditEvents[0]).toMatchObject({
@@ -41,9 +43,11 @@ describe('executeMaintenanceTransition', () => {
       workOrder: verifiedWorkOrder,
       action: 'RELEASE',
       actorUserId: 'supervisor-01',
+      actorRole: 'SUPERVISOR',
       now: '2026-08-28T03:00:00.000Z',
     })
 
+    expect(result.allowed).toBe(true)
     expect(result.workOrder.status).toBe('RELEASED')
     expect(result.handover).toMatchObject({
       handoverId: 'HO-WO-TEST-01',
@@ -53,5 +57,35 @@ describe('executeMaintenanceTransition', () => {
       condition: 'NORMAL',
     })
     expect(result.auditEvents.map((event) => event.action)).toEqual(['ACCEPT_HANDOVER', 'RELEASE'])
+  })
+
+  it('blocks an operator from approving a work order', () => {
+    const waitingWorkOrder: MaintenanceWorkOrder = { ...baseWorkOrder, status: 'WAITING_APPROVAL' }
+    const result = executeMaintenanceTransition({
+      workOrder: waitingWorkOrder,
+      action: 'APPROVE',
+      actorUserId: 'operator-02',
+      actorRole: 'OPERATOR',
+      now: '2026-08-28T03:30:00.000Z',
+    })
+
+    expect(result.allowed).toBe(false)
+    expect(result.workOrder.status).toBe('WAITING_APPROVAL')
+    expect(result.auditEvents).toHaveLength(0)
+  })
+
+  it('blocks requester self-approval even for an authorized role', () => {
+    const waitingWorkOrder: MaintenanceWorkOrder = { ...baseWorkOrder, requestedBy: 'manager-01', status: 'WAITING_APPROVAL' }
+    const result = executeMaintenanceTransition({
+      workOrder: waitingWorkOrder,
+      action: 'APPROVE',
+      actorUserId: 'manager-01',
+      actorRole: 'MANAGER',
+      now: '2026-08-28T03:45:00.000Z',
+    })
+
+    expect(result.allowed).toBe(false)
+    expect(result.workOrder.status).toBe('WAITING_APPROVAL')
+    expect(result.message).toMatch(/không được tự phê duyệt/i)
   })
 })
