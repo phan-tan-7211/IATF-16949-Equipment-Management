@@ -1,5 +1,5 @@
 import { GOOGLE_PERSISTENCE_CONFIG } from '../domain/persistenceConfig'
-import type { PERSISTENCE_TABLES } from '../domain/persistenceContract'
+import { PERSISTENCE_TABLES } from '../domain/persistenceContract'
 
 type PersistenceTable = (typeof PERSISTENCE_TABLES)[number]
 
@@ -42,6 +42,8 @@ type AppendRecordResponse = {
   }
 }
 
+const ALLOWED_TABLES = new Set<string>(GOOGLE_PERSISTENCE_CONFIG.tables)
+
 export class AppsScriptPersistenceError extends Error {
   constructor(message: string) {
     super(message)
@@ -65,6 +67,10 @@ function resolveWebAppUrl(explicitUrl?: string) {
   }
 
   return parsed.toString()
+}
+
+function assertAllowedTable(table: string) {
+  if (!ALLOWED_TABLES.has(table)) throw new AppsScriptPersistenceError('TABLE_NOT_ALLOWED')
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -94,9 +100,7 @@ export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl
     },
 
     async readTable<T extends Record<string, unknown>>(table: PersistenceTable): Promise<T[]> {
-      if (!GOOGLE_PERSISTENCE_CONFIG.tables.includes(table)) {
-        throw new AppsScriptPersistenceError('TABLE_NOT_ALLOWED')
-      }
+      assertAllowedTable(table)
 
       const url = new URL(getUrl())
       url.searchParams.set('action', 'readTable')
@@ -109,9 +113,7 @@ export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl
     },
 
     async appendRecord(input: AppendRecordInput): Promise<AppendRecordResponse> {
-      if (input.table === 'Audit_Log' || !GOOGLE_PERSISTENCE_CONFIG.tables.includes(input.table)) {
-        throw new AppsScriptPersistenceError('TABLE_NOT_ALLOWED')
-      }
+      assertAllowedTable(input.table)
       if (!input.operationId.trim()) throw new AppsScriptPersistenceError('OPERATION_ID_REQUIRED')
 
       return parseResponse<AppendRecordResponse>(await fetchImpl(getUrl(), {
