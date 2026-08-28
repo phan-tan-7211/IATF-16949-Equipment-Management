@@ -15,4 +15,14 @@ describe('equipment app shell', () => {
     fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
     expect(screen.getByRole('heading', { name: 'Bảo trì & sửa chữa' })).toBeInTheDocument()
   })
+
+  it('shows calibration as a historical source snapshot instead of live data', () => {
+    render(<App />)
+    const desktopNav = screen.getByLabelText('Điều hướng desktop')
+    fireEvent.click(within(desktopNav).getByRole('button', { name: 'Hiệu chuẩn' }))
+
+    expect(screen.getByRole('heading', { name: 'Calibration Master' })).toBeInTheDocument()
+    expect(screen.getByText(/mẫu lịch sử trích từ danh mục hiệu chuẩn 2024/i)).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+  })
 })
