@@ -16,6 +16,19 @@ describe('equipment app shell', () => {
     expect(screen.getByRole('heading', { name: 'Bảo trì & sửa chữa' })).toBeInTheDocument()
   })
 
+  it('advances a work order through the controlled repair sequence', () => {
+    render(<App />)
+    const desktopNav = screen.getByLabelText('Điều hướng desktop')
+    fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
+
+    const startButton = screen.getByRole('button', { name: 'Bắt đầu sửa chữa' })
+    fireEvent.click(startButton)
+    expect(screen.getByText('Đang xử lý', { selector: '.badge' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất sửa chữa' }))
+    expect(screen.getByText('Đã hoàn tất', { selector: '.badge' })).toBeInTheDocument()
+  })
+
   it('shows calibration as a historical source snapshot instead of live data', () => {
     render(<App />)
     const desktopNav = screen.getByLabelText('Điều hướng desktop')
