@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CEV Equipment">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <path d="M150 144h212v64H150zM128 240h256v144H128z" fill="#f8fafc"/>
+  <circle cx="192" cy="312" r="32" fill="#0f172a"/>
+  <circle cx="320" cy="312" r="32" fill="#0f172a"/>
+  <path d="M230 120h52v48h-52z" fill="#f8fafc"/>
+</svg>
