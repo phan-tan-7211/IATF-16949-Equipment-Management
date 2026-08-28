@@ -10,6 +10,7 @@ describe('GOOGLE_PERSISTENCE_CONFIG', () => {
     expect(GOOGLE_PERSISTENCE_CONFIG.persistenceBoundary).toBe('APPS_SCRIPT_WEB_APP')
     expect(GOOGLE_PERSISTENCE_CONFIG.transport).toBe('GOOGLE_APPS_SCRIPT')
     expect(GOOGLE_PERSISTENCE_CONFIG.deploymentUrlEnv).toBe('VITE_APPS_SCRIPT_WEB_APP_URL')
+    expect(GOOGLE_PERSISTENCE_CONFIG.deploymentUrl).toMatch(/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/)
   })
 
   it('maps every frozen evidence folder exactly once', () => {
