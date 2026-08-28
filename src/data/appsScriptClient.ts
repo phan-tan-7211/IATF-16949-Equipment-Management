@@ -72,7 +72,10 @@ export class AppsScriptPersistenceError extends Error {
 }
 
 function resolveWebAppUrl(explicitUrl?: string) {
-  const url = String(explicitUrl ?? import.meta.env.VITE_APPS_SCRIPT_WEB_APP_URL ?? '').trim()
+  const configured = explicitUrl !== undefined
+    ? explicitUrl
+    : (import.meta.env.VITE_APPS_SCRIPT_WEB_APP_URL || GOOGLE_PERSISTENCE_CONFIG.deploymentUrl)
+  const url = String(configured ?? '').trim()
   if (!url) throw new AppsScriptPersistenceError('APPS_SCRIPT_WEB_APP_URL_NOT_CONFIGURED')
 
   let parsed: URL
@@ -108,10 +111,14 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl?: typeof fetch }) {
   const fetchImpl = options?.fetchImpl ?? fetch
   const getUrl = () => resolveWebAppUrl(options?.webAppUrl)
+  const authenticatedRequest: Pick<RequestInit, 'credentials' | 'redirect'> = {
+    credentials: 'include',
+    redirect: 'follow',
+  }
 
   const postJson = async <T>(payload: Record<string, unknown>): Promise<T> => parseResponse<T>(await fetchImpl(getUrl(), {
+    ...authenticatedRequest,
     method: 'POST',
-    redirect: 'follow',
     headers: {
       'Content-Type': 'text/plain;charset=UTF-8',
     },
@@ -126,8 +133,8 @@ export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl
       const url = new URL(getUrl())
       url.searchParams.set('action', 'health')
       return parseResponse<AppsScriptHealthResponse>(await fetchImpl(url, {
+        ...authenticatedRequest,
         method: 'GET',
-        redirect: 'follow',
       }))
     },
 
@@ -138,8 +145,8 @@ export function createAppsScriptClient(options?: { webAppUrl?: string; fetchImpl
       url.searchParams.set('action', 'readTable')
       url.searchParams.set('table', table)
       const response = await parseResponse<AppsScriptReadResponse<T>>(await fetchImpl(url, {
+        ...authenticatedRequest,
         method: 'GET',
-        redirect: 'follow',
       }))
       return response.rows
     },
