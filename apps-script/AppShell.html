@@ -10,381 +10,224 @@
     :root {
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color-scheme: light;
-      --bg: #f5f7fa;
-      --surface: #ffffff;
-      --surface-soft: #f8fafc;
-      --text: #172033;
-      --muted: #637083;
-      --line: #dce3ea;
-      --line-strong: #c7d1dc;
-      --accent: #214f7b;
-      --accent-soft: #eaf2f8;
-      --success: #18794e;
-      --success-soft: #e9f7f0;
-      --warning: #8a5a00;
-      --warning-soft: #fff5db;
-      --danger: #b42318;
-      --danger-soft: #fff0ee;
-      --shadow: 0 14px 40px rgba(23, 32, 51, .08);
-      --radius: 16px;
+      --bg: #f5f7fa; --surface: #fff; --soft: #f8fafc; --text: #172033; --muted: #637083;
+      --line: #dce3ea; --line-strong: #c7d1dc; --accent: #214f7b; --accent-soft: #eaf2f8;
+      --success: #18794e; --success-soft: #e9f7f0; --warning: #8a5a00; --warning-soft: #fff5db;
+      --danger: #b42318; --danger-soft: #fff0ee; --shadow: 0 14px 40px rgba(23,32,51,.08); --radius: 16px;
     }
-
     * { box-sizing: border-box; }
-    html { background: var(--bg); }
-    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5; }
     button, input, select { font: inherit; }
     button, input, select, a { -webkit-tap-highlight-color: transparent; }
-    :focus-visible { outline: 3px solid rgba(33, 79, 123, .35); outline-offset: 2px; }
-
-    .skip-link {
-      position: absolute; left: 12px; top: -80px; z-index: 1000;
-      background: var(--text); color: white; padding: 10px 14px; border-radius: 8px;
+    :focus-visible { outline: 3px solid rgba(33,79,123,.35); outline-offset: 2px; }
+    .skip-link { position:absolute; left:12px; top:-80px; z-index:1000; background:var(--text); color:#fff; padding:10px 14px; border-radius:8px; }
+    .skip-link:focus { top:12px; }
+    .topbar { position:sticky; top:0; z-index:20; background:rgba(255,255,255,.95); backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }
+    .topbar-inner { max-width:1440px; margin:auto; padding:12px 16px; display:flex; gap:14px; align-items:center; justify-content:space-between; }
+    .brand { display:flex; gap:10px; align-items:center; min-width:0; }
+    .brand-mark { width:40px; height:40px; border-radius:12px; display:grid; place-items:center; flex:0 0 auto; background:var(--accent); color:#fff; font-weight:800; }
+    .brand-copy strong { display:block; font-size:14px; }
+    .brand-copy span { display:block; color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .identity { display:none; text-align:right; }
+    .identity strong { display:block; font-size:12px; }
+    .identity span { display:block; color:var(--muted); font-size:11px; }
+    .nav { max-width:1440px; margin:auto; padding:0 16px 10px; display:flex; gap:8px; overflow-x:auto; }
+    .nav button { min-height:40px; border:1px solid var(--line); border-radius:999px; background:var(--surface); padding:8px 14px; font-weight:750; cursor:pointer; white-space:nowrap; }
+    .nav button[aria-selected="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+    main { max-width:1440px; margin:auto; padding:20px 16px 48px; }
+    .hero { display:grid; gap:14px; margin-bottom:18px; }
+    .eyebrow { margin:0 0 4px; color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    h1 { margin:0; font-size:clamp(26px,5vw,40px); line-height:1.12; letter-spacing:-.04em; }
+    .hero p { margin:8px 0 0; color:var(--muted); max-width:800px; }
+    .connection-card { display:grid; gap:10px; padding:14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow); }
+    .connection-row { display:flex; align-items:center; gap:10px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:var(--warning); flex:0 0 auto; }
+    .dot.ok { background:var(--success); } .dot.error { background:var(--danger); }
+    .connection-copy strong { display:block; font-size:13px; } .connection-copy span { display:block; font-size:12px; color:var(--muted); }
+    .btn { min-height:44px; border:1px solid var(--line-strong); border-radius:10px; background:var(--surface); color:var(--text); padding:9px 14px; cursor:pointer; font-weight:750; }
+    .btn:hover { border-color:var(--accent); } .btn:disabled { cursor:not-allowed; opacity:.55; }
+    .btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .btn-danger { background:var(--danger-soft); color:var(--danger); border-color:#f4c7c3; }
+    .stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:18px; }
+    .stat { padding:14px; background:var(--surface); border:1px solid var(--line); border-radius:14px; }
+    .stat span { display:block; color:var(--muted); font-size:12px; } .stat strong { display:block; margin-top:2px; font-size:24px; letter-spacing:-.03em; }
+    .workspace { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+    .workspace + .workspace { margin-top:18px; }
+    .workspace-head { padding:16px; border-bottom:1px solid var(--line); display:grid; gap:12px; }
+    .workspace-title h2 { margin:0; font-size:18px; } .workspace-title p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+    .filters { display:grid; gap:10px; }
+    .field label { display:block; margin-bottom:5px; color:var(--muted); font-size:12px; font-weight:700; }
+    .field input, .field select { width:100%; min-height:44px; border:1px solid var(--line-strong); border-radius:10px; background:var(--surface); color:var(--text); padding:9px 11px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; min-width:960px; border-collapse:collapse; }
+    caption { text-align:left; padding:0; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+    th, td { padding:12px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { background:var(--soft); color:#4d5b6e; font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+    td { font-size:13px; } tbody tr:hover { background:#fbfcfd; } tbody tr:last-child td { border-bottom:0; }
+    .entity-name { font-weight:800; } .mono { margin-top:2px; color:var(--muted); font-size:11px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .muted { color:var(--muted); }
+    .badge { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:800; white-space:nowrap; }
+    .badge-ok { background:var(--success-soft); color:var(--success); } .badge-warn { background:var(--warning-soft); color:var(--warning); }
+    .badge-danger { background:var(--danger-soft); color:var(--danger); } .badge-default { background:var(--accent-soft); color:var(--accent); }
+    .actions { display:flex; flex-wrap:wrap; gap:6px; min-width:160px; }
+    .action-btn { min-height:36px; border:1px solid var(--line-strong); border-radius:9px; padding:6px 10px; background:var(--surface); cursor:pointer; font-size:12px; font-weight:800; }
+    .action-btn:hover { border-color:var(--accent); } .action-btn:disabled { opacity:.5; cursor:not-allowed; }
+    .notice { margin:0 0 14px; padding:12px 14px; border:1px solid #eed9a3; border-radius:12px; background:var(--warning-soft); color:#664500; font-size:13px; }
+    .error-panel { display:none; margin-bottom:16px; padding:14px; background:var(--danger-soft); border:1px solid #f4c7c3; border-radius:12px; color:var(--danger); }
+    .error-panel strong { display:block; margin-bottom:3px; }
+    .empty { padding:36px 18px; text-align:center; color:var(--muted); }
+    .screen { display:none; } .screen.active { display:block; }
+    .footer-note { margin:14px 2px 0; color:var(--muted); font-size:12px; }
+    @media (min-width:700px) {
+      .topbar-inner { padding:14px 24px; } .nav { padding:0 24px 12px; } main { padding:28px 24px 56px; } .identity { display:block; }
+      .hero { grid-template-columns:1fr minmax(280px,380px); align-items:end; } .connection-card { grid-template-columns:1fr auto; align-items:center; }
+      .stats { grid-template-columns:repeat(4,minmax(0,1fr)); } .workspace-head { grid-template-columns:1fr auto; align-items:end; padding:18px 20px; }
+      .filters { grid-template-columns:minmax(260px,360px) 180px; }
     }
-    .skip-link:focus { top: 12px; }
-
-    .app-shell { min-height: 100vh; }
-    .topbar {
-      position: sticky; top: 0; z-index: 20;
-      background: rgba(255,255,255,.94); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--line);
-    }
-    .topbar-inner {
-      max-width: 1440px; margin: 0 auto; padding: 12px 16px;
-      display: flex; gap: 12px; align-items: center; justify-content: space-between;
-    }
-    .brand { display: flex; gap: 10px; align-items: center; min-width: 0; }
-    .brand-mark {
-      width: 40px; height: 40px; border-radius: 12px; flex: 0 0 auto;
-      display: grid; place-items: center; background: var(--accent); color: white; font-weight: 800;
-      letter-spacing: -.04em;
-    }
-    .brand-copy { min-width: 0; }
-    .brand-copy strong { display: block; font-size: 14px; letter-spacing: -.01em; }
-    .brand-copy span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .identity { display: none; text-align: right; }
-    .identity strong { display: block; font-size: 12px; }
-    .identity span { display: block; font-size: 11px; color: var(--muted); }
-
-    main { max-width: 1440px; margin: 0 auto; padding: 20px 16px 48px; }
-    .hero { display: grid; gap: 14px; margin-bottom: 18px; }
-    .eyebrow { margin: 0 0 4px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-    h1 { margin: 0; font-size: clamp(26px, 5vw, 40px); line-height: 1.12; letter-spacing: -.04em; }
-    .hero p { margin: 8px 0 0; color: var(--muted); max-width: 760px; }
-
-    .connection-card {
-      display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius);
-      background: var(--surface); box-shadow: var(--shadow);
-    }
-    .connection-row { display: flex; align-items: center; gap: 10px; }
-    .dot { width: 10px; height: 10px; border-radius: 999px; background: var(--warning); flex: 0 0 auto; }
-    .dot.ok { background: var(--success); }
-    .dot.error { background: var(--danger); }
-    .connection-copy strong { display: block; font-size: 13px; }
-    .connection-copy span { display: block; font-size: 12px; color: var(--muted); }
-    .refresh-btn {
-      min-height: 44px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface);
-      color: var(--text); padding: 9px 14px; cursor: pointer; font-weight: 700;
-    }
-    .refresh-btn:hover { border-color: var(--accent); }
-    .refresh-btn:disabled { cursor: wait; opacity: .65; }
-
-    .stats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
-    .stat { padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
-    .stat span { display: block; color: var(--muted); font-size: 12px; }
-    .stat strong { display: block; margin-top: 2px; font-size: 24px; letter-spacing: -.03em; }
-
-    .workspace { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-    .workspace-head { padding: 16px; border-bottom: 1px solid var(--line); display: grid; gap: 12px; }
-    .workspace-title h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
-    .workspace-title p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
-    .filters { display: grid; gap: 10px; }
-    .field label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
-    .field input, .field select {
-      width: 100%; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 10px;
-      background: var(--surface); color: var(--text); padding: 9px 11px;
-    }
-    .field input::placeholder { color: #8b96a5; }
-
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; min-width: 960px; border-collapse: collapse; }
-    caption { text-align: left; padding: 0; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
-    th { position: sticky; top: 0; background: var(--surface-soft); color: #4d5b6e; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
-    td { font-size: 13px; }
-    tbody tr:hover { background: #fbfcfd; }
-    tbody tr:last-child td { border-bottom: 0; }
-    .equipment-name { font-weight: 800; color: var(--text); }
-    .equipment-id { margin-top: 2px; color: var(--muted); font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .muted { color: var(--muted); }
-    .badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; }
-    .badge-running { background: var(--success-soft); color: var(--success); }
-    .badge-maintenance { background: var(--warning-soft); color: var(--warning); }
-    .badge-down, .badge-stopped { background: var(--danger-soft); color: var(--danger); }
-    .badge-disposed { background: #eef1f4; color: #5f6b7a; }
-    .badge-default { background: var(--accent-soft); color: var(--accent); }
-    .empty { padding: 36px 18px; text-align: center; color: var(--muted); }
-    .error-panel { display: none; margin-bottom: 16px; padding: 14px; background: var(--danger-soft); border: 1px solid #f4c7c3; border-radius: 12px; color: var(--danger); }
-    .error-panel strong { display: block; margin-bottom: 3px; }
-
-    .footer-note { margin: 14px 2px 0; color: var(--muted); font-size: 12px; }
-
-    @media (min-width: 700px) {
-      .topbar-inner { padding: 14px 24px; }
-      main { padding: 28px 24px 56px; }
-      .identity { display: block; }
-      .hero { grid-template-columns: 1fr minmax(280px, 380px); align-items: end; }
-      .connection-card { grid-template-columns: 1fr auto; align-items: center; }
-      .stats { grid-template-columns: repeat(4, minmax(0,1fr)); }
-      .workspace-head { grid-template-columns: 1fr auto; align-items: end; padding: 18px 20px; }
-      .filters { grid-template-columns: minmax(260px, 360px) 180px; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
-    }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; scroll-behavior:auto!important; } }
   </style>
 </head>
 <body>
-  <a class="skip-link" href="#equipment-workspace">Bỏ qua đến danh sách thiết bị</a>
+  <a class="skip-link" href="#main">Bỏ qua đến nội dung chính</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><div class="brand-mark" aria-hidden="true">CEV</div><div class="brand-copy"><strong>Equipment Management</strong><span>IATF 16949 · G1 controlled workspace</span></div></div>
+      <div class="identity" aria-label="Người dùng hiện tại"><strong id="actorLabel">Đang xác thực…</strong><span id="contractLabel"></span></div>
+    </div>
+    <nav class="nav" aria-label="Khu vực làm việc" role="tablist">
+      <button id="tabEquipment" type="button" role="tab" aria-selected="true" aria-controls="screenEquipment" onclick="showScreen('equipment')">Thiết bị</button>
+      <button id="tabMaintenance" type="button" role="tab" aria-selected="false" aria-controls="screenMaintenance" onclick="showScreen('maintenance')">Bảo trì</button>
+    </nav>
+  </header>
 
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="topbar-inner">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">CEV</div>
-          <div class="brand-copy">
-            <strong>Equipment Management</strong>
-            <span>IATF 16949 · G1 controlled workspace</span>
-          </div>
-        </div>
-        <div class="identity" aria-label="Người dùng hiện tại">
-          <strong id="actorLabel">Đang xác thực…</strong>
-          <span id="contractLabel"></span>
-        </div>
-      </div>
-    </header>
+  <main id="main">
+    <div id="errorPanel" class="error-panel" role="alert"><strong>Yêu cầu không thành công</strong><span id="errorMessage"></span></div>
 
-    <main>
-      <section class="hero" aria-labelledby="page-title">
-        <div>
-          <p class="eyebrow">Thiết bị sản xuất</p>
-          <h1 id="page-title">Equipment Master</h1>
-          <p>Dữ liệu được đọc trực tiếp từ Google Sheets thông qua Apps Script. Màn hình này hiện chỉ đọc; thao tác ghi vẫn bị khóa cho tới khi hoàn tất kiểm thử transaction.</p>
-        </div>
-
-        <div class="connection-card" aria-live="polite">
-          <div class="connection-row">
-            <span id="connectionDot" class="dot" aria-hidden="true"></span>
-            <div class="connection-copy">
-              <strong id="connectionTitle">Đang kết nối Google persistence</strong>
-              <span id="connectionDetail">Apps Script first-party transport</span>
-            </div>
-          </div>
-          <button id="refreshButton" class="refresh-btn" type="button" onclick="loadEquipment()">Làm mới</button>
-        </div>
+    <section id="screenEquipment" class="screen active" role="tabpanel" aria-labelledby="tabEquipment">
+      <section class="hero" aria-labelledby="equipmentTitle">
+        <div><p class="eyebrow">Thiết bị sản xuất</p><h1 id="equipmentTitle">Equipment Master</h1><p>Danh mục thiết bị authoritative đọc trực tiếp từ Google Sheets thông qua Apps Script first-party.</p></div>
+        <div class="connection-card" aria-live="polite"><div class="connection-row"><span id="connectionDot" class="dot" aria-hidden="true"></span><div class="connection-copy"><strong id="connectionTitle">Đang kết nối Google persistence</strong><span id="connectionDetail">Apps Script HTMLService</span></div></div><button id="refreshEquipment" class="btn" type="button" onclick="loadEquipment()">Làm mới</button></div>
       </section>
-
-      <div id="errorPanel" class="error-panel" role="alert">
-        <strong>Không thể đọc Equipment Master</strong>
-        <span id="errorMessage"></span>
-      </div>
-
       <section class="stats" aria-label="Tóm tắt thiết bị">
-        <div class="stat"><span>Tổng thiết bị</span><strong id="statTotal">—</strong></div>
-        <div class="stat"><span>Running</span><strong id="statRunning">—</strong></div>
-        <div class="stat"><span>Maintenance / Down</span><strong id="statAttention">—</strong></div>
-        <div class="stat"><span>Kết quả đang hiển thị</span><strong id="statVisible">—</strong></div>
+        <div class="stat"><span>Tổng thiết bị</span><strong id="statTotal">—</strong></div><div class="stat"><span>Running</span><strong id="statRunning">—</strong></div><div class="stat"><span>Maintenance / Down</span><strong id="statAttention">—</strong></div><div class="stat"><span>Đang hiển thị</span><strong id="statVisible">—</strong></div>
       </section>
-
-      <section id="equipment-workspace" class="workspace" aria-labelledby="equipment-heading">
-        <div class="workspace-head">
-          <div class="workspace-title">
-            <h2 id="equipment-heading">Danh mục thiết bị</h2>
-            <p id="resultSummary">Đang tải dữ liệu…</p>
-          </div>
-          <div class="filters" aria-label="Bộ lọc Equipment Master">
-            <div class="field">
-              <label for="searchInput">Tìm thiết bị</label>
-              <input id="searchInput" type="search" placeholder="Tên, mã, model, khu vực…" autocomplete="off" oninput="applyFilters()">
-            </div>
-            <div class="field">
-              <label for="statusFilter">Trạng thái</label>
-              <select id="statusFilter" onchange="applyFilters()">
-                <option value="">Tất cả</option>
-                <option value="RUNNING">RUNNING</option>
-                <option value="MAINTENANCE">MAINTENANCE</option>
-                <option value="DOWN">DOWN</option>
-                <option value="STOPPED">STOPPED</option>
-                <option value="DISPOSED">DISPOSED</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <caption>Equipment Master đọc từ Google Sheets</caption>
-            <thead>
-              <tr>
-                <th scope="col">Thiết bị</th>
-                <th scope="col">Nhóm</th>
-                <th scope="col">Hãng / Model</th>
-                <th scope="col">Khu vực / Line</th>
-                <th scope="col">Phòng quản lý</th>
-                <th scope="col">Criticality</th>
-                <th scope="col">Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody id="equipmentRows">
-              <tr><td colspan="7" class="empty">Đang đọc dữ liệu từ Apps Script…</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <section class="workspace" aria-labelledby="equipmentHeading">
+        <div class="workspace-head"><div class="workspace-title"><h2 id="equipmentHeading">Danh mục thiết bị</h2><p id="equipmentSummary">Đang tải dữ liệu…</p></div><div class="filters"><div class="field"><label for="equipmentSearch">Tìm thiết bị</label><input id="equipmentSearch" type="search" placeholder="Tên, mã, model, khu vực…" autocomplete="off" oninput="filterEquipment()"></div><div class="field"><label for="equipmentStatus">Trạng thái</label><select id="equipmentStatus" onchange="filterEquipment()"><option value="">Tất cả</option><option>RUNNING</option><option>MAINTENANCE</option><option>DOWN</option><option>STOPPED</option><option>DISPOSED</option></select></div></div></div>
+        <div class="table-wrap"><table><caption>Equipment Master</caption><thead><tr><th>Thiết bị</th><th>Nhóm</th><th>Hãng / Model</th><th>Khu vực / Line</th><th>Phòng quản lý</th><th>Criticality</th><th>Trạng thái</th></tr></thead><tbody id="equipmentRows"><tr><td colspan="7" class="empty">Đang đọc dữ liệu…</td></tr></tbody></table></div>
       </section>
+    </section>
 
-      <p class="footer-note">Live read enabled · Live write disabled · Contract <span id="footerContract"></span></p>
-    </main>
-  </div>
+    <section id="screenMaintenance" class="screen" role="tabpanel" aria-labelledby="tabMaintenance">
+      <section class="hero" aria-labelledby="maintenanceTitle">
+        <div><p class="eyebrow">BM-03 / BM-04 / BM-05</p><h1 id="maintenanceTitle">Maintenance Workflow</h1><p>Workflow authoritative: OPEN → WAITING_APPROVAL → APPROVED → IN_PROGRESS → COMPLETED → VERIFIED → RELEASED. Mọi transition được kiểm tra lại phía Apps Script.</p></div>
+        <div class="connection-card"><div class="connection-row"><span class="dot ok" aria-hidden="true"></span><div class="connection-copy"><strong>Server workflow enabled</strong><span>RBAC · SoD · idempotency · LockService</span></div></div><button id="refreshMaintenance" class="btn" type="button" onclick="loadMaintenance()">Làm mới</button></div>
+      </section>
+      <p class="notice"><strong>RELEASE đang khóa trên UI.</strong> Chỉ mở sau khi BM-05 được persist bằng form authoritative và liên kết đúng <code>HO-&lt;workOrderId&gt;</code>. Server guard vẫn giữ nguyên.</p>
+      <section class="stats" aria-label="Tóm tắt bảo trì">
+        <div class="stat"><span>Work Orders</span><strong id="woTotal">—</strong></div><div class="stat"><span>Đang xử lý</span><strong id="woActive">—</strong></div><div class="stat"><span>Chờ xác nhận</span><strong id="woVerify">—</strong></div><div class="stat"><span>Executions</span><strong id="execTotal">—</strong></div>
+      </section>
+      <section class="workspace" aria-labelledby="workOrderHeading">
+        <div class="workspace-head"><div class="workspace-title"><h2 id="workOrderHeading">Maintenance Work Orders</h2><p id="maintenanceSummary">Đang tải dữ liệu…</p></div><div class="filters"><div class="field"><label for="maintenanceSearch">Tìm Work Order</label><input id="maintenanceSearch" type="search" placeholder="WO, thiết bị, lý do…" autocomplete="off" oninput="filterMaintenance()"></div><div class="field"><label for="maintenanceStatus">Trạng thái</label><select id="maintenanceStatus" onchange="filterMaintenance()"><option value="">Tất cả</option><option>OPEN</option><option>WAITING_APPROVAL</option><option>APPROVED</option><option>IN_PROGRESS</option><option>COMPLETED</option><option>VERIFIED</option><option>RELEASED</option></select></div></div></div>
+        <div class="table-wrap"><table><caption>Maintenance Work Orders</caption><thead><tr><th>Work Order</th><th>Thiết bị</th><th>Nguồn / ưu tiên</th><th>Lý do</th><th>Requested by</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="maintenanceRows"><tr><td colspan="7" class="empty">Đang đọc dữ liệu…</td></tr></tbody></table></div>
+      </section>
+    </section>
+
+    <p class="footer-note">Apps Script first-party · Contract <span id="footerContract"></span> · Production RELEASE UI locked pending BM-05</p>
+  </main>
 
   <script>
     var CONTRACT_VERSION = <?!= JSON.stringify(contractVersion) ?>;
-    var equipmentRows = [];
+    var equipmentData = [];
+    var workOrders = [];
+    var executions = [];
+    var actionByStatus = { OPEN:'REQUEST_APPROVAL', WAITING_APPROVAL:'APPROVE', APPROVED:'START', IN_PROGRESS:'COMPLETE', COMPLETED:'VERIFY', VERIFIED:'RELEASE' };
+    var actionLabel = { REQUEST_APPROVAL:'Gửi duyệt', APPROVE:'Phê duyệt', START:'Bắt đầu', COMPLETE:'Hoàn tất', VERIFY:'Xác nhận', RELEASE:'Release' };
 
     function byId(id) { return document.getElementById(id); }
-    function text(value) { return value === undefined || value === null || value === '' ? '—' : String(value); }
-    function normalize(value) { return String(value || '').toLowerCase(); }
-
-    function setConnection(state, title, detail) {
-      var dot = byId('connectionDot');
-      dot.className = 'dot' + (state ? ' ' + state : '');
-      byId('connectionTitle').textContent = title;
-      byId('connectionDetail').textContent = detail;
-    }
-
-    function showError(message) {
-      byId('errorPanel').style.display = 'block';
-      byId('errorMessage').textContent = message;
-      setConnection('error', 'Kết nối thất bại', message);
-    }
-
-    function clearError() {
-      byId('errorPanel').style.display = 'none';
-      byId('errorMessage').textContent = '';
-    }
+    function valueText(v) { return v === undefined || v === null || v === '' ? '—' : String(v); }
+    function normalize(v) { return String(v || '').toLowerCase(); }
+    function esc(v) { return valueText(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+    function uuid() { return 'ui-' + Date.now() + '-' + Math.random().toString(16).slice(2); }
 
     function invoke(payload, success, failure) {
-      google.script.run
-        .withSuccessHandler(success)
-        .withFailureHandler(function (error) {
-          failure(error && error.message ? error.message : String(error));
-        })
-        .bridgeInvoke(Object.assign({}, payload, { contractVersion: CONTRACT_VERSION }));
+      google.script.run.withSuccessHandler(success).withFailureHandler(function(error){ failure(error && error.message ? error.message : String(error)); }).bridgeInvoke(Object.assign({}, payload, { contractVersion: CONTRACT_VERSION }));
+    }
+    function clearError() { byId('errorPanel').style.display='none'; byId('errorMessage').textContent=''; }
+    function showError(message) { byId('errorPanel').style.display='block'; byId('errorMessage').textContent=message; byId('errorPanel').scrollIntoView({block:'nearest'}); }
+    function setConnection(state,title,detail) { byId('connectionDot').className='dot'+(state?' '+state:''); byId('connectionTitle').textContent=title; byId('connectionDetail').textContent=detail; }
+
+    function showScreen(name) {
+      var equipment = name === 'equipment';
+      byId('screenEquipment').className='screen'+(equipment?' active':''); byId('screenMaintenance').className='screen'+(!equipment?' active':'');
+      byId('tabEquipment').setAttribute('aria-selected', equipment ? 'true':'false'); byId('tabMaintenance').setAttribute('aria-selected', equipment ? 'false':'true');
+      if (!equipment) loadMaintenance();
     }
 
-    function statusClass(status) {
-      var normalized = String(status || '').toLowerCase();
-      if (normalized === 'running') return 'badge-running';
-      if (normalized === 'maintenance') return 'badge-maintenance';
-      if (normalized === 'down') return 'badge-down';
-      if (normalized === 'stopped') return 'badge-stopped';
-      if (normalized === 'disposed') return 'badge-disposed';
+    function badgeClass(status) {
+      status=String(status||'');
+      if (status==='RUNNING'||status==='RELEASED'||status==='VERIFIED') return 'badge-ok';
+      if (status==='DOWN'||status==='STOPPED') return 'badge-danger';
+      if (status==='MAINTENANCE'||status==='WAITING_APPROVAL'||status==='IN_PROGRESS'||status==='COMPLETED') return 'badge-warn';
       return 'badge-default';
     }
 
-    function escapeHtml(value) {
-      return text(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function renderRows(rows) {
-      var tbody = byId('equipmentRows');
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">Không có thiết bị phù hợp bộ lọc.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = rows.map(function (row) {
-        var makerModel = [row.manufacturer, row.model].filter(Boolean).map(escapeHtml).join(' · ') || '—';
-        var areaLine = [row.currentArea, row.currentLine].filter(Boolean).map(escapeHtml).join(' · ') || '—';
-        return '<tr>' +
-          '<td><div class="equipment-name">' + escapeHtml(row.equipmentName) + '</div><div class="equipment-id">' + escapeHtml(row.equipmentId) + '</div></td>' +
-          '<td>' + escapeHtml(row.equipmentCategory || row.equipmentType) + '</td>' +
-          '<td>' + makerModel + '</td>' +
-          '<td>' + areaLine + '</td>' +
-          '<td>' + escapeHtml(row.managingDepartment) + '</td>' +
-          '<td>' + escapeHtml(row.criticality) + '</td>' +
-          '<td><span class="badge ' + statusClass(row.status) + '">' + escapeHtml(row.status) + '</span></td>' +
-        '</tr>';
-      }).join('');
-    }
-
-    function updateStats(rows) {
-      var running = rows.filter(function (row) { return row.status === 'RUNNING'; }).length;
-      var attention = rows.filter(function (row) { return row.status === 'MAINTENANCE' || row.status === 'DOWN' || row.status === 'STOPPED'; }).length;
-      byId('statTotal').textContent = equipmentRows.length;
-      byId('statRunning').textContent = running;
-      byId('statAttention').textContent = attention;
-      byId('statVisible').textContent = rows.length;
-      byId('resultSummary').textContent = rows.length + ' / ' + equipmentRows.length + ' thiết bị';
-    }
-
-    function applyFilters() {
-      var query = normalize(byId('searchInput').value).trim();
-      var status = byId('statusFilter').value;
-      var filtered = equipmentRows.filter(function (row) {
-        if (status && String(row.status || '') !== status) return false;
-        if (!query) return true;
-        var haystack = [
-          row.equipmentId, row.equipmentName, row.equipmentType, row.equipmentCategory,
-          row.manufacturer, row.supplier, row.model, row.serialNumber,
-          row.currentArea, row.currentLine, row.managingDepartment, row.usingDepartment,
-          row.technicalSpecification, row.status, row.criticality
-        ].map(normalize).join(' ');
-        return haystack.indexOf(query) !== -1;
-      });
-      renderRows(filtered);
-      updateStats(filtered);
-    }
-
     function loadEquipment() {
-      clearError();
-      byId('refreshButton').disabled = true;
-      setConnection('', 'Đang đồng bộ Equipment Master', 'Apps Script → Google Sheets');
-
-      invoke({ action: 'health' }, function (health) {
-        if (!health || !health.ok || !health.authenticated || health.contractVersion !== CONTRACT_VERSION) {
-          byId('refreshButton').disabled = false;
-          showError('APP_SHELL_HEALTH_INVALID');
-          return;
-        }
-
-        invoke({ action: 'readTable', table: 'Equipment_Master' }, function (read) {
-          byId('refreshButton').disabled = false;
-          if (!read || !read.ok || !Array.isArray(read.rows)) {
-            showError('EQUIPMENT_READ_INVALID');
-            return;
-          }
-          equipmentRows = read.rows;
-          byId('actorLabel').textContent = read.actor || 'Authenticated user';
-          setConnection('ok', 'Đã kết nối Google persistence', equipmentRows.length + ' thiết bị · read-only');
-          applyFilters();
-        }, function (message) {
-          byId('refreshButton').disabled = false;
-          showError(message);
-        });
-      }, function (message) {
-        byId('refreshButton').disabled = false;
-        showError(message);
-      });
+      clearError(); byId('refreshEquipment').disabled=true; setConnection('', 'Đang đồng bộ Equipment Master','Apps Script → Google Sheets');
+      invoke({action:'health'}, function(health){
+        if(!health||!health.ok||!health.authenticated||health.contractVersion!==CONTRACT_VERSION){ byId('refreshEquipment').disabled=false; showError('APP_SHELL_HEALTH_INVALID'); return; }
+        invoke({action:'readTable',table:'Equipment_Master'}, function(read){
+          byId('refreshEquipment').disabled=false;
+          if(!read||!read.ok||!Array.isArray(read.rows)){ showError('EQUIPMENT_READ_INVALID'); return; }
+          equipmentData=read.rows; byId('actorLabel').textContent=read.actor||'Authenticated user'; setConnection('ok','Đã kết nối Google persistence',equipmentData.length+' thiết bị'); filterEquipment();
+        }, function(message){ byId('refreshEquipment').disabled=false; showError(message); });
+      }, function(message){ byId('refreshEquipment').disabled=false; showError(message); });
     }
 
-    byId('contractLabel').textContent = CONTRACT_VERSION;
-    byId('footerContract').textContent = CONTRACT_VERSION;
-    loadEquipment();
+    function filterEquipment() {
+      var q=normalize(byId('equipmentSearch').value).trim(), status=byId('equipmentStatus').value;
+      var rows=equipmentData.filter(function(r){ if(status&&r.status!==status)return false; if(!q)return true; return [r.equipmentId,r.equipmentName,r.equipmentCategory,r.equipmentType,r.manufacturer,r.model,r.currentArea,r.currentLine,r.managingDepartment,r.status].map(normalize).join(' ').indexOf(q)!==-1; });
+      byId('equipmentRows').innerHTML=rows.length?rows.map(function(r){ return '<tr><td><div class="entity-name">'+esc(r.equipmentName)+'</div><div class="mono">'+esc(r.equipmentId)+'</div></td><td>'+esc(r.equipmentCategory||r.equipmentType)+'</td><td>'+esc([r.manufacturer,r.model].filter(Boolean).join(' · '))+'</td><td>'+esc([r.currentArea,r.currentLine].filter(Boolean).join(' · '))+'</td><td>'+esc(r.managingDepartment)+'</td><td>'+esc(r.criticality)+'</td><td><span class="badge '+badgeClass(r.status)+'">'+esc(r.status)+'</span></td></tr>'; }).join(''):'<tr><td colspan="7" class="empty">Không có thiết bị phù hợp.</td></tr>';
+      var running=equipmentData.filter(function(r){return r.status==='RUNNING';}).length, attention=equipmentData.filter(function(r){return ['MAINTENANCE','DOWN','STOPPED'].indexOf(r.status)!==-1;}).length;
+      byId('statTotal').textContent=equipmentData.length; byId('statRunning').textContent=running; byId('statAttention').textContent=attention; byId('statVisible').textContent=rows.length; byId('equipmentSummary').textContent=rows.length+' / '+equipmentData.length+' thiết bị';
+    }
+
+    function loadMaintenance() {
+      clearError(); byId('refreshMaintenance').disabled=true; byId('maintenanceRows').innerHTML='<tr><td colspan="7" class="empty">Đang đọc Work Orders…</td></tr>';
+      invoke({action:'readTable',table:'Maintenance_Work_Order'}, function(woRead){
+        if(!woRead||!woRead.ok||!Array.isArray(woRead.rows)){ byId('refreshMaintenance').disabled=false; showError('WORK_ORDER_READ_INVALID'); return; }
+        workOrders=woRead.rows; byId('actorLabel').textContent=woRead.actor||byId('actorLabel').textContent;
+        invoke({action:'readTable',table:'Maintenance_Execution'}, function(execRead){
+          byId('refreshMaintenance').disabled=false;
+          if(!execRead||!execRead.ok||!Array.isArray(execRead.rows)){ showError('EXECUTION_READ_INVALID'); return; }
+          executions=execRead.rows; filterMaintenance();
+        }, function(message){ byId('refreshMaintenance').disabled=false; showError(message); });
+      }, function(message){ byId('refreshMaintenance').disabled=false; showError(message); });
+    }
+
+    function executionFor(workOrderId) { for(var i=executions.length-1;i>=0;i--){ if(String(executions[i].workOrderId)===String(workOrderId))return executions[i]; } return null; }
+    function actionHtml(wo) {
+      var action=actionByStatus[wo.status]; if(!action)return '<span class="muted">Không có action</span>';
+      if(action==='RELEASE')return '<button class="action-btn" type="button" disabled title="BM-05 chưa được persist qua UI">Release · BM-05</button>';
+      return '<button class="action-btn" type="button" onclick="transitionWorkOrder(\''+esc(wo.workOrderId)+'\',\''+action+'\',this)">'+esc(actionLabel[action])+'</button>';
+    }
+    function filterMaintenance() {
+      var q=normalize(byId('maintenanceSearch').value).trim(), status=byId('maintenanceStatus').value;
+      var rows=workOrders.filter(function(wo){ if(status&&wo.status!==status)return false; if(!q)return true; return [wo.workOrderId,wo.equipmentId,wo.sourceType,wo.reason,wo.requestedBy,wo.priority,wo.status].map(normalize).join(' ').indexOf(q)!==-1; });
+      byId('maintenanceRows').innerHTML=rows.length?rows.map(function(wo){ var ex=executionFor(wo.workOrderId); return '<tr><td><div class="entity-name">'+esc(wo.workOrderId)+'</div><div class="mono">'+esc(wo.requestedAt)+'</div></td><td>'+esc(wo.equipmentId)+'</td><td>'+esc(wo.sourceType)+'<div class="mono">'+esc(wo.priority)+'</div></td><td>'+esc(wo.reason)+'</td><td>'+esc(wo.requestedBy)+(ex?'<div class="mono">performed: '+esc(ex.performedBy)+'</div>':'')+'</td><td><span class="badge '+badgeClass(wo.status)+'">'+esc(wo.status)+'</span></td><td><div class="actions">'+actionHtml(wo)+'</div></td></tr>'; }).join(''):'<tr><td colspan="7" class="empty">Chưa có Maintenance Work Order production live.</td></tr>';
+      byId('woTotal').textContent=workOrders.length; byId('woActive').textContent=workOrders.filter(function(w){return ['APPROVED','IN_PROGRESS'].indexOf(w.status)!==-1;}).length; byId('woVerify').textContent=workOrders.filter(function(w){return w.status==='COMPLETED';}).length; byId('execTotal').textContent=executions.length; byId('maintenanceSummary').textContent=rows.length+' / '+workOrders.length+' Work Orders';
+    }
+
+    function transitionWorkOrder(workOrderId, action, button) {
+      clearError();
+      if(!window.confirm(actionLabel[action]+' Work Order '+workOrderId+'?'))return;
+      button.disabled=true; button.textContent='Đang xử lý…';
+      invoke({action:'maintenanceTransition',operationId:uuid(),workOrderId:workOrderId,workflowAction:action}, function(result){
+        if(!result||!result.ok){ button.disabled=false; button.textContent=actionLabel[action]; showError(result&&result.error?result.error:'TRANSITION_INVALID'); return; }
+        loadMaintenance();
+      }, function(message){ button.disabled=false; button.textContent=actionLabel[action]; showError(message); });
+    }
+
+    byId('contractLabel').textContent=CONTRACT_VERSION; byId('footerContract').textContent=CONTRACT_VERSION; loadEquipment();
   </script>
 </body>
 </html>
