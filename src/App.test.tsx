@@ -16,19 +16,32 @@ describe('equipment app shell', () => {
     expect(screen.getByText('MTTR')).toBeInTheDocument()
   })
 
-  it('advances a work order through approval before repair', () => {
+  it('advances a work order through approval, repair, verification and BM-05 handover', () => {
     render(<App />)
     const desktopNav = screen.getByLabelText('Điều hướng desktop')
     fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Gửi phê duyệt' }))
     expect(screen.getByText('Chờ phê duyệt', { selector: '.badge' })).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: 'Phê duyệt' }))
-    expect(screen.getByText('Đã phê duyệt', { selector: '.badge' })).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu sửa chữa' }))
-    expect(screen.getAllByText('Đang xử lý', { selector: '.badge' }).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất sửa chữa' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chạy thử' }))
+    fireEvent.click(screen.getByRole('button', { name: 'BM-05: xác nhận & bàn giao' }))
+
+    expect(screen.getByText('Đã bàn giao', { selector: '.badge' })).toBeInTheDocument()
+    expect(screen.getByText(/Bên nhận đã chấp nhận/)).toBeInTheDocument()
+  })
+
+  it('records workflow actions in the local audit trail', () => {
+    render(<App />)
+    const desktopNav = screen.getByLabelText('Điều hướng desktop')
+    fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi phê duyệt' }))
+    fireEvent.click(within(desktopNav).getByRole('button', { name: 'Audit & Cấu hình' }))
+
+    expect(screen.getByRole('heading', { name: 'Audit Trail & BM-05' })).toBeInTheDocument()
+    expect(screen.getByText('REQUEST_APPROVAL')).toBeInTheDocument()
   })
 
   it('shows calibration and historical cost from source without calling it live pricing', () => {
