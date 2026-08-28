@@ -44,88 +44,145 @@ function executeMaintenanceTransition_(body, actor) {
     const nextStatus = nextMaintenanceStatus_(currentStatus, action)
     const now = new Date().toISOString()
     let execution = null
+    let executionMatch = null
+    let oldExecution = null
+    let appendedExecutionRow = null
+    let workOrderUpdated = false
+    let executionUpdated = false
 
-    if (action === 'APPROVE') {
-      if (normalizeIdentity_(workOrder.requestedBy) === actor.email) throw new Error('SELF_APPROVAL_FORBIDDEN')
-      workOrder.approvedBy = actor.email
-      workOrder.approvedAt = now
-    }
-
-    if (action === 'START') {
-      if (findRecordByField_('Maintenance_Execution', 'workOrderId', workOrderId)) {
-        throw new Error('MAINTENANCE_EXECUTION_ALREADY_EXISTS')
+    try {
+      if (action === 'APPROVE') {
+        if (normalizeIdentity_(workOrder.requestedBy) === actor.email) throw new Error('SELF_APPROVAL_FORBIDDEN')
+        workOrder.approvedBy = actor.email
+        workOrder.approvedAt = now
       }
 
-      const executionRecord = {
-        executionId: Utilities.getUuid(),
+      if (action === 'START') {
+        if (findRecordByField_('Maintenance_Execution', 'workOrderId', workOrderId)) {
+          throw new Error('MAINTENANCE_EXECUTION_ALREADY_EXISTS')
+        }
+
+        const executionRecord = {
+          executionId: Utilities.getUuid(),
+          workOrderId: workOrderId,
+          equipmentId: workOrder.equipmentId,
+          startedAt: now,
+          performedBy: actor.email,
+          status: 'IN_PROGRESS',
+        }
+        const appended = appendRecord_('Maintenance_Execution', executionRecord)
+        appendedExecutionRow = appended.rowNumber
+        execution = executionRecord
+      }
+
+      if (action === 'COMPLETE') {
+        executionMatch = findRecordByField_('Maintenance_Execution', 'workOrderId', workOrderId)
+        if (!executionMatch) throw new Error('MAINTENANCE_EXECUTION_REQUIRED')
+        oldExecution = Object.assign({}, executionMatch.record)
+        execution = Object.assign({}, executionMatch.record)
+        if (String(execution.status || '') !== 'IN_PROGRESS') throw new Error('EXECUTION_STATUS_INVALID')
+        execution.completedAt = now
+        execution.status = 'COMPLETED'
+        updateRecordRow_('Maintenance_Execution', executionMatch.rowNumber, execution)
+        executionUpdated = true
+      }
+
+      if (action === 'VERIFY') {
+        executionMatch = findRecordByField_('Maintenance_Execution', 'workOrderId', workOrderId)
+        if (!executionMatch) throw new Error('MAINTENANCE_EXECUTION_REQUIRED')
+        oldExecution = Object.assign({}, executionMatch.record)
+        execution = Object.assign({}, executionMatch.record)
+        if (String(execution.status || '') !== 'COMPLETED') throw new Error('EXECUTION_STATUS_INVALID')
+        if (normalizeIdentity_(execution.performedBy) === actor.email) throw new Error('SELF_VERIFICATION_FORBIDDEN')
+        execution.verifiedBy = actor.email
+        execution.verifiedAt = now
+        execution.status = 'VERIFIED'
+        updateRecordRow_('Maintenance_Execution', executionMatch.rowNumber, execution)
+        executionUpdated = true
+      }
+
+      if (action === 'RELEASE') {
+        const handover = findAcceptedHandover_(workOrderId, String(workOrder.equipmentId || ''))
+        if (!handover) throw new Error('ACCEPTED_HANDOVER_REQUIRED')
+        if (String(handover.condition || '') === 'NOT_OPERABLE') throw new Error('HANDOVER_NOT_OPERABLE')
+      }
+
+      workOrder.status = nextStatus
+      updateRecordRow_('Maintenance_Work_Order', workOrderMatch.rowNumber, workOrder)
+      workOrderUpdated = true
+
+      const auditId = Utilities.getUuid()
+      const result = {
         workOrderId: workOrderId,
-        equipmentId: workOrder.equipmentId,
-        startedAt: now,
-        performedBy: actor.email,
-        status: 'IN_PROGRESS',
+        previousStatus: currentStatus,
+        status: nextStatus,
+        executionId: execution ? execution.executionId : null,
+        auditId: auditId,
       }
-      appendRecord_('Maintenance_Execution', executionRecord)
-      execution = executionRecord
+
+      appendAudit_({
+        auditId: auditId,
+        userId: actor.email,
+        action: operationAuditAction_('MAINTENANCE_TRANSITION', operationId),
+        entityType: 'MAINTENANCE',
+        entityId: workOrderId,
+        oldValueJson: JSON.stringify(oldWorkOrder),
+        newValueJson: JSON.stringify({
+          operationId: operationId,
+          result: result,
+          workOrder: workOrder,
+          execution: execution,
+        }),
+      })
+
+      return { ok: true, duplicate: false, operationId: operationId, result: result }
+    } catch (error) {
+      compensateMaintenanceTransition_(error, {
+        workOrderUpdated: workOrderUpdated,
+        workOrderRowNumber: workOrderMatch.rowNumber,
+        oldWorkOrder: oldWorkOrder,
+        executionUpdated: executionUpdated,
+        executionRowNumber: executionMatch ? executionMatch.rowNumber : null,
+        oldExecution: oldExecution,
+        appendedExecutionRow: appendedExecutionRow,
+      })
+      throw error
     }
-
-    if (action === 'COMPLETE') {
-      const executionMatch = findRecordByField_('Maintenance_Execution', 'workOrderId', workOrderId)
-      if (!executionMatch) throw new Error('MAINTENANCE_EXECUTION_REQUIRED')
-      execution = executionMatch.record
-      if (String(execution.status || '') !== 'IN_PROGRESS') throw new Error('EXECUTION_STATUS_INVALID')
-      execution.completedAt = now
-      execution.status = 'COMPLETED'
-      updateRecordRow_('Maintenance_Execution', executionMatch.rowNumber, execution)
-    }
-
-    if (action === 'VERIFY') {
-      const executionMatch = findRecordByField_('Maintenance_Execution', 'workOrderId', workOrderId)
-      if (!executionMatch) throw new Error('MAINTENANCE_EXECUTION_REQUIRED')
-      execution = executionMatch.record
-      if (String(execution.status || '') !== 'COMPLETED') throw new Error('EXECUTION_STATUS_INVALID')
-      if (normalizeIdentity_(execution.performedBy) === actor.email) throw new Error('SELF_VERIFICATION_FORBIDDEN')
-      execution.verifiedBy = actor.email
-      execution.verifiedAt = now
-      execution.status = 'VERIFIED'
-      updateRecordRow_('Maintenance_Execution', executionMatch.rowNumber, execution)
-    }
-
-    if (action === 'RELEASE') {
-      const handover = findAcceptedHandover_(workOrderId, String(workOrder.equipmentId || ''))
-      if (!handover) throw new Error('ACCEPTED_HANDOVER_REQUIRED')
-      if (String(handover.condition || '') === 'NOT_OPERABLE') throw new Error('HANDOVER_NOT_OPERABLE')
-    }
-
-    workOrder.status = nextStatus
-    updateRecordRow_('Maintenance_Work_Order', workOrderMatch.rowNumber, workOrder)
-
-    const auditId = Utilities.getUuid()
-    const result = {
-      workOrderId: workOrderId,
-      previousStatus: currentStatus,
-      status: nextStatus,
-      executionId: execution ? execution.executionId : null,
-      auditId: auditId,
-    }
-
-    appendAudit_({
-      auditId: auditId,
-      userId: actor.email,
-      action: operationAuditAction_('MAINTENANCE_TRANSITION', operationId),
-      entityType: 'MAINTENANCE',
-      entityId: workOrderId,
-      oldValueJson: JSON.stringify(oldWorkOrder),
-      newValueJson: JSON.stringify({
-        operationId: operationId,
-        result: result,
-        workOrder: workOrder,
-        execution: execution,
-      }),
-    })
-
-    return { ok: true, duplicate: false, operationId: operationId, result: result }
   } finally {
     lock.releaseLock()
+  }
+}
+
+function compensateMaintenanceTransition_(originalError, state) {
+  const failures = []
+
+  if (state.workOrderUpdated) {
+    try {
+      updateRecordRow_('Maintenance_Work_Order', state.workOrderRowNumber, state.oldWorkOrder)
+    } catch (error) {
+      failures.push('WORK_ORDER:' + error.message)
+    }
+  }
+
+  if (state.executionUpdated && state.executionRowNumber && state.oldExecution) {
+    try {
+      updateRecordRow_('Maintenance_Execution', state.executionRowNumber, state.oldExecution)
+    } catch (error) {
+      failures.push('EXECUTION:' + error.message)
+    }
+  }
+
+  if (state.appendedExecutionRow) {
+    try {
+      deleteRecordRow_('Maintenance_Execution', state.appendedExecutionRow)
+    } catch (error) {
+      failures.push('APPENDED_EXECUTION:' + error.message)
+    }
+  }
+
+  if (failures.length) {
+    const originalMessage = originalError && originalError.message ? originalError.message : String(originalError)
+    throw new Error('TRANSITION_FAILED:' + originalMessage + ':ROLLBACK_FAILED:' + failures.join('|'))
   }
 }
 
