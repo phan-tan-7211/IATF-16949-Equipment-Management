@@ -1,5 +1,7 @@
 import { EVIDENCE_FOLDERS, PERSISTENCE_CONTRACT_VERSION, PERSISTENCE_TABLES } from './persistenceContract'
 
+const DEFAULT_APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzykTZpW60nZEdwXC3Wn2nRZe1ePrvhUwoER1cHjciiDNGZ34kWv_vfvhEpwSor-f95/exec'
+
 export const GOOGLE_PERSISTENCE_CONFIG = {
   contractVersion: PERSISTENCE_CONTRACT_VERSION,
   spreadsheetId: '1zvrMyGDnXy3HMRzFrLYS4IFyuYPsSUTROy22M6Le9VE',
@@ -18,9 +20,9 @@ export const GOOGLE_PERSISTENCE_CONFIG = {
   } satisfies Record<(typeof EVIDENCE_FOLDERS)[number], string>,
   frontendDirectGoogleApiAllowed: false,
   persistenceBoundary: 'APPS_SCRIPT_WEB_APP',
-  transport: 'GOOGLE_APPS_SCRIPT',
+  browserTransport: 'APPS_SCRIPT_HTML_BRIDGE',
   deploymentUrlEnv: 'VITE_APPS_SCRIPT_WEB_APP_URL',
-  deploymentUrl: 'https://script.google.com/macros/s/AKfycbzykTZpW60nZEdwXC3Wn2nRZe1ePrvhUwoER1cHjciiDNGZ34kWv_vfvhEpwSor-f95/exec',
+  defaultWebAppUrl: DEFAULT_APPS_SCRIPT_WEB_APP_URL,
 } as const
 
 export type GooglePersistenceConfig = typeof GOOGLE_PERSISTENCE_CONFIG
