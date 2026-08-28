@@ -99,20 +99,25 @@ function doPost(e) {
       }
 
       const appended = appendRecord_(table, record)
-      const audit = appendAudit_({
-        userId: actor.email,
-        action: 'APPEND_RECORD',
-        entityType: entityType,
-        entityId: entityId,
-        newValueJson: JSON.stringify(record),
-      })
-
+      const auditId = Utilities.getUuid()
       const result = {
         table: table,
         rowNumber: appended.rowNumber,
-        auditId: audit.auditId,
+        auditId: auditId,
       }
-      rememberOperationResult_(operationId, result)
+
+      appendAudit_({
+        auditId: auditId,
+        userId: actor.email,
+        action: operationAuditAction_(operationId),
+        entityType: entityType,
+        entityId: entityId,
+        newValueJson: JSON.stringify({
+          operationId: operationId,
+          result: result,
+          record: record,
+        }),
+      })
 
       return json_({ ok: true, duplicate: false, operationId: operationId, result: result })
     } finally {
@@ -158,7 +163,7 @@ function appendRecord_(table, record) {
 function appendAudit_(input) {
   const sheet = getSheet_('Audit_Log')
   const headers = getHeaders_(sheet)
-  const auditId = Utilities.getUuid()
+  const auditId = input.auditId || Utilities.getUuid()
   const record = {
     auditId: auditId,
     timestamp: new Date().toISOString(),
@@ -218,13 +223,34 @@ function getActiveUserEmail_() {
   return String(Session.getActiveUser().getEmail() || '').trim().toLowerCase()
 }
 
-function findOperationResult_(operationId) {
-  const raw = PropertiesService.getScriptProperties().getProperty('OP_' + operationId)
-  return raw ? JSON.parse(raw) : null
+function operationAuditAction_(operationId) {
+  return 'APPEND_RECORD:' + operationId
 }
 
-function rememberOperationResult_(operationId, result) {
-  PropertiesService.getScriptProperties().setProperty('OP_' + operationId, JSON.stringify(result))
+function findOperationResult_(operationId) {
+  const sheet = getSheet_('Audit_Log')
+  const lastRow = sheet.getLastRow()
+  if (lastRow < 2) return null
+
+  const headers = getHeaders_(sheet)
+  const actionColumn = headers.indexOf('action') + 1
+  const valueColumn = headers.indexOf('newValueJson') + 1
+  if (!actionColumn || !valueColumn) throw new Error('AUDIT_HEADERS_REQUIRED')
+
+  const match = sheet
+    .getRange(2, actionColumn, lastRow - 1, 1)
+    .createTextFinder(operationAuditAction_(operationId))
+    .matchEntireCell(true)
+    .findNext()
+
+  if (!match) return null
+
+  const raw = sheet.getRange(match.getRow(), valueColumn).getDisplayValue()
+  if (!raw) return null
+
+  const payload = JSON.parse(raw)
+  if (payload.operationId !== operationId || !payload.result) return null
+  return payload.result
 }
 
 function parseJsonBody_(e) {
