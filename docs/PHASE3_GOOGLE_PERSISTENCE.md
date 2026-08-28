@@ -9,6 +9,7 @@
 - Time zone: `Asia/Ho_Chi_Minh` (Google có thể hiển thị alias `Asia/Saigon`)
 - Frontend direct Google Sheets/Drive API: **không cho phép**
 - Persistence boundary: **Google Apps Script Web App**
+- Production browser transport: **Apps Script HTMLService first-party UI + `google.script.run`**
 - Vercel/serverless persistence backend: **không sử dụng**
 - Service account JSON: **không sử dụng**
 
@@ -39,12 +40,12 @@
 
 ## Kiến trúc Apps Script
 
-`apps-script/Code.gs` và `apps-script/Maintenance.gs` tạo persistence/workflow gateway duy nhất giữa UI và Google Sheets/Drive.
+`apps-script/Code.gs`, `apps-script/Maintenance.gs` và HTMLService UI tạo persistence/workflow boundary duy nhất giữa người dùng và Google Sheets/Drive.
 
-Luồng chuẩn:
+Luồng production chuẩn:
 
-1. UI gọi Apps Script Web App qua `src/data/appsScriptClient.ts`.
-2. Frontend chỉ chấp nhận HTTPS deployment URL `script.google.com/.../exec`.
+1. Người dùng mở UI được host trực tiếp bởi Apps Script HTMLService (`?action=app`).
+2. UI gọi Apps Script server-side bằng `google.script.run`; không dùng browser cross-origin `fetch()` tới `/exec`.
 3. Apps Script lấy người dùng thực tế từ `Session.getActiveUser().getEmail()`.
 4. Role được tra từ Script Property `RBAC_JSON`; browser không được tin cậy để tự khai actor hoặc role.
 5. Apps Script kiểm tra `contractVersion`, table allowlist và role policy.
@@ -56,7 +57,19 @@ Luồng chuẩn:
 11. `VERIFY` lấy `performedBy` authoritative từ `Maintenance_Execution` và chặn performer tự verify.
 12. `RELEASE` yêu cầu BM-05 đã accepted và condition không phải `NOT_OPERABLE`.
 
+Browser `fetch()` trực tiếp từ Vercel/Netlify tới Apps Script đã được kiểm thử và thất bại do cross-origin redirect/CORS. Iframe bridge cũng không được dùng làm production transport vì embedded Google auth không ổn định. Hai đường này chỉ giữ lại cho lịch sử/diagnostic trong source; production dùng first-party HTMLService.
+
 Không dùng OAuth token, refresh token, service-account JSON hoặc private key trong repo hay browser bundle.
+
+## Live verification đã đạt ngày 2026-08-28
+
+- Apps Script deployment chạy **as user accessing the web app**.
+- Direct health trả `authenticated=true`.
+- `RBAC_JSON` nhận diện user thật và trả actor từ server-side session.
+- Apps Script HTMLService `AppShell` tải thành công ở first-party context.
+- `google.script.run → bridgeInvoke → readTable(Equipment_Master)` trả `ok=true`.
+- Actor được trả từ server và `Equipment_Master` trả đúng 19 dòng source-seeded.
+- Contract khớp `G1-frozen-2026-08-28`.
 
 ## Gate đã hoàn tất
 
@@ -71,25 +84,24 @@ Không dùng OAuth token, refresh token, service-account JSON hoặc private key
 - [x] Table allowlist + server-side role gate.
 - [x] `LockService` critical section cho append và maintenance transition.
 - [x] Durable idempotency lookup qua append-only `Audit_Log`.
-- [x] Frontend Apps Script client adapter + deployment URL allowlist.
 - [x] Browser không gửi actor/role trong maintenance transition payload.
 - [x] Maintenance state machine được enforce lại phía Apps Script.
 - [x] `performedBy != verifierId` được enforce phía Apps Script từ `Maintenance_Execution`.
 - [x] Vercel persistence endpoint/service-account architecture đã bị loại bỏ.
-- [x] Checklist deploy Apps Script tại `docs/APPS_SCRIPT_DEPLOYMENT.md`.
+- [x] Apps Script Web App deploy thật và identity server-side hoạt động.
+- [x] `RBAC_JSON` live hoạt động.
+- [x] First-party HTMLService transport hoạt động.
+- [x] End-to-end read smoke test với canonical `Equipment_Master` đạt 19 dòng.
+- [x] AppShell Equipment Master live read-only workspace được triển khai trong source.
 
 ## Gate còn lại trước live write
 
-- [ ] Tạo/deploy Apps Script Web App từ thư mục `apps-script/`.
-- [ ] Deployment phải chạy **as user accessing the web app** để identity server-side khả dụng.
-- [ ] Cấu hình Script Property `RBAC_JSON` bằng email Google Workspace thật và role tương ứng.
-- [ ] Xác nhận health trả `authenticated=true`.
-- [ ] Đặt URL deployment vào frontend qua `VITE_APPS_SCRIPT_WEB_APP_URL`.
-- [ ] End-to-end read smoke test với canonical Sheet.
 - [ ] End-to-end append/idempotency smoke test bằng fixture riêng, không dùng production rows.
 - [ ] End-to-end maintenance transition smoke test, bao gồm self-approval/self-verification negative cases.
-- [ ] Tích hợp frontend UI với server transition response thay vì chỉ local transition khi live persistence được bật.
+- [ ] Nối maintenance UI live với server transition response thay vì chỉ local transition.
+- [ ] Persist BM-05 thật trước RELEASE; không dùng demo handover làm authoritative record.
 - [ ] Evidence upload qua Drive adapter Apps Script.
 - [ ] Generic record update ngoài maintenance cần optimistic version/concurrency contract trước khi mở write.
+- [ ] Hoàn tất production HTMLService UI cho các workspace còn lại.
 
-Không bật production live write cho đến khi các gate live ở trên hoàn tất và Quality Gate + preview deployment đều xanh.
+Không bật production live write cho đến khi các gate write ở trên hoàn tất và Quality Gate xanh.
