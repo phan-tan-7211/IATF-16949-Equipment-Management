@@ -119,6 +119,10 @@ function executeTransportRequest_(body, actor) {
     return executeAppendRecord_(body, actor)
   }
 
+  if (body.action === 'createMaintenanceWorkOrder') {
+    return executeCreateMaintenanceWorkOrder_(body, actor)
+  }
+
   if (body.action === 'maintenanceTransition') {
     return executeMaintenanceTransition_(body, actor)
   }
@@ -141,6 +145,104 @@ function getAllowedParentOrigins_() {
     if (!/^https:\/\/[^/]+$/.test(value)) throw new Error('ALLOWED_PARENT_ORIGIN_INVALID:' + value)
     return value
   })
+}
+
+function executeCreateMaintenanceWorkOrder_(body, actor) {
+  assertWriteRole_('Maintenance_Work_Order', actor.role)
+
+  const operationId = String(body.operationId || '').trim()
+  const input = body.input
+  if (!operationId) throw new Error('OPERATION_ID_REQUIRED')
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('WORK_ORDER_INPUT_REQUIRED')
+
+  const equipmentId = String(input.equipmentId || '').trim()
+  const sourceType = String(input.sourceType || '').trim().toUpperCase()
+  const sourceId = String(input.sourceId || '').trim()
+  const reason = String(input.reason || '').trim()
+  const priority = String(input.priority || '').trim().toUpperCase()
+  const method = String(input.method || '').trim()
+  const plannedStartAt = String(input.plannedStartAt || '').trim()
+  const plannedEndAt = String(input.plannedEndAt || '').trim()
+
+  if (!equipmentId) throw new Error('EQUIPMENT_ID_REQUIRED')
+  if (['PLAN', 'DAILY_INSPECTION', 'DOWNTIME', 'PREDICTIVE', 'MANUAL'].indexOf(sourceType) === -1) {
+    throw new Error('WORK_ORDER_SOURCE_TYPE_INVALID')
+  }
+  if (!reason) throw new Error('WORK_ORDER_REASON_REQUIRED')
+  if (['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].indexOf(priority) === -1) {
+    throw new Error('WORK_ORDER_PRIORITY_INVALID')
+  }
+  if (plannedStartAt && !isIsoDateTime_(plannedStartAt)) throw new Error('PLANNED_START_AT_INVALID')
+  if (plannedEndAt && !isIsoDateTime_(plannedEndAt)) throw new Error('PLANNED_END_AT_INVALID')
+  if (plannedStartAt && plannedEndAt && new Date(plannedEndAt).getTime() < new Date(plannedStartAt).getTime()) {
+    throw new Error('PLANNED_WINDOW_INVALID')
+  }
+  if (!findRecordByField_('Equipment_Master', 'equipmentId', equipmentId)) throw new Error('EQUIPMENT_NOT_FOUND')
+
+  const lock = LockService.getScriptLock()
+  lock.waitLock(30000)
+
+  try {
+    const previous = findOperationResult_('CREATE_MAINTENANCE_WORK_ORDER', operationId)
+    if (previous) {
+      return { ok: true, duplicate: true, operationId: operationId, result: previous }
+    }
+
+    const now = new Date().toISOString()
+    const workOrderId = 'WO-' + Utilities.getUuid()
+    const record = {
+      workOrderId: workOrderId,
+      equipmentId: equipmentId,
+      sourceType: sourceType,
+      sourceId: sourceId,
+      requestedAt: now,
+      requestedBy: actor.email,
+      reason: reason,
+      priority: priority,
+      method: method,
+      plannedStartAt: plannedStartAt,
+      plannedEndAt: plannedEndAt,
+      approvedBy: '',
+      approvedAt: '',
+      status: 'OPEN',
+    }
+
+    let appended = null
+    try {
+      appended = appendRecord_('Maintenance_Work_Order', record)
+      const auditId = Utilities.getUuid()
+      const result = {
+        workOrderId: workOrderId,
+        status: 'OPEN',
+        rowNumber: appended.rowNumber,
+        auditId: auditId,
+      }
+
+      appendAudit_({
+        auditId: auditId,
+        userId: actor.email,
+        action: operationAuditAction_('CREATE_MAINTENANCE_WORK_ORDER', operationId),
+        entityType: 'MAINTENANCE',
+        entityId: workOrderId,
+        newValueJson: JSON.stringify({
+          operationId: operationId,
+          result: result,
+          workOrder: record,
+        }),
+      })
+
+      return { ok: true, duplicate: false, operationId: operationId, result: result }
+    } catch (error) {
+      if (appended) {
+        compensateOrThrow_(error, function () {
+          deleteRecordRow_('Maintenance_Work_Order', appended.rowNumber)
+        })
+      }
+      throw error
+    }
+  } finally {
+    lock.releaseLock()
+  }
 }
 
 function executeAppendRecord_(body, actor) {
@@ -345,6 +447,12 @@ function findOperationResult_(kind, operationId) {
   const payload = JSON.parse(raw)
   if (payload.operationId !== operationId || !payload.result) return null
   return payload.result
+}
+
+function isIsoDateTime_(value) {
+  const text = String(value || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(text)) return false
+  return !isNaN(new Date(text).getTime())
 }
 
 function parseJsonBody_(e) {
