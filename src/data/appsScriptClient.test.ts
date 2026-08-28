@@ -11,7 +11,7 @@ function jsonResponse(payload: unknown) {
 }
 
 describe('Apps Script persistence client', () => {
-  it('fails closed when the deployment URL is missing', async () => {
+  it('fails closed when an explicit deployment URL is empty', async () => {
     const client = createAppsScriptClient({ webAppUrl: '' })
     await expect(client.health()).rejects.toEqual(new AppsScriptPersistenceError('APPS_SCRIPT_WEB_APP_URL_NOT_CONFIGURED'))
   })
@@ -21,11 +21,13 @@ describe('Apps Script persistence client', () => {
     await expect(client.health()).rejects.toEqual(new AppsScriptPersistenceError('APPS_SCRIPT_WEB_APP_URL_NOT_ALLOWED'))
   })
 
-  it('reads an allowlisted G1 table', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+  it('reads an allowlisted G1 table with the browser Google session included', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input))
       expect(url.searchParams.get('action')).toBe('readTable')
       expect(url.searchParams.get('table')).toBe('Equipment_Master')
+      expect(init?.credentials).toBe('include')
+      expect(init?.redirect).toBe('follow')
       return jsonResponse({ ok: true, table: 'Equipment_Master', actor: 'user@example.com', rows: [{ equipmentId: 'CNC-001' }] })
     })
 
@@ -36,6 +38,7 @@ describe('Apps Script persistence client', () => {
   it('posts append JSON as text/plain and carries the frozen contract plus operation id', async () => {
     const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.method).toBe('POST')
+      expect(init?.credentials).toBe('include')
       expect(init?.headers).toEqual({ 'Content-Type': 'text/plain;charset=UTF-8' })
       const body = JSON.parse(String(init?.body))
       expect(body.contractVersion).toBe('G1-frozen-2026-08-28')
