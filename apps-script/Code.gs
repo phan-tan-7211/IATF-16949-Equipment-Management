@@ -39,6 +39,16 @@ function doGet(e) {
   try {
     const action = String((e && e.parameter && e.parameter.action) || 'health')
 
+    if (action === 'bridge') {
+      const template = HtmlService.createTemplateFromFile('Bridge')
+      template.allowedOriginsJson = JSON.stringify(getAllowedParentOrigins_())
+      template.contractVersion = APP_CONFIG.contractVersion
+      return template
+        .evaluate()
+        .setTitle('CEV Apps Script Bridge')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    }
+
     if (action === 'health') {
       return json_({
         ok: true,
@@ -66,23 +76,65 @@ function doPost(e) {
   try {
     const actor = requireActor_()
     const body = parseJsonBody_(e)
-
-    if (body.contractVersion !== APP_CONFIG.contractVersion) {
-      throw new Error('CONTRACT_VERSION_MISMATCH')
-    }
-
-    if (body.action === 'appendRecord') {
-      return json_(executeAppendRecord_(body, actor))
-    }
-
-    if (body.action === 'maintenanceTransition') {
-      return json_(executeMaintenanceTransition_(body, actor))
-    }
-
-    throw new Error('UNKNOWN_ACTION')
+    return json_(executeTransportRequest_(body, actor))
   } catch (error) {
     return errorJson_(error)
   }
+}
+
+function bridgeInvoke(request) {
+  const actor = requireActor_()
+  if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('BRIDGE_REQUEST_REQUIRED')
+  return executeTransportRequest_(request, actor)
+}
+
+function executeTransportRequest_(body, actor) {
+  if (body.contractVersion !== APP_CONFIG.contractVersion) {
+    throw new Error('CONTRACT_VERSION_MISMATCH')
+  }
+
+  if (body.action === 'health') {
+    return {
+      ok: true,
+      provider: 'GOOGLE_APPS_SCRIPT',
+      boundary: 'APPS_SCRIPT_HTML_BRIDGE',
+      contractVersion: APP_CONFIG.contractVersion,
+      authenticated: true,
+    }
+  }
+
+  if (body.action === 'readTable') {
+    const table = String(body.table || '')
+    assertAllowedTable_(table)
+    return { ok: true, table: table, rows: readTable_(table), actor: actor.email }
+  }
+
+  if (body.action === 'appendRecord') {
+    return executeAppendRecord_(body, actor)
+  }
+
+  if (body.action === 'maintenanceTransition') {
+    return executeMaintenanceTransition_(body, actor)
+  }
+
+  throw new Error('UNKNOWN_ACTION')
+}
+
+function getAllowedParentOrigins_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('ALLOWED_PARENT_ORIGINS_JSON') || '[]'
+  let origins
+  try {
+    origins = JSON.parse(raw)
+  } catch (error) {
+    throw new Error('ALLOWED_PARENT_ORIGINS_JSON_INVALID')
+  }
+  if (!Array.isArray(origins) || !origins.length) throw new Error('ALLOWED_PARENT_ORIGINS_NOT_CONFIGURED')
+
+  return origins.map(function (origin) {
+    const value = String(origin || '').trim()
+    if (!/^https:\/\/[^/]+$/.test(value)) throw new Error('ALLOWED_PARENT_ORIGIN_INVALID:' + value)
+    return value
+  })
 }
 
 function executeAppendRecord_(body, actor) {
