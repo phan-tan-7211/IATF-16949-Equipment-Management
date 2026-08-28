@@ -11,6 +11,7 @@
     body { margin: 0; padding: 24px; line-height: 1.5; }
     main { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
     button { min-height: 44px; padding: 10px 16px; font: inherit; cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .65; }
     pre { padding: 16px; border: 1px solid currentColor; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
   </style>
 </head>
@@ -22,60 +23,80 @@
       <p>Trang này chạy trực tiếp trong Apps Script và gọi server bằng <code>google.script.run</code>. Không ghi dữ liệu.</p>
     </header>
 
-    <button id="run" type="button">Kiểm tra kết nối</button>
-    <pre id="output" aria-live="polite">Sẵn sàng.</pre>
+    <button id="run" type="button" onclick="runCheck()">Kiểm tra kết nối</button>
+    <pre id="output" aria-live="polite">JavaScript đang khởi tạo…</pre>
   </main>
 
   <script>
-    const CONTRACT_VERSION = <?!= JSON.stringify(contractVersion) ?>
-    const output = document.getElementById('output')
-    const run = document.getElementById('run')
+    var CONTRACT_VERSION = <?!= JSON.stringify(contractVersion) ?>;
+    var output = document.getElementById('output');
+    var runButton = document.getElementById('run');
 
     function show(value) {
-      output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+      if (!output) return;
+      output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     }
 
-    function invoke(payload) {
-      return new Promise((resolve, reject) => {
-        google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler((error) => reject(new Error(error && error.message ? error.message : String(error))))
-          .bridgeInvoke(Object.assign({}, payload, { contractVersion: CONTRACT_VERSION }))
-      })
+    function fail(error) {
+      runButton.disabled = false;
+      show({
+        phase: 'apps-script-first-party',
+        ok: false,
+        error: error && error.message ? error.message : String(error)
+      });
     }
 
-    run.addEventListener('click', async () => {
-      run.disabled = true
-      show('Đang kiểm tra Apps Script first-party transport…')
+    function runCheck() {
+      runButton.disabled = true;
+      show('Đang gọi Apps Script server…');
 
-      try {
-        const health = await invoke({ action: 'health' })
-        if (!health.ok || !health.authenticated || health.contractVersion !== CONTRACT_VERSION) {
-          throw new Error('APP_SHELL_HEALTH_INVALID')
-        }
-
-        const read = await invoke({ action: 'readTable', table: 'Equipment_Master' })
-        show({
-          phase: 'apps-script-first-party',
-          ok: true,
-          health,
-          read: {
-            ok: read.ok,
-            table: read.table,
-            actor: read.actor,
-            rowCount: Array.isArray(read.rows) ? read.rows.length : null,
-          },
-        })
-      } catch (error) {
-        show({
-          phase: 'apps-script-first-party',
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      } finally {
-        run.disabled = false
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        fail(new Error('GOOGLE_SCRIPT_RUN_NOT_AVAILABLE'));
+        return;
       }
-    })
+
+      google.script.run
+        .withSuccessHandler(function (health) {
+          if (!health || !health.ok || !health.authenticated || health.contractVersion !== CONTRACT_VERSION) {
+            fail(new Error('APP_SHELL_HEALTH_INVALID'));
+            return;
+          }
+
+          google.script.run
+            .withSuccessHandler(function (read) {
+              runButton.disabled = false;
+              show({
+                phase: 'apps-script-first-party',
+                ok: true,
+                health: health,
+                read: {
+                  ok: Boolean(read && read.ok),
+                  table: read ? read.table : null,
+                  actor: read ? read.actor : null,
+                  rowCount: read && Array.isArray(read.rows) ? read.rows.length : null
+                }
+              });
+            })
+            .withFailureHandler(fail)
+            .bridgeInvoke({
+              action: 'readTable',
+              table: 'Equipment_Master',
+              contractVersion: CONTRACT_VERSION
+            });
+        })
+        .withFailureHandler(fail)
+        .bridgeInvoke({
+          action: 'health',
+          contractVersion: CONTRACT_VERSION
+        });
+    }
+
+    show({
+      phase: 'apps-script-first-party',
+      ok: null,
+      status: 'CLIENT_READY',
+      contractVersion: CONTRACT_VERSION
+    });
   </script>
 </body>
 </html>
