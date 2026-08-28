@@ -39,6 +39,7 @@ function executeMaintenanceTransition_(body, actor) {
     if (!workOrderMatch) throw new Error('WORK_ORDER_NOT_FOUND')
 
     const workOrder = workOrderMatch.record
+    const oldWorkOrder = Object.assign({}, workOrder)
     const currentStatus = String(workOrder.status || '')
     const nextStatus = nextMaintenanceStatus_(currentStatus, action)
     const now = new Date().toISOString()
@@ -90,12 +91,11 @@ function executeMaintenanceTransition_(body, actor) {
     }
 
     if (action === 'RELEASE') {
-      const handover = findAcceptedHandover_(String(workOrder.equipmentId || ''))
+      const handover = findAcceptedHandover_(workOrderId, String(workOrder.equipmentId || ''))
       if (!handover) throw new Error('ACCEPTED_HANDOVER_REQUIRED')
       if (String(handover.condition || '') === 'NOT_OPERABLE') throw new Error('HANDOVER_NOT_OPERABLE')
     }
 
-    const oldWorkOrder = Object.assign({}, workOrderMatch.record)
     workOrder.status = nextStatus
     updateRecordRow_('Maintenance_Work_Order', workOrderMatch.rowNumber, workOrder)
 
@@ -163,19 +163,25 @@ function findRecordByField_(table, field, expectedValue) {
   return null
 }
 
-function findAcceptedHandover_(equipmentId) {
+function findAcceptedHandover_(workOrderId, equipmentId) {
   const sheet = getSheet_('Equipment_Handover')
   const headers = getHeaders_(sheet)
+  const handoverIndex = headers.indexOf('handoverId')
   const equipmentIndex = headers.indexOf('equipmentId')
   const acceptedIndex = headers.indexOf('accepted')
-  if (equipmentIndex === -1 || acceptedIndex === -1) throw new Error('HANDOVER_HEADERS_REQUIRED')
+  if (handoverIndex === -1 || equipmentIndex === -1 || acceptedIndex === -1) throw new Error('HANDOVER_HEADERS_REQUIRED')
 
+  const expectedHandoverId = 'HO-' + workOrderId
   const lastRow = sheet.getLastRow()
   if (lastRow < 2) return null
 
   const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getDisplayValues()
   for (let index = values.length - 1; index >= 0; index -= 1) {
-    if (String(values[index][equipmentIndex]) === equipmentId && isTruthyCell_(values[index][acceptedIndex])) {
+    if (
+      String(values[index][handoverIndex]) === expectedHandoverId &&
+      String(values[index][equipmentIndex]) === equipmentId &&
+      isTruthyCell_(values[index][acceptedIndex])
+    ) {
       return rowToRecord_(headers, values[index])
     }
   }
