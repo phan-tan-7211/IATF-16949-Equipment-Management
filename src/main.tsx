@@ -1,40 +1,15 @@
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import { AppErrorBoundary } from './AppErrorBoundary'
-import { LiveAuditPanel } from './LiveAuditPanel'
-import { LiveCalibrationPanel } from './LiveCalibrationPanel'
-import { LiveDashboardPanel } from './LiveDashboardPanel'
-import { LiveInspectionPanel } from './LiveInspectionPanel'
-import { LiveMaintenancePanel } from './LiveMaintenancePanel'
-import { LiveToolingPanel } from './LiveToolingPanel'
-import { SupabaseTestPanel } from './SupabaseTestPanel'
 
+const SupabaseTestPanel = lazy(() => import('./SupabaseTestPanel').then((module) => ({ default: module.SupabaseTestPanel })))
 const phase3Preview = new URLSearchParams(window.location.search).get('phase3')
-const preview = (panel: React.ReactNode) => (
-  <div className="app-body phase3-preview-body">
-    <main id="main-content" className="main-content phase3-preview-content">{panel}</main>
-  </div>
-)
 
 const content = phase3Preview === 'supabase-test'
-  ? preview(<SupabaseTestPanel />)
-  : phase3Preview === 'equipment'
-    ? <App />
-    : phase3Preview === 'dashboard'
-      ? preview(<LiveDashboardPanel />)
-      : phase3Preview === 'calibration'
-        ? preview(<LiveCalibrationPanel />)
-        : phase3Preview === 'inspection'
-          ? preview(<LiveInspectionPanel />)
-          : phase3Preview === 'maintenance'
-            ? preview(<LiveMaintenancePanel />)
-            : phase3Preview === 'tooling'
-              ? preview(<LiveToolingPanel />)
-              : phase3Preview === 'audit'
-                ? preview(<LiveAuditPanel />)
-                : <App />
+  ? <Suspense fallback={<div className="workspace-loading" role="status">Đang tải Supabase diagnostics…</div>}><SupabaseTestPanel /></Suspense>
+  : <App />
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
