@@ -11,7 +11,7 @@ Purpose: prevent feature drift between `SOURCE_FIRST_IMPLEMENTATION_PLAN.md` and
 | Maintenance Work Order | DONE | browser smoke |
 | Maintenance Execution / Result | IMPLEMENTED / BROWSER TEST | verify BM08 ○/△/× + abnormal-action UX |
 | Equipment Handover | IMPLEMENTED / BROWSER TEST | verify BM05 form + accepted release gate UX |
-| Downtime / KPI | PARTIAL REVIEW | verify BM06 report coverage |
+| Downtime / KPI | IMPLEMENTED / BROWSER TEST | verify BM06 monthly report + downtime entry UX |
 | Tooling Master / Change | DONE CORE | browser smoke |
 | Calibration Master / Due | DONE CORE | browser smoke |
 | Calibration Vendor Quote History | MISSING/REVIEW | must reconcile with source requirement |
@@ -55,6 +55,20 @@ BM-TBSX-05 now persists through `rpc_record_equipment_handover()` into `equipmen
 - Captures attached documents/accessories, both-party comments and other agreements.
 - Receiver acceptance is recorded explicitly; only `accepted=true` satisfies the existing RELEASE gate.
 - Backend rollback smoke verified VERIFIED → accepted BM05 → RELEASED and left zero test records.
+
+## BM06 implementation contract
+
+BM-TBSX-06 now uses `downtime_event` as the event source and `rpc_upsert_downtime_event_bm06()` for controlled event creation/completion.
+
+- Production Equipment only.
+- Start and restart timestamps.
+- Standardized causes: mechanical, electrical, waiting material, unplanned maintenance, setup/changeover, no operator, material shortage, process error, other.
+- Detail, recovery action, affected department, recorder, handler and reporter are preserved in `source_data`.
+- Existing STOP_REPAIR-created downtime can be completed/enriched instead of duplicated.
+- Monthly report follows the source formulas in minutes: downtime rate, MTBF and MTTR.
+- Monthly equipment table marks days with downtime and shows downtime minutes/failure count.
+- Cause Pareto is derived from the same downtime events.
+- Backend rollback smoke verified create + close/update + Audit and left zero test records.
 
 ## QR implementation contract
 
