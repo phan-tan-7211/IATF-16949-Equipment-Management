@@ -6,7 +6,6 @@ import { AppErrorBoundary } from './AppErrorBoundary'
 import { LiveAuditPanel } from './LiveAuditPanel'
 import { LiveCalibrationPanel } from './LiveCalibrationPanel'
 import { LiveDashboardPanel } from './LiveDashboardPanel'
-import { LiveEquipmentPanel } from './LiveEquipmentPanel'
 import { LiveInspectionPanel } from './LiveInspectionPanel'
 import { LiveMaintenancePanel } from './LiveMaintenancePanel'
 import { LiveToolingPanel } from './LiveToolingPanel'
@@ -21,10 +20,10 @@ const preview = (panel: React.ReactNode) => (
 
 const content = phase3Preview === 'supabase-test'
   ? preview(<SupabaseTestPanel />)
-  : phase3Preview === 'dashboard'
-    ? preview(<LiveDashboardPanel />)
-    : phase3Preview === 'equipment'
-      ? preview(<LiveEquipmentPanel />)
+  : phase3Preview === 'equipment'
+    ? <App />
+    : phase3Preview === 'dashboard'
+      ? preview(<LiveDashboardPanel />)
       : phase3Preview === 'calibration'
         ? preview(<LiveCalibrationPanel />)
         : phase3Preview === 'inspection'
