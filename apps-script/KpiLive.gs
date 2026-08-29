@@ -10,23 +10,42 @@ function dashboardKpi(request) {
   if (!Number.isInteger(year) || year < 2000 || year > 2200) throw new Error('KPI_YEAR_INVALID')
   if (!Number.isInteger(month) || month < 1 || month > 12) throw new Error('KPI_MONTH_INVALID')
 
-  const equipment = readTable_('Equipment_Master').filter(function (row) {
+  const calculated = calculateDashboardKpi_({
+    equipment: readTable_('Equipment_Master'),
+    inspections: readTable_('Daily_Inspection'),
+    downtimeEvents: readTable_('Downtime_Event'),
+    plans: readTable_('Maintenance_Plan'),
+    workOrders: readTable_('Maintenance_Work_Order'),
+    executions: readTable_('Maintenance_Execution'),
+  }, year, month)
+
+  return {
+    ok: true,
+    actor: actor.email,
+    period: { year: year, month: month },
+    data: calculated,
+  }
+}
+
+function calculateDashboardKpi_(tables, year, month) {
+  const source = tables || {}
+  const equipment = (source.equipment || []).filter(function (row) {
     return String(row.equipmentType || '') === 'PRODUCTION' && String(row.status || '') !== 'DISPOSED'
   })
   const productionIds = {}
   equipment.forEach(function (row) { productionIds[String(row.equipmentId || '')] = true })
 
-  const inspections = readTable_('Daily_Inspection').filter(function (row) {
+  const inspections = (source.inspections || []).filter(function (row) {
     return productionIds[String(row.equipmentId || '')] && dateInMonth_(row.inspectionDate, year, month)
   })
-  const downtimeEvents = readTable_('Downtime_Event').filter(function (row) {
+  const downtimeEvents = (source.downtimeEvents || []).filter(function (row) {
     return productionIds[String(row.equipmentId || '')] && dateTimeInMonth_(row.downAt, year, month)
   })
-  const plans = readTable_('Maintenance_Plan').filter(function (row) {
+  const plans = (source.plans || []).filter(function (row) {
     return productionIds[String(row.equipmentId || '')] && dateInMonth_(row.plannedDate, year, month)
   })
-  const workOrders = readTable_('Maintenance_Work_Order')
-  const executions = readTable_('Maintenance_Execution')
+  const workOrders = source.workOrders || []
+  const executions = source.executions || []
 
   const equipmentDays = {}
   inspections.forEach(function (row) {
@@ -75,31 +94,66 @@ function dashboardKpi(request) {
   const maintenanceOnTimeRate = duePlans > 0 ? onTimePlans / duePlans : null
 
   return {
-    ok: true,
-    actor: actor.email,
-    period: { year: year, month: month },
-    data: {
-      productionEquipmentCount: equipment.length,
-      recordedEquipmentDays: recordedEquipmentDays,
-      runtimeMinutes: runtimeMinutes,
-      downtimeMinutes: downtimeMinutes,
-      failureCount: downtimeEvents.length,
-      restoredFailureCount: restoredFailureCount,
-      mtbfMinutes: mtbfMinutes,
-      mttrMinutes: mttrMinutes,
-      downtimeRate: downtimeRate,
-      downtimeTargetRate: 0.08,
-      dueMaintenancePlans: duePlans,
-      onTimeMaintenancePlans: onTimePlans,
-      maintenanceOnTimeRate: maintenanceOnTimeRate,
-      maintenanceTargetRate: 1,
-      completeness: {
-        runtimeAvailable: runtimeMinutes !== null,
-        runtimeBasis: 'DAILY_INSPECTION_RECORDED_EQUIPMENT_DAYS',
-        maintenanceRateAvailable: maintenanceOnTimeRate !== null,
-      },
+    productionEquipmentCount: equipment.length,
+    recordedEquipmentDays: recordedEquipmentDays,
+    runtimeMinutes: runtimeMinutes,
+    downtimeMinutes: downtimeMinutes,
+    failureCount: downtimeEvents.length,
+    restoredFailureCount: restoredFailureCount,
+    mtbfMinutes: mtbfMinutes,
+    mttrMinutes: mttrMinutes,
+    downtimeRate: downtimeRate,
+    downtimeTargetRate: 0.08,
+    dueMaintenancePlans: duePlans,
+    onTimeMaintenancePlans: onTimePlans,
+    maintenanceOnTimeRate: maintenanceOnTimeRate,
+    maintenanceTargetRate: 1,
+    completeness: {
+      runtimeAvailable: runtimeMinutes !== null,
+      runtimeBasis: 'DAILY_INSPECTION_RECORDED_EQUIPMENT_DAYS',
+      maintenanceRateAvailable: maintenanceOnTimeRate !== null,
     },
   }
+}
+
+function fixtureKpiSmoke() {
+  const actor = requireActor_()
+  if (!actor || actor.role !== 'ADMIN') throw new Error('FIXTURE_ADMIN_REQUIRED')
+
+  const empty = calculateDashboardKpi_({
+    equipment: [{ equipmentId: 'FX-KPI-EQ', equipmentType: 'PRODUCTION', status: 'RUNNING' }],
+    inspections: [], downtimeEvents: [], plans: [], workOrders: [], executions: [],
+  }, 2026, 8)
+  if (empty.runtimeMinutes !== null || empty.downtimeRate !== null || empty.mtbfMinutes !== null) {
+    throw new Error('FIXTURE_KPI_EMPTY_RUNTIME_ASSERTION_FAILED')
+  }
+
+  const populated = calculateDashboardKpi_({
+    equipment: [{ equipmentId: 'FX-KPI-EQ', equipmentType: 'PRODUCTION', status: 'RUNNING' }],
+    inspections: [
+      { equipmentId: 'FX-KPI-EQ', inspectionDate: '2026-08-10' },
+      { equipmentId: 'FX-KPI-EQ', inspectionDate: '2026-08-11' },
+      { equipmentId: 'FX-KPI-EQ', inspectionDate: '2026-08-11' },
+    ],
+    downtimeEvents: [
+      { equipmentId: 'FX-KPI-EQ', downAt: '2026-08-10T08:00:00+07:00', restoredAt: '2026-08-10T09:00:00+07:00', downtimeMinutes: 60 },
+      { equipmentId: 'FX-KPI-EQ', downAt: '2026-08-11T08:00:00+07:00', restoredAt: '2026-08-11T08:30:00+07:00', downtimeMinutes: 30 },
+    ],
+    plans: [{ planId: 'FX-PLAN-1', equipmentId: 'FX-KPI-EQ', plannedDate: '2026-08-20' }],
+    workOrders: [{ workOrderId: 'FX-WO-PLAN-1', sourceType: 'PLAN', sourceId: 'FX-PLAN-1' }],
+    executions: [{ workOrderId: 'FX-WO-PLAN-1', completedAt: '2026-08-19T10:00:00+07:00' }],
+  }, 2026, 8)
+
+  if (populated.recordedEquipmentDays !== 2) throw new Error('FIXTURE_KPI_EQUIPMENT_DAYS_FAILED')
+  if (populated.runtimeMinutes !== 2880) throw new Error('FIXTURE_KPI_RUNTIME_FAILED')
+  if (populated.downtimeMinutes !== 90) throw new Error('FIXTURE_KPI_DOWNTIME_FAILED')
+  if (populated.restoredFailureCount !== 2) throw new Error('FIXTURE_KPI_FAILURE_COUNT_FAILED')
+  if (populated.mttrMinutes !== 45) throw new Error('FIXTURE_KPI_MTTR_FAILED')
+  if (Math.abs(populated.mtbfMinutes - 1395) > 0.0001) throw new Error('FIXTURE_KPI_MTBF_FAILED')
+  if (Math.abs(populated.downtimeRate - 0.03125) > 0.000001) throw new Error('FIXTURE_KPI_DOWNTIME_RATE_FAILED')
+  if (populated.maintenanceOnTimeRate !== 1) throw new Error('FIXTURE_KPI_MAINTENANCE_RATE_FAILED')
+
+  Logger.log(JSON.stringify({ phase: 'fixture-kpi', ok: true, empty: empty, populated: populated }, null, 2))
 }
 
 function dateInMonth_(value, year, month) {
