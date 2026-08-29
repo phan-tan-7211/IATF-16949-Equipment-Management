@@ -17,6 +17,14 @@ production data + evidence
 
 `AppShell` chỉ là màn hình test kỹ thuật của Apps Script backend. Không phải frontend production.
 
+Browser không gọi Google Sheets/Drive trực tiếp. Frontend Vercel giao tiếp với Apps Script backend qua postMessage bridge ẩn để giữ Google session và tránh CORS/redirect của Apps Script Web App. Bridge là **transport backend**, không phải UI và không thay thế Vercel frontend.
+
+Canonical production frontend origin:
+
+`https://iatf-16949-equipment-management.vercel.app`
+
+Không coi deployment hash hoặc git-branch alias là canonical production origin.
+
 ## Nguyên tắc dữ liệu cốt lõi
 
 **Một thiết bị = một mã thiết bị = một hồ sơ gốc = toàn bộ nghiệp vụ cùng tham chiếu mã đó.**
@@ -59,52 +67,52 @@ production data + evidence
 
 # Phase 3 — Vercel production frontend — CURRENT PRIORITY
 
-## 3.1 Frontend architecture reset
+## 3.1 Frontend architecture reset — IMPLEMENTED ON FEATURE BRANCH
 
-Goal: remove production dependence on Apps Script HTML bridge and make `src/` the only production UI.
+- `src/` remains the production UI.
+- `AppShell` remains diagnostic-only.
+- Added typed Apps Script bridge client for Vercel React.
+- Browser has no direct Google API access.
+- Contract version remains validated across the bridge.
+- `persistenceConfig` now explicitly locks:
+  - `frontendRuntime = VERCEL_REACT`
+  - `persistenceBoundary = APPS_SCRIPT_BACKEND`
+  - `browserTransport = POSTMESSAGE_APPS_SCRIPT_BRIDGE`
+  - `diagnosticUi = APPS_SCRIPT_APPSHELL`
+  - canonical production origin = `https://iatf-16949-equipment-management.vercel.app`
+- Added `vercel.json` for Vite build/deploy.
 
-Tasks:
+## 3.2 Equipment live — IMPLEMENTED ON FEATURE BRANCH
 
-1. Keep `AppShell` diagnostic-only.
-2. Replace frontend mock data with an explicit Apps Script API client.
-3. Replace `browserTransport: APPS_SCRIPT_HTML_BRIDGE` with production HTTP API transport.
-4. Do not expose Spreadsheet/Drive credentials to browser.
-5. Keep contract version validation on every backend request.
-6. Add centralized loading / error / auth-state handling.
-7. Add typed API result schemas using existing Zod/domain models.
+- `Equipment_Master` read live via Apps Script backend.
+- Live UI supports `ALL / PRODUCTION / MEASUREMENT` filters.
+- Expected production state: **71 total = 19 PRODUCTION + 52 MEASUREMENT**.
+- Preview route: `?phase3=equipment`.
+- Test / Build / Lint PASS.
 
-## 3.2 Backend API completion for frontend
+## 3.3 Calibration live — IMPLEMENTED ON FEATURE BRANCH
 
-Existing backend provides `doGet`, `doPost`, `readTable` and workflow actions, but frontend coverage must be completed.
+- Reads `Calibration_Master + Equipment_Master` through backend.
+- Calculates canonical link state only by exact `equipmentId`:
+  - LINKED
+  - UNLINKED
+  - ORPHAN
+  - INVALID_TYPE
+- No fuzzy matching by serial/model/name.
+- Live UI shows control number, instrument, department, model/serial, calibration date, next due and link state.
+- Expected production state: **52 records / 52 LINKED / 0 reconciliation**.
+- Preview route: `?phase3=calibration`.
+- Test / Build / Lint PASS.
 
-Required API surface:
+## 3.4 Next implementation order
 
-- health/session/current role
-- Equipment list/detail/create/update/lifecycle/delete-safe
-- Daily Inspection list/submit
-- Maintenance plan/list/work order/create/transitions
-- Execution/result/verification/handover
-- Downtime + KPI
-- Tooling master/plan/modification workflow
-- Calibration master/list/log/evaluation
-- Evidence upload/read links
-- Audit read for authorized roles
-
-Rule: frontend must call business actions, not write Sheets directly.
-
-## 3.3 Production UI modules
-
-Deliver in this order:
-
-1. Application shell / responsive navigation / user session
-2. Dashboard
-3. Equipment
-4. Calibration
-5. Daily Inspection
-6. Maintenance
-7. Tooling
-8. Audit & Configuration
-9. QR/PWA workflow
+1. Dashboard live summary.
+2. Daily Inspection live.
+3. Maintenance / Work Order live including backend mutations.
+4. Tooling live.
+5. Audit & Configuration live.
+6. QR / PWA workflow.
+7. After live preview gates pass, replace remaining mock production paths inside `App.tsx`.
 
 Each module is only DONE when:
 
@@ -113,28 +121,9 @@ Each module is only DONE when:
 - loading/error/empty states exist;
 - mobile + tablet + desktop pass;
 - tests pass;
-- no mock data is used in production path.
+- no mock data is used in the production path.
 
-## 3.4 Equipment UI
-
-- Combined PRODUCTION + MEASUREMENT master.
-- Filter by equipmentType, department, status, area.
-- Detail profile with all related history.
-- ADMIN CRUD/lifecycle UI.
-- QR uses `equipmentId`.
-
-## 3.5 Calibration UI
-
-Expected production state after current data migration:
-
-- 52 current calibration profiles.
-- 52 linked MEASUREMENT roots.
-- 0 reconciliation-needed rows unless future incomplete source data is added.
-- Due/overdue status calculated from current dates.
-- Calibration entry only for valid linked MEASUREMENT equipment.
-- Post-calibration evaluation required after log entry.
-
-## 3.6 UX quality gate
+## 3.5 UX quality gate
 
 Production frontend must be visibly more professional than AppShell:
 
@@ -146,18 +135,26 @@ Production frontend must be visibly more professional than AppShell:
 - no debug wording such as LOCAL UI / mock / source snapshot in production;
 - Vietnamese terminology consistent with business forms.
 
-## 3.7 Vercel deployment
+## 3.6 Vercel deployment gate
 
-Current connected Vercel team has no project discovered. Therefore:
+Vercel project already exists. Canonical domain:
 
-1. create/reconnect Vercel project to this GitHub repo;
-2. framework: Vite;
-3. build: `npm run build`;
-4. output: `dist`;
-5. production env includes Apps Script backend URL and required public contract config only;
-6. deploy Preview first;
-7. run live read-only + mutation smoke against authorized test/fixture flow;
-8. promote production after gates pass.
+`https://iatf-16949-equipment-management.vercel.app`
+
+Current production deployment is still from `main` before Phase 3 live slices.
+
+The Phase 3 branch preview is currently blocked by Vercel Hobby deployment rate limit with status **“Deployment rate limited — retry in 24 hours.”** This is an infrastructure quota issue, not a frontend build failure. The same PR builds successfully in GitHub Quality Gate and Netlify preview; Netlify remains test-only and does not change the production architecture.
+
+Do not merge just to bypass the Vercel preview gate.
+
+Merge gate:
+
+- GitHub Quality Gate PASS on latest HEAD.
+- Vercel preview can build after rate limit resets.
+- Apps Script allowed parent origins includes canonical Vercel origin.
+- `?phase3=equipment` confirms live `71 = 19 + 52`.
+- `?phase3=calibration` confirms live `52 LINKED / 0 reconciliation`.
+- Then replace default Equipment/Calibration mock paths with live modules and merge.
 
 ---
 
@@ -165,8 +162,8 @@ Current connected Vercel team has no project discovered. Therefore:
 
 After Vercel frontend reaches feature parity:
 
-- remove mock-data imports from production bundle;
-- verify CORS/origin policy between Vercel and Apps Script;
+- remove all remaining mock-data imports from production bundle;
+- verify Apps Script allowed-origin policy;
 - security review RBAC and endpoint exposure;
 - browser never controls actor/role;
 - rate/duplicate protections on writes;
@@ -181,7 +178,7 @@ Only after G1 frontend production is stable:
 - BM-10B tooling replacement program;
 - advanced maintenance analytics;
 - richer evidence/document workflow;
-- notifications / reminders if approved;
+- notifications/reminders if approved;
 - additional production modules only from official source requirements.
 
 ---
@@ -193,10 +190,10 @@ Only after G1 frontend production is stable:
 3. A backend feature with no Vercel UI is not considered product-complete if users need to operate it.
 4. Google Sheets/Drive are persistence, never the browser's direct API target.
 5. Apps Script is backend authority for actor, role, workflow validation and audit.
-6. No new parallel equipment master or department-specific equipment code system.
-7. Source data may be incomplete; incomplete fields remain blank unless the system owner explicitly authorizes a new internal standard.
+6. The hidden Apps Script bridge is transport only; it must never become the visible production UI.
+7. No new parallel equipment master or department-specific equipment code system.
 8. Every phase must have build/test/live gates before being marked complete.
 
 ## Current next action
 
-Start Phase 3.1 by replacing mock frontend data with a typed Apps Script API adapter and implement live **Equipment + Calibration** read paths first, because these now have authoritative production data and provide the fastest end-to-end validation of the architecture.
+Continue Phase 3 with **Dashboard live summary**, while waiting for Vercel Hobby preview quota to reset. Do not return UI work to AppShell.
