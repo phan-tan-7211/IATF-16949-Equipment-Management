@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './Maintenance.css'
+import { canCreateMaintenance, canTransitionMaintenance, useAppRole } from './auth/AppRoleContext'
 import { createManualWorkOrder, loadLiveMaintenance, transitionLiveMaintenance, type LiveHandover, type LiveMaintenancePlan, type LiveMaintenanceWorkOrder, type MaintenanceEquipmentOption } from './data/liveMaintenance'
 import type { MaintenanceWorkflowAction, MaintenanceWorkflowStatus } from './domain/workflow'
 
@@ -20,6 +21,8 @@ function dateTime(value: string) {
 }
 
 export function LiveMaintenancePanel() {
+  const role = useAppRole()
+  const canCreate = canCreateMaintenance(role)
   const [equipment, setEquipment] = useState<MaintenanceEquipmentOption[]>([])
   const [plans, setPlans] = useState<LiveMaintenancePlan[]>([])
   const [workOrders, setWorkOrders] = useState<LiveMaintenanceWorkOrder[]>([])
@@ -80,9 +83,12 @@ export function LiveMaintenancePanel() {
   }), [workOrders, statusFilter, normalizedQuery, equipmentName])
   const selected = selectedId ? workOrders.find((item) => item.workOrderId === selectedId) || null : null
   const selectedHandover = selected ? handovers.find((item) => item.workOrderId === selected.workOrderId && item.accepted) || null : null
+  const selectedNext = selected ? nextAction[selected.status] : undefined
+  const canAdvanceSelected = selectedNext ? canTransitionMaintenance(role, selectedNext.action) : false
 
   const onCreate = async (event: FormEvent) => {
     event.preventDefault()
+    if (!canCreate) return setError(`Role ${role} không có quyền tạo Work Order.`)
     if (!equipmentId || !reason.trim()) return
     setBusy('create'); setError(''); setMessage('')
     try {
@@ -97,6 +103,7 @@ export function LiveMaintenancePanel() {
   }
 
   const advance = async (workOrderId: string, action: MaintenanceWorkflowAction) => {
+    if (!canTransitionMaintenance(role, action)) return setError(`Role ${role} không có quyền thực hiện ${action}.`)
     setBusy(workOrderId); setError(''); setMessage('')
     try {
       const result = await transitionLiveMaintenance({ workOrderId, workflowAction: action, operationId: operationId(`maintenance-${action.toLowerCase()}`) })
@@ -117,7 +124,7 @@ export function LiveMaintenancePanel() {
     <section className="maintenance-surface" aria-labelledby="maintenance-title">
       <header className="maintenance-header">
         <div><p className="eyebrow">Maintenance Control</p><h2 id="maintenance-title">Work Order</h2><p>{filteredWorkOrders.length} / {workOrders.length} hồ sơ · workflow chạy bằng Supabase RPC</p></div>
-        <button className="maintenance-primary" type="button" onClick={() => setCreateOpen(true)}>+ Tạo Work Order</button>
+        {canCreate ? <button className="maintenance-primary" type="button" onClick={() => setCreateOpen(true)}>+ Tạo Work Order</button> : <span className="maintenance-readonly">Chỉ xem · {role}</span>}
       </header>
 
       <div className="maintenance-toolbar" role="search">
@@ -173,14 +180,14 @@ export function LiveMaintenancePanel() {
         <section className="maintenance-detail-section"><span>Lý do / hiện tượng</span><p>{selected.reason || '—'}</p></section>
         {selected.approvedBy ? <section className="maintenance-detail-section"><span>Phê duyệt</span><p>{selected.approvedBy} · {dateTime(selected.approvedAt)}</p></section> : null}
         <div className="maintenance-workflow"><span>OPEN</span><b>→</b><span>APPROVE</span><b>→</b><span>REPAIR</span><b>→</b><span>VERIFY</span><b>→</b><span>RELEASE</span></div>
-        <footer>{nextAction[selected.status] ? <>
+        <footer>{selectedNext ? <>
           {selected.status === 'VERIFIED' && !selectedHandover ? <p className="maintenance-release-lock">Cần BM-05 accepted trước khi Release.</p> : null}
-          <button className="maintenance-primary" type="button" disabled={busy === selected.workOrderId || (selected.status === 'VERIFIED' && !selectedHandover)} onClick={() => void advance(selected.workOrderId, nextAction[selected.status]!.action)}>{busy === selected.workOrderId ? 'Đang xử lý…' : nextAction[selected.status]!.label}</button>
+          {canAdvanceSelected ? <button className="maintenance-primary" type="button" disabled={busy === selected.workOrderId || (selected.status === 'VERIFIED' && !selectedHandover)} onClick={() => void advance(selected.workOrderId, selectedNext.action)}>{busy === selected.workOrderId ? 'Đang xử lý…' : selectedNext.label}</button> : <span className="maintenance-readonly">Role {role} không có quyền: {selectedNext.label}</span>}
         </> : <span className="maintenance-complete">Workflow đã hoàn tất</span>}</footer>
       </aside>
     </div> : null}
 
-    {createOpen ? <div className="maintenance-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false) }}>
+    {createOpen && canCreate ? <div className="maintenance-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false) }}>
       <aside className="maintenance-drawer create" role="dialog" aria-modal="true" aria-labelledby="create-wo-title">
         <header><div><p className="eyebrow">Manual Work Order</p><h2 id="create-wo-title">Tạo yêu cầu bảo trì</h2></div><button type="button" aria-label="Đóng" onClick={() => setCreateOpen(false)}>×</button></header>
         <form className="maintenance-create-form" onSubmit={onCreate}>
