@@ -1,5 +1,6 @@
 import { GOOGLE_PERSISTENCE_CONFIG } from '../domain/persistenceConfig'
 import { PERSISTENCE_TABLES } from '../domain/persistenceContract'
+import type { MaintenanceWorkflowAction } from '../domain/workflow'
 
 const CHANNEL = 'CEV_APPS_SCRIPT_BRIDGE'
 const DEFAULT_TIMEOUT_MS = 15000
@@ -54,6 +55,45 @@ type DailyInspectionSubmitResponse = {
     overallMark: DailyInspectionMark
     workOrderId: string | null
     downtimeId: string | null
+    auditId: string
+  }
+}
+
+export type CreateMaintenanceWorkOrderInput = {
+  operationId: string
+  input: {
+    equipmentId: string
+    sourceType: 'PLAN' | 'DAILY_INSPECTION' | 'DOWNTIME' | 'PREDICTIVE' | 'MANUAL'
+    sourceId: string
+    reason: string
+    priority: Exclude<WorkOrderPriority, ''>
+    method: string
+    plannedStartAt: string
+    plannedEndAt: string
+  }
+}
+
+type CreateMaintenanceWorkOrderResponse = {
+  ok: true
+  duplicate: boolean
+  operationId: string
+  result: {
+    workOrderId: string
+    status: string
+    rowNumber: number
+    auditId: string
+  }
+}
+
+type MaintenanceTransitionResponse = {
+  ok: true
+  duplicate: boolean
+  operationId: string
+  result: {
+    workOrderId: string
+    previousStatus: string
+    status: string
+    executionId: string | null
     auditId: string
   }
 }
@@ -206,6 +246,38 @@ export function createAppsScriptBridgeClient(options?: {
       })
       if (!response || response.ok !== true || !response.result?.inspectionId) {
         throw new AppsScriptBridgeError('DAILY_INSPECTION_RESPONSE_INVALID')
+      }
+      return response
+    },
+
+    async createMaintenanceWorkOrder(request: CreateMaintenanceWorkOrderInput): Promise<CreateMaintenanceWorkOrderResponse> {
+      if (!request.operationId.trim()) throw new AppsScriptBridgeError('OPERATION_ID_REQUIRED')
+      if (!request.input.equipmentId.trim()) throw new AppsScriptBridgeError('EQUIPMENT_ID_REQUIRED')
+      if (!request.input.reason.trim()) throw new AppsScriptBridgeError('WORK_ORDER_REASON_REQUIRED')
+
+      const response = await invoke<CreateMaintenanceWorkOrderResponse>({
+        action: 'createMaintenanceWorkOrder',
+        operationId: request.operationId,
+        input: request.input,
+      })
+      if (!response || response.ok !== true || !response.result?.workOrderId) {
+        throw new AppsScriptBridgeError('CREATE_WORK_ORDER_RESPONSE_INVALID')
+      }
+      return response
+    },
+
+    async transitionMaintenance(request: { workOrderId: string; workflowAction: MaintenanceWorkflowAction; operationId: string }): Promise<MaintenanceTransitionResponse> {
+      if (!request.workOrderId.trim()) throw new AppsScriptBridgeError('WORK_ORDER_ID_REQUIRED')
+      if (!request.operationId.trim()) throw new AppsScriptBridgeError('OPERATION_ID_REQUIRED')
+
+      const response = await invoke<MaintenanceTransitionResponse>({
+        action: 'maintenanceTransition',
+        workOrderId: request.workOrderId,
+        workflowAction: request.workflowAction,
+        operationId: request.operationId,
+      })
+      if (!response || response.ok !== true || !response.result?.workOrderId) {
+        throw new AppsScriptBridgeError('MAINTENANCE_TRANSITION_RESPONSE_INVALID')
       }
       return response
     },
