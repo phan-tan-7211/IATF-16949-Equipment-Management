@@ -2,17 +2,63 @@ import { supabase } from './supabaseClient'
 import { getCalibrationDueStatus } from '../domain/calibration'
 
 export type LiveDashboardSummary = {
-  equipmentTotal: number; productionCount: number; measurementCount: number; runningCount: number; downCount: number; calibrationTotal: number; calibrationOverdue: number; workOrderOpen: number; criticalOpen: number; pmOverdue: number; downtimeOpen: number; downtimeMinutes: number
+  equipmentTotal: number
+  productionCount: number
+  measurementCount: number
+  runningCount: number
+  downCount: number
+  calibrationTotal: number
+  calibrationOverdue: number
+  workOrderOpen: number
+  criticalOpen: number
+  pmOverdue: number
+  downtimeOpen: number
+  downtimeMinutes: number
 }
+
+export type DashboardActionKind = 'DOWN' | 'CRITICAL_WO' | 'CALIBRATION_OVERDUE' | 'PM_OVERDUE' | 'DOWNTIME_OPEN'
+
+export type LiveDashboardAction = {
+  kind: DashboardActionKind
+  severity: 'CRITICAL' | 'WARNING'
+  equipmentId: string
+  equipmentName: string
+  sourceId: string
+  title: string
+  detail: string
+  date: string
+}
+
+export type LiveDashboardData = {
+  summary: LiveDashboardSummary
+  actions: LiveDashboardAction[]
+}
+
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 
-export async function loadLiveDashboard(asOfDate = new Date().toISOString().slice(0, 10)): Promise<LiveDashboardSummary> {
+function sourceValue(row: Record<string, unknown>, key: string) {
+  const source = row.source_data as Record<string, unknown> | null
+  return text(source?.[key])
+}
+
+function actionRank(action: LiveDashboardAction) {
+  const rank: Record<DashboardActionKind, number> = {
+    DOWN: 0,
+    CRITICAL_WO: 1,
+    DOWNTIME_OPEN: 2,
+    CALIBRATION_OVERDUE: 3,
+    PM_OVERDUE: 4,
+  }
+  return rank[action.kind]
+}
+
+export async function loadLiveDashboard(asOfDate = new Date().toISOString().slice(0, 10)): Promise<LiveDashboardData> {
   const [equipmentResult, calibrationResult, planResult, woResult, downtimeResult] = await Promise.all([
-    supabase.from('equipment_master').select('equipment_id,equipment_type,status,active').eq('active', true),
-    supabase.from('calibration_master').select('calibration_id,next_due_date'),
-    supabase.from('maintenance_plan').select('plan_id,source_data,active'),
-    supabase.from('maintenance_work_order').select('work_order_id,status,priority'),
-    supabase.from('downtime_event').select('downtime_id,started_at,ended_at'),
+    supabase.from('equipment_master').select('equipment_id,equipment_name,equipment_type,status,active').eq('active', true),
+    supabase.from('calibration_master').select('calibration_id,equipment_id,next_due_date,status'),
+    supabase.from('maintenance_plan').select('plan_id,equipment_id,source_data,active'),
+    supabase.from('maintenance_work_order').select('work_order_id,equipment_id,status,priority,reason,created_at'),
+    supabase.from('downtime_event').select('downtime_id,equipment_id,started_at,ended_at'),
   ])
   for (const result of [equipmentResult, calibrationResult, planResult, woResult, downtimeResult]) if (result.error) throw result.error
 
@@ -22,13 +68,16 @@ export async function loadLiveDashboard(asOfDate = new Date().toISOString().slic
   const workOrders = (woResult.data || []) as Array<Record<string, unknown>>
   const downtime = (downtimeResult.data || []) as Array<Record<string, unknown>>
   const openStatuses = new Set(['OPEN', 'WAITING_APPROVAL', 'APPROVED', 'IN_PROGRESS', 'COMPLETED', 'VERIFIED'])
+  const equipmentNames = new Map(equipment.map((row) => [text(row.equipment_id), text(row.equipment_name)]))
+
   let downtimeMinutes = 0
   for (const row of downtime) {
     const start = row.started_at ? new Date(String(row.started_at)).getTime() : 0
     const end = row.ended_at ? new Date(String(row.ended_at)).getTime() : Date.now()
     if (start && end >= start) downtimeMinutes += Math.round((end - start) / 60000)
   }
-  return {
+
+  const summary: LiveDashboardSummary = {
     equipmentTotal: equipment.length,
     productionCount: equipment.filter((row) => text(row.equipment_type) === 'PRODUCTION').length,
     measurementCount: equipment.filter((row) => text(row.equipment_type) === 'MEASUREMENT').length,
@@ -38,8 +87,53 @@ export async function loadLiveDashboard(asOfDate = new Date().toISOString().slic
     calibrationOverdue: calibration.filter((row) => getCalibrationDueStatus(text(row.next_due_date), asOfDate) === 'OVERDUE').length,
     workOrderOpen: workOrders.filter((row) => openStatuses.has(text(row.status))).length,
     criticalOpen: workOrders.filter((row) => openStatuses.has(text(row.status)) && text(row.priority) === 'CRITICAL').length,
-    pmOverdue: plans.filter((row) => text((row.source_data as Record<string, unknown> | null)?.status) === 'OVERDUE').length,
+    pmOverdue: plans.filter((row) => sourceValue(row, 'status') === 'OVERDUE').length,
     downtimeOpen: downtime.filter((row) => !row.ended_at).length,
     downtimeMinutes,
   }
+
+  const actions: LiveDashboardAction[] = []
+
+  equipment.filter((row) => text(row.status) === 'DOWN').forEach((row) => {
+    const equipmentId = text(row.equipment_id)
+    actions.push({
+      kind: 'DOWN', severity: 'CRITICAL', equipmentId, equipmentName: text(row.equipment_name), sourceId: equipmentId,
+      title: 'Thiết bị đang DOWN', detail: 'Trạng thái Equipment Master đang là DOWN. Cần xác nhận nguyên nhân và Work Order liên quan.', date: '',
+    })
+  })
+
+  workOrders.filter((row) => openStatuses.has(text(row.status)) && text(row.priority) === 'CRITICAL').forEach((row) => {
+    const equipmentId = text(row.equipment_id)
+    actions.push({
+      kind: 'CRITICAL_WO', severity: 'CRITICAL', equipmentId, equipmentName: equipmentNames.get(equipmentId) || '', sourceId: text(row.work_order_id),
+      title: 'Work Order CRITICAL', detail: text(row.reason) || `Trạng thái ${text(row.status)}`, date: text(row.created_at),
+    })
+  })
+
+  downtime.filter((row) => !row.ended_at).forEach((row) => {
+    const equipmentId = text(row.equipment_id)
+    actions.push({
+      kind: 'DOWNTIME_OPEN', severity: 'CRITICAL', equipmentId, equipmentName: equipmentNames.get(equipmentId) || '', sourceId: text(row.downtime_id),
+      title: 'Downtime chưa kết thúc', detail: 'Sự kiện downtime chưa có thời điểm ended_at.', date: text(row.started_at),
+    })
+  })
+
+  calibration.filter((row) => getCalibrationDueStatus(text(row.next_due_date), asOfDate) === 'OVERDUE').forEach((row) => {
+    const equipmentId = text(row.equipment_id)
+    actions.push({
+      kind: 'CALIBRATION_OVERDUE', severity: 'WARNING', equipmentId, equipmentName: equipmentNames.get(equipmentId) || '', sourceId: text(row.calibration_id),
+      title: 'Hiệu chuẩn quá hạn', detail: `Hạn hiệu chuẩn: ${text(row.next_due_date) || 'chưa xác định'}`, date: text(row.next_due_date),
+    })
+  })
+
+  plans.filter((row) => sourceValue(row, 'status') === 'OVERDUE').forEach((row) => {
+    const equipmentId = text(row.equipment_id)
+    actions.push({
+      kind: 'PM_OVERDUE', severity: 'WARNING', equipmentId, equipmentName: equipmentNames.get(equipmentId) || '', sourceId: text(row.plan_id),
+      title: 'PM quá hạn', detail: sourceValue(row, 'maintenanceType') || 'Kế hoạch bảo trì định kỳ quá hạn', date: sourceValue(row, 'plannedDate'),
+    })
+  })
+
+  actions.sort((a, b) => actionRank(a) - actionRank(b) || a.equipmentId.localeCompare(b.equipmentId))
+  return { summary, actions }
 }
