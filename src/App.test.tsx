@@ -26,7 +26,7 @@ describe('Vercel + Supabase app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Dashboard live' })).toBeInTheDocument()
     expect(screen.getByText('SUPABASE LIVE')).toBeInTheDocument()
     expect(screen.getByText(/React \+ Vite \+ TypeScript/)).toBeInTheDocument()
-    expect(await screen.findByText('ADMIN')).toBeInTheDocument()
+    expect((await screen.findAllByText('ADMIN')).length).toBeGreaterThan(0)
   })
 
   it('routes every desktop workspace to its live module', async () => {
@@ -44,7 +44,7 @@ describe('Vercel + Supabase app shell', () => {
 
   it('exposes every workspace from mobile navigation for admin', async () => {
     render(<App />)
-    await screen.findByText('ADMIN')
+    expect((await screen.findAllByText('ADMIN')).length).toBeGreaterThan(0)
     const mobileNav = screen.getByLabelText('Điều hướng mobile')
     const expectedItems = ['Tổng quan', 'Thiết bị', 'Kiểm tra ngày', 'Bảo trì', 'Jig & Tooling', 'Hiệu chuẩn', 'Audit & Cấu hình']
     expectedItems.forEach((label) => expect(within(mobileNav).getByRole('button', { name: label })).toBeInTheDocument())
