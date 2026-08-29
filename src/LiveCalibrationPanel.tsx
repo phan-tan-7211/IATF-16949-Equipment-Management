@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './Calibration.css'
+import { canRecordCalibration, useAppRole } from './auth/AppRoleContext'
 import { loadCalibrationLogs, loadLiveCalibration, recordCalibration, type CalibrationLinkState, type LiveCalibration, type LiveCalibrationLog } from './data/liveCalibration'
 import { getCalibrationDueStatus } from './domain/calibration'
 
@@ -9,6 +10,8 @@ type DueFilter = 'ALL' | 'OVERDUE' | 'DUE_SOON' | 'VALID' | 'NO_PLAN'
 function dueLabel(value: string) { return ({ OVERDUE: 'Quá hạn', DUE_SOON: 'Sắp đến hạn', VALID: 'Còn hạn', NO_PLAN: 'Chưa có hạn' } as Record<string,string>)[value] || value }
 
 export function LiveCalibrationPanel() {
+  const role = useAppRole()
+  const canRecord = canRecordCalibration(role)
   const [rows, setRows] = useState<LiveCalibration[]>([])
   const [logs, setLogs] = useState<LiveCalibrationLog[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,6 +51,7 @@ export function LiveCalibrationPanel() {
 
   const submitRecord=async(e:FormEvent)=>{
     e.preventDefault(); if(!selected?.equipmentId)return
+    if(!canRecord){setError(`Role ${role} không có quyền ghi Calibration Log.`);return}
     setSaving(true); setError(''); setMessage('')
     try { await recordCalibration({equipmentId:selected.equipmentId,calibrationDate,nextDueDate,result,provider,note,certificate}); setMessage(`Đã ghi hiệu chuẩn ${selected.equipmentId}`); setRecordMode(false); setProvider('');setNote('');setCertificate(undefined); await reload(); setLogs(await loadCalibrationLogs(selected.equipmentId)) }
     catch(c:unknown){setError(c instanceof Error?c.message:'Không thể ghi hiệu chuẩn')} finally{setSaving(false)}
@@ -63,8 +67,8 @@ export function LiveCalibrationPanel() {
     </section>
 
     {selected?<div className="calibration-layer" onMouseDown={(e)=>{if(e.target===e.currentTarget){setRecordMode(false);setSelectedId('')}}}><aside className="calibration-drawer" role="dialog" aria-modal="true"><header><div><p className="eyebrow">Calibration Profile</p><h2>{selected.controlNumber||selected.equipmentId||selected.calibrationEquipmentId}</h2><p>{selected.instrumentName||selected.localName||'Thiết bị đo'}</p></div><button onClick={()=>{setRecordMode(false);setSelectedId('')}}>×</button></header>
-      <div className="calibration-alert-row"><span className={`calibration-due due-${selectedDue.toLowerCase()}`}>{dueLabel(selectedDue)}</span><span className={`calibration-link-state link-${selected.linkState.toLowerCase()}`}>{linkLabel[selected.linkState]}</span>{selected.linkState==='LINKED'?<button className="calibration-record-button" onClick={()=>setRecordMode((v)=>!v)}>{recordMode?'Đóng form':'+ Ghi hiệu chuẩn'}</button>:null}</div>
-      {recordMode?<form className="calibration-record-form" onSubmit={submitRecord}><label><span>Ngày hiệu chuẩn</span><input type="date" value={calibrationDate} onChange={(e)=>setCalibrationDate(e.target.value)} required/></label><label><span>Hạn tiếp theo</span><input type="date" value={nextDueDate} onChange={(e)=>setNextDueDate(e.target.value)} required/></label><label><span>Kết quả</span><select value={result} onChange={(e)=>setResult(e.target.value as typeof result)}><option>PASS</option><option>LIMITED_USE</option><option>FAIL</option></select></label><label><span>Đơn vị hiệu chuẩn</span><input value={provider} onChange={(e)=>setProvider(e.target.value)}/></label><label><span>Chứng chỉ</span><input type="file" accept="application/pdf,image/*" onChange={(e)=>setCertificate(e.target.files?.[0])}/></label><label><span>Ghi chú</span><textarea value={note} onChange={(e)=>setNote(e.target.value)}/></label><button className="calibration-record-button primary" disabled={saving}>{saving?'Đang lưu…':'Lưu Calibration Log'}</button></form>:null}
+      <div className="calibration-alert-row"><span className={`calibration-due due-${selectedDue.toLowerCase()}`}>{dueLabel(selectedDue)}</span><span className={`calibration-link-state link-${selected.linkState.toLowerCase()}`}>{linkLabel[selected.linkState]}</span>{selected.linkState==='LINKED'&&canRecord?<button className="calibration-record-button" onClick={()=>setRecordMode((v)=>!v)}>{recordMode?'Đóng form':'+ Ghi hiệu chuẩn'}</button>:selected.linkState==='LINKED'?<span className="calibration-readonly">Chỉ xem · {role}</span>:null}</div>
+      {recordMode&&canRecord?<form className="calibration-record-form" onSubmit={submitRecord}><label><span>Ngày hiệu chuẩn</span><input type="date" value={calibrationDate} onChange={(e)=>setCalibrationDate(e.target.value)} required/></label><label><span>Hạn tiếp theo</span><input type="date" value={nextDueDate} onChange={(e)=>setNextDueDate(e.target.value)} required/></label><label><span>Kết quả</span><select value={result} onChange={(e)=>setResult(e.target.value as typeof result)}><option>PASS</option><option>LIMITED_USE</option><option>FAIL</option></select></label><label><span>Đơn vị hiệu chuẩn</span><input value={provider} onChange={(e)=>setProvider(e.target.value)}/></label><label><span>Chứng chỉ</span><input type="file" accept="application/pdf,image/*" onChange={(e)=>setCertificate(e.target.files?.[0])}/></label><label><span>Ghi chú</span><textarea value={note} onChange={(e)=>setNote(e.target.value)}/></label><button className="calibration-record-button primary" disabled={saving}>{saving?'Đang lưu…':'Lưu Calibration Log'}</button></form>:null}
       <div className="calibration-detail-grid"><div><span>Equipment ID</span><strong>{selected.equipmentId||'—'}</strong></div><div><span>Calibration ID</span><strong>{selected.calibrationEquipmentId}</strong></div><div><span>Model</span><strong>{selected.model||'—'}</strong></div><div><span>Serial</span><strong>{selected.serialNumber||'—'}</strong></div><div><span>Hiệu chuẩn gần nhất</span><strong>{selected.lastCalibrationDate||'—'}</strong></div><div><span>Hạn tiếp theo</span><strong>{selected.nextDueDate||'—'}</strong></div></div>
       <section className="calibration-detail-section"><span>Lịch sử hiệu chuẩn</span>{logs.length?<div className="calibration-log-list">{logs.map((log)=><article key={log.calibrationLogId}><div><b>{log.calibrationDate}</b><span>{log.result}</span></div><small>Next: {log.nextDueDate} · {log.provider||'—'} · {log.actorEmail||'—'}</small>{log.note?<p>{log.note}</p>:null}{log.certificateUrl?<a href={log.certificateUrl} target="_blank" rel="noreferrer">Mở chứng chỉ</a>:null}</article>)}</div>:<p>Chưa có Calibration Log.</p>}</section>
       </aside></div>:null}
