@@ -23,6 +23,10 @@ const nextAction: Partial<Record<MaintenanceWorkflowStatus, { action: Maintenanc
   VERIFIED: { action: 'RELEASE', label: 'Release / bàn giao' },
 }
 
+function operationId(prefix: string) {
+  return `${prefix}-${crypto.randomUUID()}`
+}
+
 export function LiveMaintenancePanel() {
   const [equipment, setEquipment] = useState<MaintenanceEquipmentOption[]>([])
   const [plans, setPlans] = useState<LiveMaintenancePlan[]>([])
@@ -86,7 +90,7 @@ export function LiveMaintenancePanel() {
     setMessage('')
     try {
       const result = await createManualWorkOrder(client, {
-        operationId: `create-wo-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        operationId: operationId('create-wo'),
         input: { equipmentId, sourceType: 'MANUAL', sourceId: '', reason: reason.trim(), priority, method: '', plannedStartAt: '', plannedEndAt: '' },
       })
       setMessage(`Đã tạo ${result.result.workOrderId}`)
@@ -109,7 +113,7 @@ export function LiveMaintenancePanel() {
       const result = await transitionLiveMaintenance(client, {
         workOrderId,
         workflowAction: action,
-        operationId: `maintenance-${action.toLowerCase()}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        operationId: operationId(`maintenance-${action.toLowerCase()}`),
       })
       setMessage(`${workOrderId}: ${statusLabel[result.result.status] || result.result.status}`)
     } catch (cause: unknown) {
