@@ -1,0 +1,16 @@
+<section id="kpiLivePanel" class="box" style="display:none;max-width:1400px;margin:0 auto 20px">
+  <div class="head">
+    <div><h2>Chỉ số quản lý thiết bị · BM-TBSX-06 / KPI-SOP3</h2><div class="muted">Tính từ dữ liệu phát sinh thật. Nếu thiếu nền thời gian vận hành, hệ thống hiển thị chưa đủ dữ liệu thay vì suy đoán.</div></div>
+    <div class="filters"><div class="field"><label for="kpiMonth">Tháng</label><input id="kpiMonth" type="month" onchange="loadKpiLive()"></div></div>
+  </div>
+  <div class="body">
+    <div class="stats">
+      <div class="stat"><span>Bảo trì đúng hạn</span><strong id="kpiMaintenance">—</strong><small id="kpiMaintenanceDetail" class="muted"></small></div>
+      <div class="stat"><span>Tỷ lệ dừng máy</span><strong id="kpiDowntimeRate">—</strong><small class="muted">Mục tiêu ≤ 8%</small></div>
+      <div class="stat"><span>MTBF</span><strong id="kpiMtbf">—</strong><small class="muted">phút</small></div>
+      <div class="stat"><span>MTTR</span><strong id="kpiMttr">—</strong><small class="muted">phút</small></div>
+    </div>
+    <div id="kpiDataNotice" class="notice" style="margin-top:12px"></div>
+    <div class="table" style="margin-top:12px"><table><thead><tr><th>Thiết bị sản xuất</th><th>Ngày-thiết-bị có ghi nhận</th><th>Phút vận hành nền</th><th>Phút dừng</th><th>Sự kiện dừng</th><th>Đã phục hồi</th></tr></thead><tbody id="kpiDetailRows"></tbody></table></div>
+  </div>
+</section>
