@@ -1,3 +1,4 @@
+<script>
 var openScreenKpiBase_=openScreen;
 openScreen=function(name){openScreenKpiBase_(name);toggleKpiLive_(name)};
 
@@ -25,3 +26,4 @@ function loadKpiLive(){
   })
 }
 setTimeout(function(){initializeKpiMonth_();if(el('screenOverview')&&el('screenOverview').classList.contains('on'))toggleKpiLive_('Overview')},500);
+</script>
