@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { createAppsScriptBridgeClient } from './data/appsScriptBridgeClient'
 import { createTooling, createToolingModification, createToolingPlan, loadLiveTooling, transitionToolingModification, type LiveTooling, type LiveToolingModification, type LiveToolingPlan } from './data/liveTooling'
 
 export function LiveToolingPanel() {
@@ -11,89 +10,72 @@ export function LiveToolingPanel() {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-
   const [toolingId, setToolingId] = useState('')
   const [toolingName, setToolingName] = useState('')
   const [toolingType, setToolingType] = useState('JIG')
   const [ownership, setOwnership] = useState('COMPANY')
   const [customerName, setCustomerName] = useState('')
-
   const [planToolingId, setPlanToolingId] = useState('')
   const [inspectionItem, setInspectionItem] = useState('')
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('')
   const [frequencyType, setFrequencyType] = useState('MONTH')
   const [frequencyValue, setFrequencyValue] = useState('1')
-
   const [modToolingId, setModToolingId] = useState('')
   const [modReason, setModReason] = useState('')
   const [beforeAfter, setBeforeAfter] = useState('')
   const [updatedDocs, setUpdatedDocs] = useState<Record<string, string>>({})
 
   const refresh = async () => {
-    const client = createAppsScriptBridgeClient()
-    try {
-      const result = await loadLiveTooling(client)
-      setTooling(result.tooling)
-      setPlans(result.plans)
-      setMods(result.modifications)
-      setPlanToolingId((current) => current || result.tooling[0]?.toolingId || '')
-      setModToolingId((current) => current || result.tooling[0]?.toolingId || '')
-      setError('')
-    } finally { client.destroy() }
+    const result = await loadLiveTooling()
+    setTooling(result.tooling); setPlans(result.plans); setMods(result.modifications)
+    setPlanToolingId((current) => current || result.tooling[0]?.toolingId || '')
+    setModToolingId((current) => current || result.tooling[0]?.toolingId || '')
+    setError('')
   }
 
   useEffect(() => {
     let active = true
-    const client = createAppsScriptBridgeClient()
-    loadLiveTooling(client)
-      .then((result) => {
-        if (!active) return
-        setTooling(result.tooling); setPlans(result.plans); setMods(result.modifications)
-        setPlanToolingId(result.tooling[0]?.toolingId || ''); setModToolingId(result.tooling[0]?.toolingId || '')
-      })
-      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải Tooling') })
-      .finally(() => { if (active) setLoading(false); client.destroy() })
-    return () => { active = false; client.destroy() }
+    loadLiveTooling().then((result) => {
+      if (!active) return
+      setTooling(result.tooling); setPlans(result.plans); setMods(result.modifications)
+      setPlanToolingId(result.tooling[0]?.toolingId || ''); setModToolingId(result.tooling[0]?.toolingId || '')
+    }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải Tooling') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [])
 
   const submitTooling = async (event: FormEvent) => {
     event.preventDefault(); setBusy('create-tooling'); setError(''); setMessage('')
-    const client = createAppsScriptBridgeClient()
     try {
-      await createTooling(client, { toolingId, toolingName, toolingType, ownership, customerName, status: 'IN_PRODUCTION', serialOrAssetNumber: '', usedFor: '', managingDepartment: '', storageLocation: '', commissionDate: '', inspectionCycleDays: '', note: '' })
+      await createTooling({ toolingId, toolingName, toolingType, ownership, customerName, status: 'IN_PRODUCTION', serialOrAssetNumber: '', usedFor: '', managingDepartment: '', storageLocation: '', commissionDate: '', inspectionCycleDays: '', note: '' })
       setMessage(`Đã tạo ${toolingId}`); setToolingId(''); setToolingName(''); await refresh()
     } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể tạo Tooling') }
-    finally { client.destroy(); setBusy('') }
+    finally { setBusy('') }
   }
 
   const submitPlan = async (event: FormEvent) => {
     event.preventDefault(); setBusy('create-plan'); setError(''); setMessage('')
-    const client = createAppsScriptBridgeClient()
     try {
-      await createToolingPlan(client, { toolingId: planToolingId, inspectionItem, acceptanceCriteria, frequencyType, frequencyValue, responsiblePerson: '', lastResultDate: '', note: '' })
+      await createToolingPlan({ toolingId: planToolingId, inspectionItem, acceptanceCriteria, frequencyType, frequencyValue, responsiblePerson: '', lastResultDate: '', note: '' })
       setMessage('Đã tạo kế hoạch kiểm tra Tooling'); setInspectionItem(''); setAcceptanceCriteria(''); await refresh()
     } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể tạo kế hoạch Tooling') }
-    finally { client.destroy(); setBusy('') }
+    finally { setBusy('') }
   }
 
   const submitModification = async (event: FormEvent) => {
     event.preventDefault(); setBusy('create-mod'); setError(''); setMessage('')
-    const client = createAppsScriptBridgeClient()
     try {
-      await createToolingModification(client, { toolingId: modToolingId, modificationDate: new Date().toISOString().slice(0, 10), modificationType: 'PHYSICAL_MODIFICATION', reason: modReason, ecnNumber: '', beforeAfterDescription: beforeAfter })
+      await createToolingModification({ toolingId: modToolingId, modificationDate: new Date().toISOString().slice(0, 10), modificationType: 'PHYSICAL_MODIFICATION', reason: modReason, ecnNumber: '', beforeAfterDescription: beforeAfter })
       setMessage('Đã tạo BM-11 modification'); setModReason(''); setBeforeAfter(''); await refresh()
     } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể tạo modification') }
-    finally { client.destroy(); setBusy('') }
+    finally { setBusy('') }
   }
 
   const transition = async (modificationId: string, action: 'APPROVE' | 'QA_CONFIRM' | 'COMPLETE') => {
     setBusy(modificationId); setError(''); setMessage('')
-    const client = createAppsScriptBridgeClient()
-    try {
-      await transitionToolingModification(client, modificationId, action, updatedDocs[modificationId] || '')
-      setMessage(`${modificationId}: ${action}`); await refresh()
-    } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể chuyển trạng thái modification') }
-    finally { client.destroy(); setBusy('') }
+    try { await transitionToolingModification(modificationId, action, updatedDocs[modificationId] || ''); setMessage(`${modificationId}: ${action}`); await refresh() }
+    catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể chuyển trạng thái modification') }
+    finally { setBusy('') }
   }
 
   return <div className="stack">
@@ -101,9 +83,8 @@ export function LiveToolingPanel() {
       <article><span>Tooling Master</span><strong>{tooling.length}</strong><small>BM-09</small></article>
       <article><span>Kế hoạch kiểm tra</span><strong>{plans.length}</strong><small>BM-10A</small></article>
       <article><span>Modification mở</span><strong>{mods.filter((item) => item.status !== 'COMPLETED').length}</strong><small>BM-11</small></article>
-      <article><span>Nguồn dữ liệu</span><strong>LIVE</strong><small>Apps Script backend</small></article>
+      <article><span>Nguồn dữ liệu</span><strong>LIVE</strong><small>Supabase PostgreSQL</small></article>
     </section>
-
     {loading ? <p className="muted" role="status">Đang tải Tooling…</p> : null}
     {error ? <div className="record-card" role="alert"><b>Có lỗi</b><p>{error}</p></div> : null}
     {message ? <div className="record-card" role="status"><b>{message}</b></div> : null}
@@ -117,7 +98,7 @@ export function LiveToolingPanel() {
         {ownership === 'CUSTOMER' ? <label>Khách hàng<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} required /></label> : null}
         <button className="primary-action" disabled={busy === 'create-tooling'}>{busy === 'create-tooling' ? 'Đang tạo…' : '+ Thêm Tooling'}</button>
       </form>
-      {tooling.length ? <div className="table-wrap"><table><thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Sở hữu</th><th>Trạng thái</th></tr></thead><tbody>{tooling.map((item) => <tr key={item.toolingId}><td><b>{item.toolingId}</b></td><td>{item.toolingName}</td><td>{item.toolingType}</td><td>{item.ownership}</td><td>{item.status}</td></tr>)}</tbody></table></div> : <p className="muted">Chưa có Tooling production.</p>}
+      {tooling.length ? <div className="table-wrap"><table><thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Sở hữu</th><th>Trạng thái</th></tr></thead><tbody>{tooling.map((item) => <tr key={item.toolingId}><td><b>{item.toolingId}</b></td><td>{item.toolingName}</td><td>{item.toolingType}</td><td>{item.ownership}</td><td>{item.status}</td></tr>)}</tbody></table></div> : <p className="muted">Chưa có Tooling.</p>}
     </section>
 
     <section className="content-card"><div className="section-heading"><div><p className="eyebrow">BM-TBSX-10A</p><h3>Kế hoạch kiểm tra Tooling</h3></div></div>
