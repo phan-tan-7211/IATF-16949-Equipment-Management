@@ -57,6 +57,20 @@ File/document evidence is separated into 9 evidence folders for Drive-like stora
 
 Calibration financial data from `source/` is retained as historical quotation evidence and structured comparison data; it is not labeled as current/live vendor pricing.
 
+## 6. Khoảng trống schema đã phát hiện sau khi freeze
+
+BM-TBSX-10 gồm hai phần:
+
+- **Phần A — Kế hoạch kiểm tra, bảo trì jig/gá định kỳ:** G1 đã có cấu trúc trong `Tooling_Maintenance_Plan` và có thể vận hành.
+- **Phần B — Chương trình thay mới dụng cụ nhanh hỏng:** G1 hiện **chưa có trường cấu trúc đầy đủ** cho `tồn kho tối thiểu`, `chu kỳ đặt mua`, `nơi đặt mua`, `người theo dõi`.
+
+Quy tắc xử lý:
+
+1. Không nhét các trường BM-10B vào `note` hoặc JSON ẩn để giả vờ đã hỗ trợ.
+2. Không tự thêm bảng thứ 21 hoặc tự sửa header Google Sheet khi contract vẫn mang phiên bản `G1-frozen-2026-08-28`.
+3. BM-10B phải được đưa vào một migration schema có phiên bản mới sau khi thiết kế được duyệt.
+4. Cho đến lúc migration, giao diện Tooling chỉ được coi là live đầy đủ cho BM-09, BM-10 Phần A và BM-11.
+
 ## G1 verification
 
 - [x] Legacy `CORE_SHEET_NAMES` reconciled with authoritative `PERSISTENCE_TABLES`.
