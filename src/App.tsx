@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { AppErrorBoundary } from './AppErrorBoundary'
 import { AppRoleProvider, canViewAudit, type AppRole } from './auth/AppRoleContext'
 import { loadLiveSession } from './data/liveAudit'
-import { LiveAuditPanel } from './LiveAuditPanel'
-import { LiveCalibrationPanel } from './LiveCalibrationPanel'
-import { LiveDashboardPanel } from './LiveDashboardPanel'
-import { LiveEquipmentPanel } from './LiveEquipmentPanel'
-import { LiveInspectionPanel } from './LiveInspectionPanel'
-import { LiveMaintenancePanel } from './LiveMaintenancePanel'
-import { LiveToolingPanel } from './LiveToolingPanel'
 import { PwaStatus } from './PwaStatus'
+
+const LiveAuditPanel = lazy(() => import('./LiveAuditPanel').then((module) => ({ default: module.LiveAuditPanel })))
+const LiveCalibrationPanel = lazy(() => import('./LiveCalibrationPanel').then((module) => ({ default: module.LiveCalibrationPanel })))
+const LiveDashboardPanel = lazy(() => import('./LiveDashboardPanel').then((module) => ({ default: module.LiveDashboardPanel })))
+const LiveEquipmentPanel = lazy(() => import('./LiveEquipmentPanel').then((module) => ({ default: module.LiveEquipmentPanel })))
+const LiveInspectionPanel = lazy(() => import('./LiveInspectionPanel').then((module) => ({ default: module.LiveInspectionPanel })))
+const LiveMaintenancePanel = lazy(() => import('./LiveMaintenancePanel').then((module) => ({ default: module.LiveMaintenancePanel })))
+const LiveToolingPanel = lazy(() => import('./LiveToolingPanel').then((module) => ({ default: module.LiveToolingPanel })))
 
 type View = 'dashboard' | 'equipment' | 'inspection' | 'maintenance' | 'tooling' | 'calibration' | 'settings'
 
@@ -77,7 +78,7 @@ export default function App() {
   const active = useMemo(() => NAV.find((item) => item.id === view) ?? NAV[0], [view])
 
   return <AppRoleProvider role={role}>
-    <div className="app-shell">
+    <div className="app-shell" data-role={role}>
       <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
       <PwaStatus />
 
@@ -110,7 +111,9 @@ export default function App() {
 
         <main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}>
           <AppErrorBoundary key={view}>
-            <LiveView view={view} />
+            <Suspense fallback={<div className="workspace-loading" role="status">Đang mở workspace…</div>}>
+              <LiveView view={view} />
+            </Suspense>
           </AppErrorBoundary>
         </main>
       </div>
