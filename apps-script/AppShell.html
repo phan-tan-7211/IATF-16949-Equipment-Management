@@ -11,10 +11,12 @@
 <body>
 <?!= HtmlService.createHtmlOutputFromFile('AppShellBody').getContent() ?>
 <?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminPanel').getContent() ?>
+<?!= HtmlService.createHtmlOutputFromFile('CalibrationEntryPanel').getContent() ?>
 <script>
 <? var clientTemplate = HtmlService.createTemplateFromFile('AppShellClient'); clientTemplate.contractVersion = contractVersion; ?>
 <?!= clientTemplate.evaluate().getContent() ?>
 </script>
 <script><?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminClient').getContent() ?></script>
+<script><?!= HtmlService.createHtmlOutputFromFile('CalibrationEntryClient').getContent() ?></script>
 </body>
 </html>
