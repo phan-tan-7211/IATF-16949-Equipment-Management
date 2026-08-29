@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import './Equipment.css'
 import { type LiveEquipment } from './data/liveEquipment'
 import {
   getEquipmentPhotoPreview,
@@ -10,7 +11,7 @@ import {
 
 const statusLabel: Record<string, string> = {
   RUNNING: 'Hoạt động',
-  DOWN: 'DOWN',
+  DOWN: 'Sự cố',
   MAINTENANCE: 'Bảo trì',
   STOPPED: 'Dừng',
   DISPOSED: 'Thanh lý',
@@ -42,15 +43,31 @@ function toDraft(row: LiveEquipment): EquipmentEditInput {
   }
 }
 
+function includesQuery(row: LiveEquipment, query: string) {
+  if (!query) return true
+  const haystack = [
+    row.equipmentId,
+    row.equipmentName,
+    row.serialNumber,
+    row.model,
+    row.manufacturer,
+    row.usingDepartment,
+    row.managingDepartment,
+    row.currentArea,
+  ].join(' ').toLocaleLowerCase()
+  return haystack.includes(query)
+}
+
 export function LiveEquipmentPanel() {
   const [rows, setRows] = useState<LiveEquipment[]>([])
-  const [drafts, setDrafts] = useState<Record<string, EquipmentEditInput>>({})
   const [photos, setPhotos] = useState<Record<string, PhotoInfo>>({})
+  const [editing, setEditing] = useState<EquipmentEditInput | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [uploadingId, setUploadingId] = useState('')
-  const [savingId, setSavingId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
 
   async function refreshOnePhoto(equipmentId: string) {
@@ -78,7 +95,6 @@ export function LiveEquipmentPanel() {
     try {
       const result = await loadSupabaseEquipment()
       setRows(result)
-      setDrafts(Object.fromEntries(result.map((row) => [row.equipmentId, toDraft(row)])))
       setError('')
       void refreshPhotoStates(result)
     } catch (cause) {
@@ -92,43 +108,37 @@ export function LiveEquipmentPanel() {
     void reloadEquipment()
   }, [])
 
-  function patchDraft(oldEquipmentId: string, patch: Partial<EquipmentEditInput>) {
-    setDrafts((current) => ({
-      ...current,
-      [oldEquipmentId]: { ...current[oldEquipmentId], ...patch },
-    }))
-  }
-
-  async function handleSave(oldEquipmentId: string) {
-    const draft = drafts[oldEquipmentId]
-    if (!draft) return
-    if (!draft.equipmentId.trim()) {
-      setMessage('Mã thiết bị không được để trống.')
+  async function handleSave() {
+    if (!editing) return
+    if (!editing.equipmentId.trim() || !editing.equipmentName.trim()) {
+      setMessage('Mã thiết bị và tên thiết bị không được để trống.')
       return
     }
-    setSavingId(oldEquipmentId)
+
+    setSaving(true)
     setMessage('')
     try {
-      await updateSupabaseEquipment(draft)
-      setMessage(`Đã lưu ${draft.equipmentId}`)
+      await updateSupabaseEquipment(editing)
+      setMessage(`Đã lưu ${editing.equipmentId}`)
+      setEditing(null)
       await reloadEquipment()
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'SAVE_FAILED')
     } finally {
-      setSavingId('')
+      setSaving(false)
     }
   }
 
   async function confirmPhotoReplacement(equipmentId: string) {
-    let photo = photos[equipmentId]
-    if (!photo || photo.state === 'loading' || photo.state === 'error') {
-      await refreshOnePhoto(equipmentId)
-      const preview = await getEquipmentPhotoPreview(equipmentId).catch(() => null)
-      if (!preview?.exists) return true
-    } else if (photo.state !== 'yes') {
-      return true
+    const current = photos[equipmentId]
+    if (current?.state === 'yes') {
+      return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`)
     }
-    return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`)
+    if (!current || current.state === 'loading' || current.state === 'error') {
+      const exists = await refreshOnePhoto(equipmentId)
+      if (exists) return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`)
+    }
+    return true
   }
 
   async function uploadAndRefresh(equipmentId: string, file: File) {
@@ -137,7 +147,7 @@ export function LiveEquipmentPanel() {
     try {
       await uploadEquipmentPhoto(equipmentId, file)
       await refreshOnePhoto(equipmentId)
-      setMessage(`Đã lưu ảnh cho ${equipmentId}`)
+      setMessage(`Đã cập nhật ảnh ${equipmentId}`)
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'UPLOAD_FAILED')
     } finally {
@@ -147,10 +157,7 @@ export function LiveEquipmentPanel() {
 
   async function handlePhotoUpload(equipmentId: string, file: File | undefined) {
     if (!file) return
-    if (!await confirmPhotoReplacement(equipmentId)) {
-      setMessage('Đã hủy thay ảnh.')
-      return
-    }
+    if (!await confirmPhotoReplacement(equipmentId)) return
     await uploadAndRefresh(equipmentId, file)
   }
 
@@ -165,10 +172,7 @@ export function LiveEquipmentPanel() {
       for (const item of clipboardItems) {
         const imageType = item.types.find((type) => type.startsWith('image/'))
         if (!imageType) continue
-        if (!await confirmPhotoReplacement(equipmentId)) {
-          setMessage('Đã hủy thay ảnh.')
-          return
-        }
+        if (!await confirmPhotoReplacement(equipmentId)) return
         const blob = await item.getType(imageType)
         const extension = clipboardFileExtension(imageType)
         const file = new File([blob], `clipboard.${extension}`, { type: imageType })
@@ -183,71 +187,112 @@ export function LiveEquipmentPanel() {
 
   const productionCount = rows.filter((row) => row.equipmentType === 'PRODUCTION').length
   const measurementCount = rows.filter((row) => row.equipmentType === 'MEASUREMENT').length
+  const normalizedQuery = query.trim().toLocaleLowerCase()
   const filteredRows = useMemo(
-    () => typeFilter === 'ALL' ? rows : rows.filter((row) => row.equipmentType === typeFilter),
-    [rows, typeFilter],
+    () => rows.filter((row) => (typeFilter === 'ALL' || row.equipmentType === typeFilter) && includesQuery(row, normalizedQuery)),
+    [rows, typeFilter, normalizedQuery],
   )
 
-  return <div className="stack equipment-master-page">
-    <section className="metric-grid equipment-metrics" aria-label="Tổng quan Equipment Master live">
+  return <div className="equipment-page">
+    <section className="equipment-summary" aria-label="Tổng quan thiết bị">
       <article><span>Tổng thiết bị</span><strong>{rows.length}</strong></article>
-      <article><span>Sản xuất</span><strong>{productionCount}</strong></article>
-      <article><span>Đo kiểm</span><strong>{measurementCount}</strong></article>
-      <article><span>Nguồn</span><strong>LIVE</strong><small>Supabase</small></article>
+      <article><span>Thiết bị sản xuất</span><strong>{productionCount}</strong></article>
+      <article><span>Thiết bị đo kiểm</span><strong>{measurementCount}</strong></article>
     </section>
 
-    <section className="content-card equipment-card" aria-labelledby="live-equipment-title">
-      <div className="section-heading equipment-heading">
+    <section className="equipment-surface" aria-labelledby="equipment-title">
+      <header className="equipment-page-header">
         <div>
-          <p className="eyebrow">BM-TBSX-01 · 02</p>
-          <h2 id="live-equipment-title">Equipment Master</h2>
+          <p className="eyebrow">Equipment Master</p>
+          <h2 id="equipment-title">Danh sách thiết bị</h2>
+          <p>{filteredRows.length} / {rows.length} thiết bị</p>
         </div>
-        <select id="equipment-type-filter" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}>
-          <option value="ALL">Tất cả</option>
-          <option value="PRODUCTION">Sản xuất</option>
-          <option value="MEASUREMENT">Đo kiểm</option>
-        </select>
+        <button className="equipment-refresh" type="button" onClick={() => void reloadEquipment()} disabled={loading}>Làm mới</button>
+      </header>
+
+      <div className="equipment-toolbar" role="search">
+        <label className="equipment-search">
+          <span className="sr-only">Tìm thiết bị</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã, tên, serial, model, bộ phận…" />
+        </label>
+        <label>
+          <span className="sr-only">Lọc loại thiết bị</span>
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}>
+            <option value="ALL">Tất cả loại</option>
+            <option value="PRODUCTION">Sản xuất</option>
+            <option value="MEASUREMENT">Đo kiểm</option>
+          </select>
+        </label>
       </div>
 
-      {loading ? <p className="muted" role="status">Đang tải…</p> : null}
-      {error ? <div className="record-card" role="alert"><b>Không kết nối được Supabase</b><p>{error}</p></div> : null}
-      {message ? <div className="equipment-toast" role="status">{message}</div> : null}
+      {message ? <div className="equipment-feedback" role="status">{message}</div> : null}
+      {loading ? <div className="equipment-state">Đang tải Equipment Master…</div> : null}
+      {error ? <div className="equipment-state error" role="alert">{error}</div> : null}
 
-      {!loading && !error ? <div className="table-wrap equipment-table-wrap">
-        <table className="equipment-table">
-          <caption className="sr-only">Danh sách Equipment Master từ Supabase</caption>
-          <thead><tr><th>Mã</th><th>Thiết bị</th><th>Loại</th><th>Bộ phận</th><th>Model</th><th>Serial Number</th><th>Trạng thái</th><th>Ảnh</th><th></th></tr></thead>
-          <tbody>{filteredRows.map((equipment) => {
-            const draft = drafts[equipment.equipmentId] || toDraft(equipment)
-            const uploadTargetId = draft.equipmentId.trim() || equipment.equipmentId
-            const photo = photos[equipment.equipmentId] || { state: 'loading', url: '' }
-            return <tr key={equipment.equipmentId}>
-              <td><input className="equipment-id-input" value={draft.equipmentId} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentId: event.target.value })} /></td>
-              <td><input value={draft.equipmentName} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentName: event.target.value })} /></td>
-              <td><select value={draft.equipmentType} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}><option value="PRODUCTION">PRODUCTION</option><option value="MEASUREMENT">MEASUREMENT</option></select></td>
-              <td><input value={draft.department} onChange={(event) => patchDraft(equipment.equipmentId, { department: event.target.value })} /></td>
-              <td><input value={draft.model} onChange={(event) => patchDraft(equipment.equipmentId, { model: event.target.value })} /></td>
-              <td><input value={draft.serialNumber} onChange={(event) => patchDraft(equipment.equipmentId, { serialNumber: event.target.value })} /></td>
-              <td><select value={draft.status} onChange={(event) => patchDraft(equipment.equipmentId, { status: event.target.value })}><option value="RUNNING">{statusLabel.RUNNING}</option><option value="STOPPED">{statusLabel.STOPPED}</option><option value="MAINTENANCE">{statusLabel.MAINTENANCE}</option><option value="DOWN">{statusLabel.DOWN}</option><option value="DISPOSED">{statusLabel.DISPOSED}</option></select></td>
-              <td className="equipment-photo-cell">
-                <div className="equipment-photo-box">
+      {!loading && !error ? <div className="equipment-table-scroll">
+        <table className="equipment-data-table">
+          <caption className="sr-only">Danh sách Equipment Master</caption>
+          <thead>
+            <tr><th>Ảnh</th><th>Mã thiết bị</th><th>Tên thiết bị</th><th>Bộ phận</th><th>Model</th><th>Serial Number</th><th>Loại</th><th>Trạng thái</th><th aria-label="Thao tác" /></tr>
+          </thead>
+          <tbody>
+            {filteredRows.map((equipment) => {
+              const photo = photos[equipment.equipmentId] || { state: 'loading', url: '' }
+              return <tr key={equipment.equipmentId}>
+                <td className="equipment-image-col">
                   {photo.state === 'yes' && photo.url
-                    ? <img src={photo.url} alt={`Ảnh ${equipment.equipmentId}`} loading="lazy" />
-                    : <div className={`equipment-photo-empty ${photo.state}`}>{photo.state === 'loading' ? '…' : photo.state === 'error' ? '!' : 'Chưa có ảnh'}</div>}
-                  <div className="equipment-photo-actions">
-                    <button type="button" disabled={uploadingId === uploadTargetId} onClick={() => void handleClipboardUpload(uploadTargetId)}>{uploadingId === uploadTargetId ? 'Đang tải…' : photo.state === 'yes' ? 'Thay ảnh' : 'Dán ảnh'}</button>
-                    <label className="equipment-file-button">
-                      Chọn
-                      <input type="file" accept="image/*" disabled={uploadingId === uploadTargetId} onChange={(event) => { const file = event.currentTarget.files?.[0]; void handlePhotoUpload(uploadTargetId, file); event.currentTarget.value = '' }} />
-                    </label>
-                  </div>
-                </div>
-              </td>
-              <td><button className="equipment-save-button" type="button" disabled={savingId === equipment.equipmentId} onClick={() => void handleSave(equipment.equipmentId)}>{savingId === equipment.equipmentId ? '…' : 'Lưu'}</button></td>
-            </tr>
-          })}</tbody>
+                    ? <img className="equipment-thumb" src={photo.url} alt={`Ảnh ${equipment.equipmentName}`} loading="lazy" />
+                    : <div className={`equipment-thumb-placeholder ${photo.state}`} aria-label="Chưa có ảnh">{photo.state === 'loading' ? '…' : '—'}</div>}
+                </td>
+                <td><strong className="equipment-code">{equipment.equipmentId}</strong></td>
+                <td><span className="equipment-name">{equipment.equipmentName}</span></td>
+                <td>{equipment.usingDepartment || equipment.managingDepartment || equipment.currentArea || '—'}</td>
+                <td>{equipment.model || '—'}</td>
+                <td><strong>{equipment.serialNumber || '—'}</strong></td>
+                <td><span className="equipment-type-badge">{equipment.equipmentType === 'MEASUREMENT' ? 'Đo kiểm' : 'Sản xuất'}</span></td>
+                <td><span className={`equipment-status status-${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status] || equipment.status}</span></td>
+                <td className="equipment-row-actions"><button type="button" onClick={() => setEditing(toDraft(equipment))}>Sửa</button></td>
+              </tr>
+            })}
+          </tbody>
         </table>
+        {filteredRows.length === 0 ? <div className="equipment-empty">Không tìm thấy thiết bị phù hợp.</div> : null}
       </div> : null}
     </section>
+
+    {editing ? <div className="equipment-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null) }}>
+      <aside className="equipment-drawer" role="dialog" aria-modal="true" aria-labelledby="equipment-edit-title">
+        <header>
+          <div><p className="eyebrow">Equipment Master</p><h2 id="equipment-edit-title">Chỉnh sửa thiết bị</h2></div>
+          <button className="equipment-close" type="button" aria-label="Đóng" onClick={() => setEditing(null)}>×</button>
+        </header>
+
+        <div className="equipment-edit-photo">
+          {photos[editing.oldEquipmentId]?.state === 'yes' && photos[editing.oldEquipmentId]?.url
+            ? <img src={photos[editing.oldEquipmentId].url} alt={`Ảnh ${editing.equipmentName}`} />
+            : <div className="equipment-edit-photo-empty">Chưa có ảnh</div>}
+          <div>
+            <button type="button" onClick={() => void handleClipboardUpload(editing.oldEquipmentId)} disabled={uploadingId === editing.oldEquipmentId}>{uploadingId === editing.oldEquipmentId ? 'Đang xử lý…' : 'Dán ảnh từ clipboard'}</button>
+            <label className="equipment-upload-label">Chọn ảnh<input type="file" accept="image/*" disabled={uploadingId === editing.oldEquipmentId} onChange={(event) => { const file = event.currentTarget.files?.[0]; void handlePhotoUpload(editing.oldEquipmentId, file); event.currentTarget.value = '' }} /></label>
+            <small>1 thiết bị = 1 ảnh · tự nén trước khi lưu</small>
+          </div>
+        </div>
+
+        <div className="equipment-form-grid">
+          <label><span>Mã thiết bị</span><input value={editing.equipmentId} onChange={(event) => setEditing({ ...editing, equipmentId: event.target.value })} /></label>
+          <label><span>Tên thiết bị</span><input value={editing.equipmentName} onChange={(event) => setEditing({ ...editing, equipmentName: event.target.value })} /></label>
+          <label><span>Loại</span><select value={editing.equipmentType} onChange={(event) => setEditing({ ...editing, equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}><option value="PRODUCTION">Sản xuất</option><option value="MEASUREMENT">Đo kiểm</option></select></label>
+          <label><span>Bộ phận</span><input value={editing.department} onChange={(event) => setEditing({ ...editing, department: event.target.value })} /></label>
+          <label><span>Model</span><input value={editing.model} onChange={(event) => setEditing({ ...editing, model: event.target.value })} /></label>
+          <label><span>Serial Number</span><input value={editing.serialNumber} onChange={(event) => setEditing({ ...editing, serialNumber: event.target.value })} /></label>
+          <label><span>Trạng thái</span><select value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
+        </div>
+
+        <footer>
+          <button className="equipment-cancel" type="button" onClick={() => setEditing(null)}>Hủy</button>
+          <button className="equipment-primary" type="button" onClick={() => void handleSave()} disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
+        </footer>
+      </aside>
+    </div> : null}
   </div>
 }
