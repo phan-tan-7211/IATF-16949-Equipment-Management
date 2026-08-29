@@ -78,17 +78,7 @@ const PHOTO_MAX_EDGE = 1920
 const PHOTO_TARGET_BYTES = 1.5 * 1024 * 1024
 const PHOTO_INITIAL_QUALITY = 0.82
 const PHOTO_MIN_QUALITY = 0.66
-
-function safeFileName(name: string) {
-  const cleaned = name.trim().replace(/[^a-zA-Z0-9._-]+/g, '-')
-  return cleaned || 'photo.jpg'
-}
-
-function optimizedFileName(name: string) {
-  const safe = safeFileName(name)
-  const base = safe.replace(/\.[^.]+$/, '') || 'photo'
-  return `${base}.webp`
-}
+const EQUIPMENT_PHOTO_NAME = 'photo.webp'
 
 function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
   return new Promise<Blob>((resolve, reject) => {
@@ -109,7 +99,6 @@ async function loadImage(file: File) {
     await image.decode()
     return image
   } finally {
-    // Revoked after decode; decoded pixels remain available to canvas.
     URL.revokeObjectURL(objectUrl)
   }
 }
@@ -144,39 +133,51 @@ async function optimizeEquipmentPhoto(file: File) {
     blob = await canvasToBlob(canvas, quality)
   }
 
-  // For an already tiny source, do not replace it with a larger optimized file.
-  if (file.size <= PHOTO_TARGET_BYTES && blob.size >= file.size && scale === 1) {
-    return file
-  }
-
-  return new File([blob], optimizedFileName(file.name), {
+  return new File([blob], EQUIPMENT_PHOTO_NAME, {
     type: 'image/webp',
     lastModified: Date.now(),
   })
 }
 
-export async function uploadEquipmentPhoto(equipmentId: string, file: File) {
-  const client = requireSupabase()
-  if (!equipmentId.trim()) throw new Error('EQUIPMENT_ID_REQUIRED')
-
-  // Every frontend upload is normalized here before it reaches Supabase Storage.
-  const optimizedFile = await optimizeEquipmentPhoto(file)
-  const path = `${equipmentId}/${Date.now()}-${safeFileName(optimizedFile.name)}`
-  const { error } = await client.storage.from('equipment-photos').upload(path, optimizedFile, {
-    cacheControl: '31536000',
-    upsert: false,
-    contentType: optimizedFile.type,
-  })
-  if (error) throw new Error(`SUPABASE_PHOTO_UPLOAD_FAILED: ${error.message}`)
-  return path
-}
-
 export async function listEquipmentPhotos(equipmentId: string) {
   const client = requireSupabase()
   const { data, error } = await client.storage.from('equipment-photos').list(equipmentId, {
-    limit: 20,
+    limit: 100,
     sortBy: { column: 'created_at', order: 'desc' },
   })
   if (error) throw new Error(`SUPABASE_PHOTO_LIST_FAILED: ${error.message}`)
   return data || []
+}
+
+export async function hasEquipmentPhoto(equipmentId: string) {
+  const files = await listEquipmentPhotos(equipmentId)
+  return files.some((file) => file.name === EQUIPMENT_PHOTO_NAME) || files.length > 0
+}
+
+export async function uploadEquipmentPhoto(equipmentId: string, file: File) {
+  const client = requireSupabase()
+  const normalizedId = equipmentId.trim()
+  if (!normalizedId) throw new Error('EQUIPMENT_ID_REQUIRED')
+
+  const optimizedFile = await optimizeEquipmentPhoto(file)
+  const path = `${normalizedId}/${EQUIPMENT_PHOTO_NAME}`
+
+  const { error } = await client.storage.from('equipment-photos').upload(path, optimizedFile, {
+    cacheControl: '31536000',
+    upsert: true,
+    contentType: 'image/webp',
+  })
+  if (error) throw new Error(`SUPABASE_PHOTO_UPLOAD_FAILED: ${error.message}`)
+
+  // Enforce 1 equipment = 1 photo. Remove legacy timestamp files after the canonical upload succeeds.
+  const files = await listEquipmentPhotos(normalizedId)
+  const stalePaths = files
+    .filter((item) => item.name !== EQUIPMENT_PHOTO_NAME)
+    .map((item) => `${normalizedId}/${item.name}`)
+  if (stalePaths.length > 0) {
+    const { error: removeError } = await client.storage.from('equipment-photos').remove(stalePaths)
+    if (removeError) throw new Error(`SUPABASE_PHOTO_CLEANUP_FAILED: ${removeError.message}`)
+  }
+
+  return path
 }
