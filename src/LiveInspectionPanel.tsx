@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './Inspection.css'
+import { canSubmitInspection, useAppRole } from './auth/AppRoleContext'
 import {
   loadLiveInspection,
   submitLiveInspection,
@@ -25,6 +26,8 @@ function operationId() {
 }
 
 export function LiveInspectionPanel() {
+  const role = useAppRole()
+  const canSubmit = canSubmitInspection(role)
   const [equipment, setEquipment] = useState<InspectionEquipmentOption[]>([])
   const [inspections, setInspections] = useState<LiveInspection[]>([])
   const [loading, setLoading] = useState(true)
@@ -93,6 +96,7 @@ export function LiveInspectionPanel() {
     event.preventDefault()
     setMessage('')
     setError('')
+    if (!canSubmit) return setError(`Role ${role} không có quyền ghi kiểm tra.`)
     if (!equipmentId) return setError('Vui lòng chọn thiết bị')
     if (overallMark === 'STOP_REPAIR' && (!note.trim() || !priority)) return setError('Kết quả X bắt buộc nhập lý do và mức ưu tiên Work Order')
 
@@ -121,7 +125,7 @@ export function LiveInspectionPanel() {
     <section className="inspection-surface" aria-labelledby="inspection-title">
       <header className="inspection-header">
         <div><p className="eyebrow">BM-KTTBHN</p><h2 id="inspection-title">Daily Inspection</h2><p>{filtered.length} / {inspections.length} bản ghi gần nhất</p></div>
-        <div className="inspection-header-actions"><button type="button" onClick={() => void refresh()}>Làm mới</button><button className="inspection-primary" type="button" onClick={() => setDrawerOpen(true)}>+ Kiểm tra mới</button></div>
+        <div className="inspection-header-actions"><button type="button" onClick={() => void refresh()}>Làm mới</button>{canSubmit ? <button className="inspection-primary" type="button" onClick={() => setDrawerOpen(true)}>+ Kiểm tra mới</button> : <span className="inspection-readonly">Chỉ xem · {role}</span>}</div>
       </header>
 
       <div className="inspection-legend"><span className="ok">V · Tốt</span><span>○ · Sửa gấp</span><span>△ · Bảo trì</span><span className="danger">X · Dừng máy</span></div>
@@ -149,7 +153,7 @@ export function LiveInspectionPanel() {
       </table>{!filtered.length ? <div className="inspection-state">Không có bản ghi phù hợp.</div> : null}</div> : null}
     </section>
 
-    {drawerOpen ? <div className="inspection-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDrawerOpen(false) }}>
+    {drawerOpen && canSubmit ? <div className="inspection-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDrawerOpen(false) }}>
       <aside className="inspection-drawer" role="dialog" aria-modal="true" aria-labelledby="inspection-create-title">
         <header><div><p className="eyebrow">Daily Inspection</p><h2 id="inspection-create-title">Kiểm tra thiết bị</h2><p>{selectedEquipment?.equipmentName || 'Chọn thiết bị'}</p></div><button type="button" aria-label="Đóng" onClick={() => setDrawerOpen(false)}>×</button></header>
         <form className="inspection-form" onSubmit={onSubmit}>
