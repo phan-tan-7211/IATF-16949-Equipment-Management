@@ -73,22 +73,99 @@ export async function updateSupabaseEquipment(input: EquipmentEditInput) {
   if (error) throw new Error(`SUPABASE_EQUIPMENT_SAVE_FAILED: ${error.message}`)
 }
 
+const PHOTO_MAX_INPUT_BYTES = 25 * 1024 * 1024
+const PHOTO_MAX_EDGE = 1920
+const PHOTO_TARGET_BYTES = 1.5 * 1024 * 1024
+const PHOTO_INITIAL_QUALITY = 0.82
+const PHOTO_MIN_QUALITY = 0.66
+
 function safeFileName(name: string) {
   const cleaned = name.trim().replace(/[^a-zA-Z0-9._-]+/g, '-')
   return cleaned || 'photo.jpg'
 }
 
+function optimizedFileName(name: string) {
+  const safe = safeFileName(name)
+  const base = safe.replace(/\.[^.]+$/, '') || 'photo'
+  return `${base}.webp`
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error('IMAGE_COMPRESSION_FAILED')),
+      'image/webp',
+      quality,
+    )
+  })
+}
+
+async function loadImage(file: File) {
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const image = new Image()
+    image.decoding = 'async'
+    image.src = objectUrl
+    await image.decode()
+    return image
+  } finally {
+    // Revoked after decode; decoded pixels remain available to canvas.
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+async function optimizeEquipmentPhoto(file: File) {
+  if (!file.type.startsWith('image/')) throw new Error('IMAGE_FILE_REQUIRED')
+  if (file.size > PHOTO_MAX_INPUT_BYTES) throw new Error('IMAGE_TOO_LARGE_MAX_25MB')
+
+  const image = await loadImage(file)
+  const sourceWidth = image.naturalWidth || image.width
+  const sourceHeight = image.naturalHeight || image.height
+  if (!sourceWidth || !sourceHeight) throw new Error('IMAGE_DIMENSIONS_INVALID')
+
+  const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(sourceWidth, sourceHeight))
+  const width = Math.max(1, Math.round(sourceWidth * scale))
+  const height = Math.max(1, Math.round(sourceHeight * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d', { alpha: true })
+  if (!context) throw new Error('IMAGE_CANVAS_UNAVAILABLE')
+
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(image, 0, 0, width, height)
+
+  let quality = PHOTO_INITIAL_QUALITY
+  let blob = await canvasToBlob(canvas, quality)
+  while (blob.size > PHOTO_TARGET_BYTES && quality > PHOTO_MIN_QUALITY) {
+    quality = Math.max(PHOTO_MIN_QUALITY, quality - 0.04)
+    blob = await canvasToBlob(canvas, quality)
+  }
+
+  // For an already tiny source, do not replace it with a larger optimized file.
+  if (file.size <= PHOTO_TARGET_BYTES && blob.size >= file.size && scale === 1) {
+    return file
+  }
+
+  return new File([blob], optimizedFileName(file.name), {
+    type: 'image/webp',
+    lastModified: Date.now(),
+  })
+}
+
 export async function uploadEquipmentPhoto(equipmentId: string, file: File) {
   const client = requireSupabase()
   if (!equipmentId.trim()) throw new Error('EQUIPMENT_ID_REQUIRED')
-  if (!file.type.startsWith('image/')) throw new Error('IMAGE_FILE_REQUIRED')
-  if (file.size > 5 * 1024 * 1024) throw new Error('IMAGE_TOO_LARGE_MAX_5MB')
 
-  const path = `${equipmentId}/${Date.now()}-${safeFileName(file.name)}`
-  const { error } = await client.storage.from('equipment-photos').upload(path, file, {
-    cacheControl: '3600',
+  // Every frontend upload is normalized here before it reaches Supabase Storage.
+  const optimizedFile = await optimizeEquipmentPhoto(file)
+  const path = `${equipmentId}/${Date.now()}-${safeFileName(optimizedFile.name)}`
+  const { error } = await client.storage.from('equipment-photos').upload(path, optimizedFile, {
+    cacheControl: '31536000',
     upsert: false,
-    contentType: file.type,
+    contentType: optimizedFile.type,
   })
   if (error) throw new Error(`SUPABASE_PHOTO_UPLOAD_FAILED: ${error.message}`)
   return path
