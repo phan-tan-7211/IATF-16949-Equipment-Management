@@ -15,14 +15,12 @@
 <?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminPanel').getContent() ?>
 <?!= HtmlService.createHtmlOutputFromFile('CalibrationEntryPanel').getContent() ?>
 <?!= HtmlService.createHtmlOutputFromFile('CalibrationEvaluationPanel').getContent() ?>
-<script>
 <? var clientTemplate = HtmlService.createTemplateFromFile('AppShellClient'); clientTemplate.contractVersion = contractVersion; ?>
 <?!= clientTemplate.evaluate().getContent() ?>
-</script>
-<script><?!= HtmlService.createHtmlOutputFromFile('KpiClient').getContent() ?></script>
-<script><?!= HtmlService.createHtmlOutputFromFile('ToolingClient').getContent() ?></script>
-<script><?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminClient').getContent() ?></script>
-<script><?!= HtmlService.createHtmlOutputFromFile('CalibrationEntryClient').getContent() ?></script>
-<script><?!= HtmlService.createHtmlOutputFromFile('CalibrationEvaluationClient').getContent() ?></script>
+<?!= HtmlService.createHtmlOutputFromFile('KpiClient').getContent() ?>
+<?!= HtmlService.createHtmlOutputFromFile('ToolingClient').getContent() ?>
+<?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminClient').getContent() ?>
+<?!= HtmlService.createHtmlOutputFromFile('CalibrationEntryClient').getContent() ?>
+<?!= HtmlService.createHtmlOutputFromFile('CalibrationEvaluationClient').getContent() ?>
 </body>
 </html>
