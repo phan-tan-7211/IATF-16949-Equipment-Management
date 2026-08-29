@@ -1,0 +1,79 @@
+<script>
+var calibrationAdminSource=[],calibrationAdminEquipment=[];
+var openScreenBase_=openScreen;
+openScreen=function(name){
+  openScreenBase_(name);
+  toggleCalibrationAdmin_(name);
+};
+
+function toggleCalibrationAdmin_(screenName){
+  var panel=el('calibrationAdminPanel');
+  if(!panel)return;
+  var visible=screenName==='Calibration'&&role==='ADMIN';
+  panel.style.display=visible?'block':'none';
+  if(visible)loadCalibrationAdmin_();
+}
+
+function loadCalibrationAdmin_(){
+  read('Calibration_Master',function(master){
+    read('Equipment_Master',function(eq){
+      calibrationAdminSource=master;
+      calibrationAdminEquipment=eq;
+      var unlinked=master.filter(function(r){return !String(r.equipmentId||'').trim()});
+      var measurement=eq.filter(function(r){return r.equipmentType==='MEASUREMENT'&&r.status!=='DISPOSED'&&(!r.active||yes(r.active))});
+      el('calibrationSourceRecord').innerHTML='<option value="">Chọn hồ sơ nguồn</option>'+unlinked.map(function(r){
+        return '<option value="'+esc(r.calibrationEquipmentId)+'">'+esc(r.controlNumber||r.calibrationEquipmentId)+' · '+esc(r.instrumentName||r.equipmentName)+'</option>';
+      }).join('');
+      el('calibrationRootEquipment').innerHTML='<option value="">Chọn thiết bị đo kiểm</option>'+measurement.map(function(r){
+        return '<option value="'+esc(r.equipmentId)+'">'+esc(r.equipmentId)+' · '+esc(r.equipmentName)+'</option>';
+      }).join('');
+      var linked=master.filter(function(r){return String(r.equipmentId||'').trim()});
+      el('calibrationLinkRows').innerHTML=linked.length?linked.map(function(r){
+        var sourceId=JSON.stringify(String(r.calibrationEquipmentId||''));
+        var equipmentId=JSON.stringify(String(r.equipmentId||''));
+        return '<tr><td>'+esc(r.controlNumber||r.calibrationEquipmentId)+'</td><td><strong>'+esc(r.equipmentId)+'</strong></td><td>'+esc(r.instrumentName||r.equipmentName)+'</td><td><button class="act" onclick="unlinkCalibrationMaster_('+sourceId+','+equipmentId+')">Gỡ liên kết</button></td></tr>';
+      }).join(''):'<tr><td colspan="4" class="empty">Chưa có hồ sơ nào liên kết với mã thiết bị gốc.</td></tr>';
+      if(!measurement.length)el('calibrationLinkStatus').textContent='Chưa có thiết bị đo kiểm trong danh mục gốc. Hãy đăng ký thiết bị trước.';
+      else el('calibrationLinkStatus').textContent='';
+    });
+  });
+}
+
+function linkCalibrationMaster(event){
+  event.preventDefault();
+  clearFail();
+  var sourceId=el('calibrationSourceRecord').value;
+  var equipmentId=el('calibrationRootEquipment').value;
+  if(!sourceId||!equipmentId){el('calibrationLinkStatus').textContent='Vui lòng chọn đủ hai đối tượng.';return}
+  el('calibrationLinkButton').disabled=true;
+  call('calibrationLinkMaster',{
+    operationId:'ui-cal-link-'+Date.now()+'-'+Math.random().toString(36).slice(2),
+    calibrationEquipmentId:sourceId,
+    equipmentId:equipmentId,
+    expectedCurrentEquipmentId:''
+  },function(r){
+    el('calibrationLinkButton').disabled=false;
+    el('calibrationLinkStatus').textContent='Đã liên kết '+r.result.calibrationEquipmentId+' → '+r.result.equipmentId;
+    loadCalibrationAdmin_();
+    loadCalibration();
+    loadAudit();
+  });
+}
+
+function unlinkCalibrationMaster_(sourceId,equipmentId){
+  if(!confirm('Chỉ được gỡ khi chưa có lịch sử hiệu chuẩn thực tế. Xác nhận gỡ liên kết '+sourceId+' khỏi '+equipmentId+'?'))return;
+  call('calibrationUnlinkMaster',{
+    operationId:'ui-cal-unlink-'+Date.now()+'-'+Math.random().toString(36).slice(2),
+    calibrationEquipmentId:sourceId,
+    expectedEquipmentId:equipmentId
+  },function(){
+    loadCalibrationAdmin_();
+    loadCalibration();
+    loadAudit();
+  });
+}
+
+setTimeout(function(){
+  if(el('screenCalibration')&&el('screenCalibration').classList.contains('on'))toggleCalibrationAdmin_('Calibration');
+},500);
+</script>

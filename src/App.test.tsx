@@ -1,18 +1,79 @@
 /** @vitest-environment jsdom */
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./PwaStatus', () => ({ PwaStatus: () => null }))
+
+afterEach(() => cleanup())
 
 import App from './App'
 
 describe('equipment app shell', () => {
-  it('renders the dashboard and navigates to maintenance', () => {
+  it('renders the dashboard and source-aligned downtime KPI', () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: 'Thiết bị trong tầm kiểm soát' })).toBeInTheDocument()
+    expect(screen.getByText('Downtime rate')).toBeInTheDocument()
+    expect(screen.getByText('MTBF')).toBeInTheDocument()
+    expect(screen.getByText('MTTR')).toBeInTheDocument()
+  })
+
+  it('advances a work order through approval, repair, verification and BM-05 handover', () => {
+    render(<App />)
     const desktopNav = screen.getByLabelText('Điều hướng desktop')
     fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
-    expect(screen.getByRole('heading', { name: 'Bảo trì & sửa chữa' })).toBeInTheDocument()
+
+    const targetWorkOrder = screen.getByText('WO-20260828-01').closest('article')
+    expect(targetWorkOrder).not.toBeNull()
+    if (!targetWorkOrder) return
+
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Gửi phê duyệt' }))
+    expect(within(targetWorkOrder).getByText('Chờ phê duyệt', { selector: '.badge' })).toBeInTheDocument()
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Phê duyệt' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Bắt đầu sửa chữa' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Hoàn tất sửa chữa' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Xác nhận chạy thử' }))
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'BM-05: xác nhận & bàn giao' }))
+
+    expect(within(targetWorkOrder).getByText('Đã bàn giao', { selector: '.badge' })).toBeInTheDocument()
+    expect(within(targetWorkOrder).getByText(/Bên nhận đã chấp nhận/)).toBeInTheDocument()
+  })
+
+  it('records workflow actions in the local audit trail', () => {
+    render(<App />)
+    const desktopNav = screen.getByLabelText('Điều hướng desktop')
+    fireEvent.click(within(desktopNav).getByRole('button', { name: 'Bảo trì' }))
+    const targetWorkOrder = screen.getByText('WO-20260828-01').closest('article')
+    expect(targetWorkOrder).not.toBeNull()
+    if (!targetWorkOrder) return
+    fireEvent.click(within(targetWorkOrder).getByRole('button', { name: 'Gửi phê duyệt' }))
+    fireEvent.click(within(desktopNav).getByRole('button', { name: 'Audit & Cấu hình' }))
+
+    expect(screen.getByRole('heading', { name: 'Audit Trail & BM-05' })).toBeInTheDocument()
+    expect(screen.getByText('REQUEST_APPROVAL')).toBeInTheDocument()
+  })
+
+  it('shows calibration and historical cost from source without calling it live pricing', () => {
+    render(<App />)
+    const desktopNav = screen.getByLabelText('Điều hướng desktop')
+    fireEvent.click(within(desktopNav).getByRole('button', { name: 'Hiệu chuẩn' }))
+
+    expect(screen.getByRole('heading', { name: 'Calibration Master' })).toBeInTheDocument()
+    expect(screen.getByText(/dữ liệu lịch sử để đối chiếu và lập kế hoạch/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'So sánh chi phí hiệu chuẩn 2024' })).toBeInTheDocument()
+    expect(screen.getAllByText('G.TECH').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('exposes every workspace from the mobile navigation', () => {
+    render(<App />)
+    const mobileNav = screen.getByLabelText('Điều hướng mobile')
+    const expectedItems = ['Tổng quan', 'Thiết bị', 'Kiểm tra ngày', 'Bảo trì', 'Jig & Tooling', 'Hiệu chuẩn', 'Audit & Cấu hình']
+
+    expectedItems.forEach((label) => {
+      expect(within(mobileNav).getByRole('button', { name: label })).toBeInTheDocument()
+    })
+
+    fireEvent.click(within(mobileNav).getByRole('button', { name: 'Audit & Cấu hình' }))
+    expect(screen.getByRole('heading', { name: 'Audit Trail & BM-05' })).toBeInTheDocument()
   })
 })

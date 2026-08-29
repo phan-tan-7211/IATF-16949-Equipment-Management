@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Apps Script HTML bridge smoke test</title>
+  <style>
+    :root {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: light dark;
+    }
+    body { margin: 0; padding: 24px; line-height: 1.5; }
+    main { max-width: 760px; margin: 0 auto; }
+    button { min-height: 44px; padding: 10px 16px; font: inherit; cursor: pointer; }
+    pre { padding: 16px; overflow-wrap: anywhere; white-space: pre-wrap; border: 1px solid currentColor; border-radius: 8px; }
+    .stack { display: grid; gap: 16px; }
+    .bridge-frame { width: 1px; height: 1px; border: 0; position: absolute; left: -9999px; }
+  </style>
+</head>
+<body>
+  <main class="stack">
+    <header>
+      <p>IATF 16949 · Apps Script diagnostics</p>
+      <h1>HTML bridge smoke test</h1>
+      <p>Trang này kiểm tra kênh Apps Script HTMLService → google.script.run → Google Sheets. Không ghi dữ liệu.</p>
+    </header>
+
+    <button id="run" type="button" disabled>Đang khởi tạo bridge…</button>
+    <pre id="output" aria-live="polite">Đang tải Apps Script bridge.</pre>
+  </main>
+
+  <iframe
+    id="bridge"
+    class="bridge-frame"
+    title="Apps Script persistence bridge"
+    src="https://script.google.com/macros/s/AKfycbzykTZpW60nZEdwXC3Wn2nRZe1ePrvhUwoER1cHjciiDNGZ34kWv_vfvhEpwSor-f95/exec?action=bridge"
+  ></iframe>
+
+  <script>
+    const CHANNEL = 'CEV_APPS_SCRIPT_BRIDGE'
+    const CONTRACT_VERSION = 'G1-frozen-2026-08-28'
+    const bridge = document.getElementById('bridge')
+    const output = document.getElementById('output')
+    const run = document.getElementById('run')
+    let bridgeReady = false
+    let bridgeOrigin = ''
+    const pending = new Map()
+
+    function show(value) {
+      output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+    }
+
+    function request(payload) {
+      if (!bridgeReady || !bridgeOrigin || !bridge.contentWindow) return Promise.reject(new Error('BRIDGE_NOT_READY'))
+
+      const requestId = crypto.randomUUID()
+      return new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          pending.delete(requestId)
+          reject(new Error('BRIDGE_TIMEOUT'))
+        }, 15000)
+
+        pending.set(requestId, { resolve, reject, timeout })
+        bridge.contentWindow.postMessage({ channel: CHANNEL, type: 'request', requestId, payload }, bridgeOrigin)
+      })
+    }
+
+    window.addEventListener('message', (event) => {
+      if (event.source !== bridge.contentWindow) return
+      const message = event.data
+      if (!message || message.channel !== CHANNEL) return
+
+      if (message.type === 'ready') {
+        if (message.contractVersion !== CONTRACT_VERSION) {
+          show({ phase: 'bridge-ready', ok: false, error: 'CONTRACT_VERSION_MISMATCH', received: message.contractVersion })
+          return
+        }
+        bridgeOrigin = event.origin
+        bridgeReady = true
+        run.disabled = false
+        run.textContent = 'Kiểm tra kết nối'
+        show({ phase: 'bridge-ready', ok: true, parentOrigin: location.origin, bridgeOrigin, contractVersion: message.contractVersion })
+        return
+      }
+
+      if (!bridgeReady || event.origin !== bridgeOrigin || message.type !== 'response') return
+      const entry = pending.get(message.requestId)
+      if (!entry) return
+      window.clearTimeout(entry.timeout)
+      pending.delete(message.requestId)
+
+      if (message.ok) entry.resolve(message.result)
+      else entry.reject(new Error(message.error || 'BRIDGE_REQUEST_FAILED'))
+    })
+
+    run.addEventListener('click', async () => {
+      run.disabled = true
+      show('Đang kiểm tra Apps Script HTML bridge từ origin: ' + location.origin)
+
+      try {
+        const health = await request({ action: 'health' })
+        if (!health.ok || !health.authenticated || health.contractVersion !== CONTRACT_VERSION) {
+          throw new Error('BRIDGE_HEALTH_INVALID')
+        }
+
+        const read = await request({ action: 'readTable', table: 'Equipment_Master' })
+        show({
+          phase: 'bridge-readTable',
+          health,
+          read: {
+            ok: read.ok,
+            table: read.table,
+            actor: read.actor,
+            rowCount: Array.isArray(read.rows) ? read.rows.length : null,
+          },
+        })
+      } catch (error) {
+        show({
+          phase: 'html-bridge',
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          note: 'Nếu là ROLE_NOT_CONFIGURED thì transport đã hoạt động và chỉ còn cấu hình RBAC_JSON.',
+        })
+      } finally {
+        run.disabled = false
+      }
+    })
+
+    window.setTimeout(() => {
+      if (!bridgeReady) {
+        show({
+          phase: 'bridge-ready',
+          ok: false,
+          error: 'BRIDGE_NOT_READY',
+          note: 'Kiểm tra Apps Script đã có Bridge.html, ALLOWED_PARENT_ORIGINS_JSON và đã deploy version mới.',
+        })
+      }
+    }, 12000)
+  </script>
+</body>
+</html>

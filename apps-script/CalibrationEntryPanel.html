@@ -1,0 +1,21 @@
+<section id="calibrationEntryPanel" class="box" style="display:none;max-width:1400px;margin:0 auto 20px">
+  <div class="head">
+    <div>
+      <h2>Ghi kết quả hiệu chuẩn</h2>
+      <div class="muted">Chỉ chọn thiết bị đo kiểm đã tồn tại trong danh mục gốc và đã liên kết hồ sơ hiệu chuẩn.</div>
+    </div>
+  </div>
+  <form id="calibrationEntryForm" class="body" onsubmit="submitCalibrationEntry(event)">
+    <div class="grid">
+      <div class="field"><label for="calEntryEquipment">Thiết bị đo kiểm *</label><select id="calEntryEquipment" required></select></div>
+      <div class="field"><label for="calEntryResult">Kết quả *</label><select id="calEntryResult"><option value="PASS">Đạt</option><option value="LIMITED_USE">Hạn chế sử dụng</option><option value="FAIL">Không đạt</option></select></div>
+      <div class="field"><label for="calEntryDate">Ngày hiệu chuẩn *</label><input id="calEntryDate" type="date" required></div>
+      <div class="field"><label for="calEntryNextDate">Ngày đến hạn tiếp theo *</label><input id="calEntryNextDate" type="date" required></div>
+      <div class="field"><label for="calEntryProvider">Đơn vị hiệu chuẩn</label><input id="calEntryProvider"></div>
+      <div class="field"><label for="calEntryCertificate">Số chứng nhận</label><input id="calEntryCertificate"></div>
+      <div class="field"><label for="calEntryCertificateUrl">Liên kết chứng nhận</label><input id="calEntryCertificateUrl" type="url" placeholder="https://..."></div>
+      <div class="field"><label for="calEntryLabelUrl">Liên kết ảnh tem</label><input id="calEntryLabelUrl" type="url" placeholder="https://..."></div>
+    </div>
+    <div class="buttons"><button id="calEntrySubmit" class="btn primary">Lưu kết quả hiệu chuẩn</button><span id="calEntryStatus" class="muted"></span></div>
+  </form>
+</section>

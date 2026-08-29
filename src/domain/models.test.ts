@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { CORE_SHEET_NAMES, DailyInspectionSchema, EquipmentSchema, MaintenanceLogSchema } from './models'
+import { PERSISTENCE_TABLES } from './persistenceContract'
 
 describe('equipment domain schemas', () => {
-  it('defines the source-derived evidence tables', () => {
+  it('uses the G1 persistence contract as the source-derived table list', () => {
+    expect(CORE_SHEET_NAMES).toBe(PERSISTENCE_TABLES)
     expect(CORE_SHEET_NAMES).toContain('Equipment_Master')
     expect(CORE_SHEET_NAMES).toContain('Daily_Inspection')
     expect(CORE_SHEET_NAMES).toContain('Maintenance_Plan')
@@ -11,6 +13,9 @@ describe('equipment domain schemas', () => {
     expect(CORE_SHEET_NAMES).toContain('Downtime_Event')
     expect(CORE_SHEET_NAMES).toContain('Tooling_Master')
     expect(CORE_SHEET_NAMES).toContain('Tooling_Modification')
+    expect(CORE_SHEET_NAMES).toContain('Calibration_Master')
+    expect(CORE_SHEET_NAMES).toContain('Calibration_Vendor_Quote')
+    expect(CORE_SHEET_NAMES).toContain('Calibration_Quote_Summary')
     expect(CORE_SHEET_NAMES).toContain('Audit_Log')
   })
 

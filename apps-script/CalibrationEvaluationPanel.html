@@ -1,0 +1,16 @@
+<section id="calibrationEvaluationPanel" class="box" style="display:none;max-width:1400px;margin:0 auto 20px">
+  <div class="head">
+    <div>
+      <h2>Đánh giá sau hiệu chuẩn</h2>
+      <div class="muted">Bước bắt buộc sau khi đã ghi kết quả hiệu chuẩn. Hồ sơ chưa đánh giá vẫn ở trạng thái chờ đánh giá.</div>
+    </div>
+  </div>
+  <form id="calibrationEvaluationForm" class="body" onsubmit="submitCalibrationEvaluation(event)">
+    <div class="grid">
+      <div class="field"><label for="calEvaluationLog">Hồ sơ hiệu chuẩn chờ đánh giá *</label><select id="calEvaluationLog" required></select></div>
+      <div class="field"><label for="calEvaluationResult">Kết quả đánh giá *</label><select id="calEvaluationResult" onchange="syncCalibrationEvaluationNote()"><option value="PASS">Đạt</option><option value="LIMITED_USE">Hạn chế sử dụng</option><option value="FAIL">Không đạt</option></select></div>
+      <div class="field wide"><label for="calEvaluationNote">Nhận xét đánh giá</label><textarea id="calEvaluationNote" placeholder="Bắt buộc khi Hạn chế sử dụng hoặc Không đạt"></textarea></div>
+    </div>
+    <div class="buttons"><button id="calEvaluationSubmit" class="btn primary">Xác nhận đánh giá</button><span id="calEvaluationStatus" class="muted"></span></div>
+  </form>
+</section>
