@@ -115,13 +115,39 @@ export function LiveEquipmentPanel() {
       return
     }
 
+    const saved = editing
+    const nextEquipmentId = saved.equipmentId.trim()
     setSaving(true)
     setMessage('')
     try {
-      await updateSupabaseEquipment(editing)
-      setMessage(`Đã lưu ${editing.equipmentId}`)
+      await updateSupabaseEquipment(saved)
+
+      setRows((current) => current.map((row) => row.equipmentId !== saved.oldEquipmentId
+        ? row
+        : {
+            ...row,
+            equipmentId: nextEquipmentId,
+            equipmentName: saved.equipmentName.trim(),
+            equipmentType: saved.equipmentType,
+            model: saved.model.trim(),
+            serialNumber: saved.serialNumber.trim(),
+            usingDepartment: saved.department.trim(),
+            status: saved.status.trim() || 'RUNNING',
+            qrCode: nextEquipmentId,
+            updatedAt: new Date().toISOString(),
+          }))
+
+      if (saved.oldEquipmentId !== nextEquipmentId) {
+        setPhotos((current) => {
+          const next = { ...current }
+          if (next[saved.oldEquipmentId]) next[nextEquipmentId] = next[saved.oldEquipmentId]
+          delete next[saved.oldEquipmentId]
+          return next
+        })
+      }
+
+      setMessage(`Đã lưu ${nextEquipmentId}`)
       setEditing(null)
-      await reloadEquipment()
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'SAVE_FAILED')
     } finally {
