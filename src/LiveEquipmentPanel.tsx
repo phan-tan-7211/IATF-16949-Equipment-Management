@@ -90,13 +90,14 @@ export function LiveEquipmentPanel() {
       {!loading && !error ? <div className="table-wrap">
         <table>
           <caption className="sr-only">Danh sách Equipment Master từ Supabase</caption>
-          <thead><tr><th scope="col">Mã</th><th scope="col">Thiết bị</th><th scope="col">Loại</th><th scope="col">Bộ phận</th><th scope="col">Model / Serial</th><th scope="col">Trạng thái</th><th scope="col">Ảnh thiết bị</th></tr></thead>
+          <thead><tr><th scope="col">Mã</th><th scope="col">Thiết bị</th><th scope="col">Loại</th><th scope="col">Bộ phận</th><th scope="col">Model</th><th scope="col">Serial Number</th><th scope="col">Trạng thái</th><th scope="col">Ảnh thiết bị</th></tr></thead>
           <tbody>{filteredRows.map((equipment) => <tr key={equipment.equipmentId}>
             <td><b>{equipment.equipmentId}</b><small>QR: {equipment.qrCode}</small></td>
             <td>{equipment.equipmentName}<small>{equipment.equipmentCategory || '—'}</small></td>
             <td><span className="status-pill">{equipment.equipmentType}</span></td>
             <td>{equipment.usingDepartment || equipment.managingDepartment || equipment.currentArea || '—'}<small>{equipment.currentLine || '—'}</small></td>
-            <td>{equipment.model || '—'}<small>{equipment.serialNumber || '—'}</small></td>
+            <td>{equipment.model || '—'}</td>
+            <td><b>{equipment.serialNumber || '—'}</b></td>
             <td><span className={`badge ${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status] || equipment.status}</span></td>
             <td>
               <label>
