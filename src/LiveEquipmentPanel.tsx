@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { type LiveEquipment } from './data/liveEquipment'
-import { loadSupabaseEquipment, uploadEquipmentPhoto } from './data/supabaseEquipment'
+import {
+  loadSupabaseEquipment,
+  updateSupabaseEquipment,
+  uploadEquipmentPhoto,
+  type EquipmentEditInput,
+} from './data/supabaseEquipment'
 
 const statusLabel: Record<string, string> = {
   RUNNING: 'Hoạt động',
@@ -18,35 +23,73 @@ function clipboardFileExtension(mimeType: string) {
   return 'jpg'
 }
 
+function toDraft(row: LiveEquipment): EquipmentEditInput {
+  return {
+    oldEquipmentId: row.equipmentId,
+    equipmentId: row.equipmentId,
+    equipmentType: row.equipmentType,
+    equipmentName: row.equipmentName,
+    department: row.usingDepartment || row.managingDepartment || row.currentArea || '',
+    model: row.model,
+    serialNumber: row.serialNumber,
+    status: row.status || 'RUNNING',
+  }
+}
+
 export function LiveEquipmentPanel() {
   const [rows, setRows] = useState<LiveEquipment[]>([])
+  const [drafts, setDrafts] = useState<Record<string, EquipmentEditInput>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [uploadingId, setUploadingId] = useState('')
+  const [savingId, setSavingId] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
 
-  useEffect(() => {
-    let active = true
-
-    loadSupabaseEquipment()
-      .then((result) => {
-        if (!active) return
-        setRows(result)
-        setError('')
-      })
-      .catch((cause: unknown) => {
-        if (!active) return
-        setError(cause instanceof Error ? cause.message : 'Không thể tải Equipment Master')
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-
-    return () => {
-      active = false
+  async function reloadEquipment() {
+    setLoading(true)
+    try {
+      const result = await loadSupabaseEquipment()
+      setRows(result)
+      setDrafts(Object.fromEntries(result.map((row) => [row.equipmentId, toDraft(row)])))
+      setError('')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể tải Equipment Master')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    void reloadEquipment()
   }, [])
+
+  function patchDraft(oldEquipmentId: string, patch: Partial<EquipmentEditInput>) {
+    setDrafts((current) => ({
+      ...current,
+      [oldEquipmentId]: { ...current[oldEquipmentId], ...patch },
+    }))
+  }
+
+  async function handleSave(oldEquipmentId: string) {
+    const draft = drafts[oldEquipmentId]
+    if (!draft) return
+    if (!draft.equipmentId.trim()) {
+      setMessage('Mã thiết bị không được để trống.')
+      return
+    }
+    setSavingId(oldEquipmentId)
+    setMessage('')
+    try {
+      await updateSupabaseEquipment(draft)
+      setMessage(`SAVE_OK: ${draft.equipmentId}`)
+      await reloadEquipment()
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'SAVE_FAILED')
+    } finally {
+      setSavingId('')
+    }
+  }
 
   async function handlePhotoUpload(equipmentId: string, file: File | undefined) {
     if (!file) return
@@ -107,7 +150,11 @@ export function LiveEquipmentPanel() {
 
     <section className="content-card" aria-labelledby="live-equipment-title">
       <div className="section-heading">
-        <div><p className="eyebrow">BM-TBSX-01 · 02 · Production data</p><h2 id="live-equipment-title">Equipment Master</h2></div>
+        <div>
+          <p className="eyebrow">BM-TBSX-01 · 02 · Production data</p>
+          <h2 id="live-equipment-title">Equipment Master</h2>
+          <small>Sửa trực tiếp từng dòng rồi bấm Lưu. QR tự đồng bộ theo Mã thiết bị.</small>
+        </div>
         <div>
           <label className="sr-only" htmlFor="equipment-type-filter">Lọc loại thiết bị</label>
           <select id="equipment-type-filter" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}>
@@ -125,41 +172,64 @@ export function LiveEquipmentPanel() {
       {!loading && !error ? <div className="table-wrap">
         <table>
           <caption className="sr-only">Danh sách Equipment Master từ Supabase</caption>
-          <thead><tr><th scope="col">Mã</th><th scope="col">Thiết bị</th><th scope="col">Loại</th><th scope="col">Bộ phận</th><th scope="col">Model</th><th scope="col">Serial Number</th><th scope="col">Trạng thái</th><th scope="col">Ảnh thiết bị</th></tr></thead>
-          <tbody>{filteredRows.map((equipment) => <tr key={equipment.equipmentId}>
-            <td><b>{equipment.equipmentId}</b><small>QR: {equipment.qrCode}</small></td>
-            <td>{equipment.equipmentName}<small>{equipment.equipmentCategory || '—'}</small></td>
-            <td><span className="status-pill">{equipment.equipmentType}</span></td>
-            <td>{equipment.usingDepartment || equipment.managingDepartment || equipment.currentArea || '—'}<small>{equipment.currentLine || '—'}</small></td>
-            <td>{equipment.model || '—'}</td>
-            <td><b>{equipment.serialNumber || '—'}</b></td>
-            <td><span className={`badge ${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status] || equipment.status}</span></td>
-            <td>
-              <div className="stack-sm">
-                <label>
-                  <span className="sr-only">Tải ảnh cho {equipment.equipmentId}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={uploadingId === equipment.equipmentId}
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0]
-                      void handlePhotoUpload(equipment.equipmentId, file)
-                      event.currentTarget.value = ''
-                    }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  disabled={uploadingId === equipment.equipmentId}
-                  onClick={() => void handleClipboardUpload(equipment.equipmentId)}
-                >
-                  Dán ảnh từ clipboard
+          <thead><tr><th scope="col">Mã</th><th scope="col">Thiết bị</th><th scope="col">Loại</th><th scope="col">Bộ phận</th><th scope="col">Model</th><th scope="col">Serial Number</th><th scope="col">Trạng thái</th><th scope="col">Ảnh thiết bị</th><th scope="col">Lưu</th></tr></thead>
+          <tbody>{filteredRows.map((equipment) => {
+            const draft = drafts[equipment.equipmentId] || toDraft(equipment)
+            const uploadTargetId = draft.equipmentId.trim() || equipment.equipmentId
+            return <tr key={equipment.equipmentId}>
+              <td>
+                <input value={draft.equipmentId} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentId: event.target.value })} />
+                <small>QR tự theo mã</small>
+              </td>
+              <td>
+                <input value={draft.equipmentName} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentName: event.target.value })} />
+              </td>
+              <td>
+                <select value={draft.equipmentType} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}>
+                  <option value="PRODUCTION">PRODUCTION</option>
+                  <option value="MEASUREMENT">MEASUREMENT</option>
+                </select>
+              </td>
+              <td><input value={draft.department} onChange={(event) => patchDraft(equipment.equipmentId, { department: event.target.value })} /></td>
+              <td><input value={draft.model} onChange={(event) => patchDraft(equipment.equipmentId, { model: event.target.value })} /></td>
+              <td><input value={draft.serialNumber} onChange={(event) => patchDraft(equipment.equipmentId, { serialNumber: event.target.value })} /></td>
+              <td>
+                <select value={draft.status} onChange={(event) => patchDraft(equipment.equipmentId, { status: event.target.value })}>
+                  <option value="RUNNING">{statusLabel.RUNNING}</option>
+                  <option value="STOPPED">{statusLabel.STOPPED}</option>
+                  <option value="MAINTENANCE">{statusLabel.MAINTENANCE}</option>
+                  <option value="DOWN">{statusLabel.DOWN}</option>
+                  <option value="DISPOSED">{statusLabel.DISPOSED}</option>
+                </select>
+              </td>
+              <td>
+                <div className="stack-sm">
+                  <label>
+                    <span className="sr-only">Tải ảnh cho {uploadTargetId}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingId === uploadTargetId}
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0]
+                        void handlePhotoUpload(uploadTargetId, file)
+                        event.currentTarget.value = ''
+                      }}
+                    />
+                  </label>
+                  <button type="button" disabled={uploadingId === uploadTargetId} onClick={() => void handleClipboardUpload(uploadTargetId)}>
+                    Dán ảnh từ clipboard
+                  </button>
+                  <small>{uploadingId === uploadTargetId ? 'Đang tải…' : 'Ctrl+C ảnh → bấm Dán · tối đa 5 MB'}</small>
+                </div>
+              </td>
+              <td>
+                <button type="button" disabled={savingId === equipment.equipmentId} onClick={() => void handleSave(equipment.equipmentId)}>
+                  {savingId === equipment.equipmentId ? 'Đang lưu…' : 'Lưu'}
                 </button>
-                <small>{uploadingId === equipment.equipmentId ? 'Đang tải…' : 'Ctrl+C ảnh → bấm Dán · tối đa 5 MB'}</small>
-              </div>
-            </td>
-          </tr>)}</tbody>
+              </td>
+            </tr>
+          })}</tbody>
         </table>
       </div> : null}
     </section>
