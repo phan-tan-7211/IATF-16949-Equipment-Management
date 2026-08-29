@@ -1,15 +1,15 @@
-# Supabase + Cloudflare R2 Migration Checkpoint
+# Supabase-only Migration Checkpoint
 
 ## Purpose
 
-This document freezes the current production state before experimenting with the Supabase + Cloudflare R2 architecture.
+This document freezes the current production state before experimenting with a Supabase-only architecture.
 
 Do not treat this branch as production until the migration is explicitly approved.
 
 ## Branch policy
 
 - `main` = current production line.
-- `feat/supabase-r2-migration` = isolated migration/research branch.
+- `feat/supabase-r2-migration` = isolated migration/research branch. The branch name is historical; the current target is Supabase-only.
 - Never replace production persistence from this branch without a dedicated migration gate and live verification.
 
 ## Current production architecture
@@ -157,11 +157,11 @@ Current production evidence is stored in Google Drive folders, including:
 - handover records
 - official PDF snapshots
 
-The migration branch may replace image/evidence storage with Cloudflare R2, but existing Google Drive evidence must remain untouched until migration verification passes.
+Existing Google Drive evidence must remain untouched until migration verification passes.
 
 ## Migration target
 
-Target architecture to research on `feat/supabase-r2-migration`:
+Cloudflare R2 is not used because account setup requires a payment card. The migration target is now Supabase-only:
 
 ```text
 Vercel React
@@ -169,10 +169,8 @@ Vercel React
 Supabase
   ├─ PostgreSQL data
   ├─ Auth / RBAC
-  └─ backend functions / API boundary
-        ↓
-Cloudflare R2
-  └─ equipment photos and evidence files
+  ├─ Storage for equipment photos/evidence
+  └─ Edge Functions / RPC for protected workflows
 ```
 
 Initial migration is TEST ONLY.
@@ -183,18 +181,36 @@ Suggested first test dataset:
 - sample Calibration rows
 - sample Daily Inspection rows
 - sample Maintenance rows
-- sample equipment/evidence images
+- sample equipment/evidence images in Supabase Storage
+
+## Supabase storage plan
+
+Use separate buckets or logical prefixes for the current evidence categories:
+
+- `equipment-photos`
+- `manuals-and-setup`
+- `maintenance-before-after`
+- `calibration-certificates`
+- `calibration-label-photos`
+- `tooling-drawings`
+- `tooling-change-attachments`
+- `handover-records`
+- `official-pdf-snapshots`
+
+For TEST, private buckets are preferred. The database should store object paths and metadata, not image binary data.
 
 ## Migration rules
 
-1. Keep `main` production unchanged while testing Supabase/R2.
-2. Do not write migration test data into the production Google Sheets.
+1. Keep `main` production unchanged while testing Supabase.
+2. Do not write migration test data into production Google Sheets.
 3. Do not delete or move existing Google Drive evidence.
 4. Preserve `equipmentId` values exactly.
 5. Preserve G1 workflow and RBAC semantics before switching persistence.
-6. Use a separate Supabase test project and separate R2 test bucket.
+6. Use a separate Supabase TEST project.
 7. Test read, create, update, workflow, audit, image upload, permissions, and rollback before considering production migration.
 8. Production cutover requires data reconciliation against the frozen counts above.
+9. Do not commit Supabase secrets or service-role keys to GitHub/Vite client code.
+10. Browser may use only the Supabase public client key with RLS; privileged workflow logic stays behind protected RPC/Edge Functions.
 
 ## Git checkpoint
 
@@ -215,12 +231,12 @@ If `main` advances after this checkpoint, deliberately decide whether to merge/r
 When work resumes on this branch:
 
 1. Provision Supabase TEST.
-2. Provision Cloudflare R2 TEST bucket.
-3. Define environment-variable contract without committing credentials.
-4. Port the 20-table G1 schema to PostgreSQL.
-5. Add RLS / RBAC.
+2. Define environment-variable contract without committing credentials.
+3. Port the 20-table G1 schema to PostgreSQL.
+4. Add RLS / RBAC.
+5. Create Supabase Storage buckets/policies for equipment photos and evidence.
 6. Build repository adapters behind the existing frontend interfaces.
-7. Add R2 signed upload/read flow for equipment photos/evidence.
-8. Seed test data only.
+7. Seed test data only.
+8. Test equipment image upload/read/delete permissions.
 9. Benchmark against Apps Script/Sheets.
 10. Decide migration only after functional and performance verification.
