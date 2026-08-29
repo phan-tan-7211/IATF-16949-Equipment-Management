@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import './Maintenance.css'
+import './MaintenanceResult.css'
 import { canCreateMaintenance, useAppRole } from './auth/AppRoleContext'
 import { loadLiveMaintenance, type LiveMaintenancePlan, type LiveMaintenanceWorkOrder } from './data/liveMaintenance'
 import { loadMaintenanceExecutionResults, recordMaintenanceResult, type MaintenanceExecutionResult, type MaintenanceResultInput } from './data/liveMaintenanceResult'
