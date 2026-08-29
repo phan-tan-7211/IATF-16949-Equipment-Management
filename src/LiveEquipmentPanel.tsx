@@ -110,6 +110,15 @@ export function LiveEquipmentPanel() {
     void reloadEquipment()
   }, [])
 
+  useEffect(() => {
+    if (!editing) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEditing(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [editing])
+
   async function handleSave() {
     if (!editing) return
     if (!editing.equipmentId.trim() || !editing.equipmentName.trim()) {
@@ -141,11 +150,11 @@ export function LiveEquipmentPanel() {
 
       if (saved.oldEquipmentId !== nextEquipmentId) {
         setPhotos((current) => {
-          const next = { ...current }
-          if (next[saved.oldEquipmentId]) next[nextEquipmentId] = next[saved.oldEquipmentId]
+          const next = { ...current, [nextEquipmentId]: { state: 'loading', url: '' } as PhotoInfo }
           delete next[saved.oldEquipmentId]
           return next
         })
+        void refreshOnePhoto(nextEquipmentId)
       }
 
       setMessage(`Đã lưu ${nextEquipmentId}`)
