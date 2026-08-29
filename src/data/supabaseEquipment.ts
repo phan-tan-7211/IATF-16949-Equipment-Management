@@ -267,6 +267,43 @@ export async function getEquipmentPhotoPreview(equipmentId: string): Promise<Equ
   return { exists: true, path, signedUrl: data.signedUrl }
 }
 
+export async function getEquipmentPhotoPreviews(equipmentIds: string[]): Promise<Record<string, EquipmentPhotoPreview>> {
+  const client = requireSupabase()
+  const ids = Array.from(new Set(equipmentIds.map((id) => id.trim()).filter(Boolean)))
+  if (ids.length === 0) return {}
+
+  const { data: pathRows, error: pathError } = await client.rpc('rpc_equipment_photo_paths', {
+    p_equipment_ids: ids,
+  })
+  if (pathError) throw new Error(`SUPABASE_PHOTO_BATCH_LOOKUP_FAILED: ${pathError.message}`)
+
+  const pathById = new Map<string, string>()
+  for (const row of pathRows || []) {
+    const id = String(row.equipment_id || '')
+    const path = String(row.path || '')
+    if (id && path) pathById.set(id, path)
+  }
+
+  const paths = Array.from(pathById.values())
+  const signedByPath = new Map<string, string>()
+  if (paths.length > 0) {
+    const { data: signedRows, error: signedError } = await client.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 3600)
+    if (signedError) throw new Error(`SUPABASE_PHOTO_BATCH_URL_FAILED: ${signedError.message}`)
+    for (const row of signedRows || []) {
+      if (row.path && row.signedUrl) signedByPath.set(row.path, row.signedUrl)
+    }
+  }
+
+  return Object.fromEntries(ids.map((id) => {
+    const path = pathById.get(id) || ''
+    return [id, {
+      exists: Boolean(path),
+      path,
+      signedUrl: path ? signedByPath.get(path) || '' : '',
+    } satisfies EquipmentPhotoPreview]
+  }))
+}
+
 export async function hasEquipmentPhoto(equipmentId: string) {
   const preview = await getEquipmentPhotoPreview(equipmentId)
   return preview.exists
