@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
 import './Equipment.css'
+import { EquipmentProfile } from './EquipmentProfile'
 import { type LiveEquipment } from './data/liveEquipment'
 import {
   getEquipmentPhotoPreview,
@@ -62,6 +63,7 @@ export function LiveEquipmentPanel() {
   const [rows, setRows] = useState<LiveEquipment[]>([])
   const [photos, setPhotos] = useState<Record<string, PhotoInfo>>({})
   const [editing, setEditing] = useState<EquipmentEditInput | null>(null)
+  const [profileId, setProfileId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -238,6 +240,12 @@ export function LiveEquipmentPanel() {
     () => rows.filter((row) => (typeFilter === 'ALL' || row.equipmentType === typeFilter) && includesQuery(row, normalizedQuery)),
     [rows, typeFilter, normalizedQuery],
   )
+  const profileEquipment = profileId ? rows.find((row) => row.equipmentId === profileId) || null : null
+
+  function openEdit(row: LiveEquipment) {
+    setProfileId('')
+    setEditing(toDraft(row))
+  }
 
   return <div className="equipment-page">
     <section className="equipment-summary" aria-label="Tổng quan thiết bị">
@@ -251,7 +259,7 @@ export function LiveEquipmentPanel() {
         <div>
           <p className="eyebrow">Equipment Master</p>
           <h2 id="equipment-title">Danh sách thiết bị</h2>
-          <p>{filteredRows.length} / {rows.length} thiết bị</p>
+          <p>{filteredRows.length} / {rows.length} thiết bị · click mã, tên hoặc ảnh để xem hồ sơ</p>
         </div>
         <button className="equipment-refresh" type="button" onClick={() => void reloadEquipment()} disabled={loading}>Làm mới</button>
       </header>
@@ -289,23 +297,23 @@ export function LiveEquipmentPanel() {
                 <td
                   className={`equipment-image-col${pasteReady ? ' paste-ready' : ''}`}
                   tabIndex={pasteReady ? 0 : undefined}
-                  title={pasteReady ? 'Click ô ảnh rồi Ctrl+V để dán ảnh' : undefined}
+                  title={pasteReady ? 'Click ô ảnh rồi Ctrl+V để dán ảnh' : 'Mở hồ sơ thiết bị'}
                   onPaste={pasteReady ? (event) => void handleEmptyPhotoCellPaste(equipment.equipmentId, event) : undefined}
                 >
                   {photo.state === 'yes' && photo.url
-                    ? <img className="equipment-thumb" src={photo.url} alt={`Ảnh ${equipment.equipmentName}`} loading="lazy" />
+                    ? <button className="equipment-thumb-button" type="button" onClick={() => setProfileId(equipment.equipmentId)} aria-label={`Mở hồ sơ ${equipment.equipmentId}`}><img className="equipment-thumb" src={photo.url} alt={`Ảnh ${equipment.equipmentName}`} loading="lazy" /></button>
                     : <div className={`equipment-thumb-placeholder ${photo.state}`} aria-label="Chưa có ảnh">
                         {uploadingId === equipment.equipmentId ? 'Đang tải…' : photo.state === 'loading' ? '…' : photo.state === 'no' ? <><span>Chưa có ảnh</span><small>Click + Ctrl+V</small></> : '—'}
                       </div>}
                 </td>
-                <td><strong className="equipment-code">{equipment.equipmentId}</strong></td>
-                <td><span className="equipment-name">{equipment.equipmentName}</span></td>
+                <td><button className="equipment-profile-link equipment-code" type="button" onClick={() => setProfileId(equipment.equipmentId)}>{equipment.equipmentId}</button></td>
+                <td><button className="equipment-profile-link equipment-name" type="button" onClick={() => setProfileId(equipment.equipmentId)}>{equipment.equipmentName}</button></td>
                 <td>{equipment.usingDepartment || equipment.managingDepartment || equipment.currentArea || '—'}</td>
                 <td>{equipment.model || '—'}</td>
                 <td><strong>{equipment.serialNumber || '—'}</strong></td>
                 <td><span className="equipment-type-badge">{equipment.equipmentType === 'MEASUREMENT' ? 'Đo kiểm' : 'Sản xuất'}</span></td>
                 <td><span className={`equipment-status status-${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status] || equipment.status}</span></td>
-                <td className="equipment-row-actions"><button type="button" onClick={() => setEditing(toDraft(equipment))}>Sửa</button></td>
+                <td className="equipment-row-actions"><button type="button" onClick={() => openEdit(equipment)}>Sửa</button></td>
               </tr>
             })}
           </tbody>
@@ -313,6 +321,13 @@ export function LiveEquipmentPanel() {
         {filteredRows.length === 0 ? <div className="equipment-empty">Không tìm thấy thiết bị phù hợp.</div> : null}
       </div> : null}
     </section>
+
+    {profileEquipment ? <EquipmentProfile
+      equipment={profileEquipment}
+      photoUrl={photos[profileEquipment.equipmentId]?.url || ''}
+      onClose={() => setProfileId('')}
+      onEdit={() => openEdit(profileEquipment)}
+    /> : null}
 
     {editing ? <div className="equipment-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null) }}>
       <aside className="equipment-drawer" role="dialog" aria-modal="true" aria-labelledby="equipment-edit-title">
