@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import { transitionMaintenanceStatus, type MaintenanceWorkflowAction, type MaintenanceWorkflowStatus } from '../domain/workflow'
+import type { MaintenanceWorkflowAction, MaintenanceWorkflowStatus } from '../domain/workflow'
 
 export type MaintenanceEquipmentOption = { equipmentId: string; equipmentName: string }
 export type LiveMaintenanceWorkOrder = {
@@ -47,59 +47,29 @@ export async function loadLiveMaintenance() {
 }
 
 export async function createManualWorkOrder(request: { operationId: string; input: { equipmentId: string; sourceType: string; sourceId: string; reason: string; priority: string; method?: string; plannedStartAt?: string; plannedEndAt?: string } }) {
-  const session = await supabase.auth.getSession()
-  const actor = session.data.session?.user.email || ''
-  const stamp = Date.now()
-  const workOrderId = `WO-${stamp}`
-  const { error } = await supabase.from('maintenance_work_order').insert({
-    work_order_id: workOrderId,
-    equipment_id: request.input.equipmentId,
-    source_type: request.input.sourceType,
-    source_id: request.input.sourceId || null,
-    reason: request.input.reason,
-    priority: request.input.priority,
-    status: 'OPEN',
-    created_by: actor || null,
-    source_data: { operationId: request.operationId, method: request.input.method || '', plannedStartAt: request.input.plannedStartAt || '', plannedEndAt: request.input.plannedEndAt || '' },
+  const { data, error } = await supabase.rpc('rpc_create_maintenance_work_order', {
+    p_operation_id: request.operationId,
+    p_equipment_id: request.input.equipmentId,
+    p_source_type: request.input.sourceType,
+    p_source_id: request.input.sourceId,
+    p_reason: request.input.reason,
+    p_priority: request.input.priority,
+    p_method: request.input.method || '',
+    p_planned_start_at: request.input.plannedStartAt || '',
+    p_planned_end_at: request.input.plannedEndAt || '',
   })
   if (error) throw error
-  return { result: { workOrderId } }
+  const result = (data || {}) as Record<string, unknown>
+  return { result: { workOrderId: text(result.workOrderId), status: text(result.status) } }
 }
 
 export async function transitionLiveMaintenance(request: { workOrderId: string; workflowAction: MaintenanceWorkflowAction; operationId: string }) {
-  const { data: wo, error: readError } = await supabase.from('maintenance_work_order').select('*').eq('work_order_id', request.workOrderId).single()
-  if (readError) throw readError
-  const current = text(wo.status) as MaintenanceWorkflowStatus
-  const next = transitionMaintenanceStatus(current, request.workflowAction)
-
-  if (request.workflowAction === 'RELEASE') {
-    const { data: accepted, error: handoverError } = await supabase.from('equipment_handover').select('handover_id').eq('work_order_id', request.workOrderId).eq('accepted', true).limit(1)
-    if (handoverError) throw handoverError
-    if (!accepted?.length) throw new Error('Không thể RELEASE: chưa có BM-05 accepted cho Work Order này')
-  }
-
-  const session = await supabase.auth.getSession()
-  const actor = session.data.session?.user.email || ''
-  const source = ((wo.source_data as Record<string, unknown> | null) || {})
-  if (request.workflowAction === 'APPROVE') {
-    source.approvedBy = actor
-    source.approvedAt = new Date().toISOString()
-  }
-  source.lastOperationId = request.operationId
-
-  const { error: updateError } = await supabase.from('maintenance_work_order').update({ status: next, source_data: source, updated_at: new Date().toISOString() }).eq('work_order_id', request.workOrderId)
-  if (updateError) throw updateError
-
-  const auditId = `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-  await supabase.from('audit_log').insert({
-    audit_id: auditId,
-    equipment_id: text(wo.equipment_id),
-    entity_type: 'Maintenance_Work_Order',
-    entity_id: request.workOrderId,
-    action: request.workflowAction,
-    actor_email: actor || 'unknown',
-    detail: { before: current, after: next, operationId: request.operationId },
+  const { data, error } = await supabase.rpc('rpc_transition_maintenance', {
+    p_work_order_id: request.workOrderId,
+    p_action: request.workflowAction,
+    p_operation_id: request.operationId,
   })
-
-  return { result: { status: next } }
+  if (error) throw error
+  const result = (data || {}) as Record<string, unknown>
+  return { result: { status: text(result.status) as MaintenanceWorkflowStatus } }
 }
