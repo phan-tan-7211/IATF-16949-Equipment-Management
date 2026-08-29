@@ -61,7 +61,34 @@ Storage SELECT policy allows authenticated reads for the evidence buckets, inclu
 
 Equipment list photo loading uses `rpc_equipment_photo_paths` plus Storage `createSignedUrls(...)` so the page no longer performs one Storage list + one signing request per equipment row.
 
-### PASS — Backend workflow/RBAC smoke tests
+### PASS — Read-only cutover diagnostics
+
+`rpc_cutover_diagnostics()` is read-only and returns a single JSON cutover snapshot. Current database result is `pass=true`.
+
+The browser route `?phase3=supabase-test` exposes **Run cutover read gate**, which verifies:
+
+- Supabase Auth + app role;
+- database integrity snapshot;
+- Equipment Master count;
+- private Storage + batch signed URLs;
+- ADMIN Audit RLS read when the current role is ADMIN.
+
+### PASS — Rollback-safe workflow write smoke
+
+`rpc_cutover_write_smoke()` is ADMIN-only and calls the real production workflow RPCs inside a PostgreSQL exception subtransaction. It deliberately raises `SMOKE_ROLLBACK` after validation so every smoke write is rolled back before returning.
+
+Verified result with the real ADMIN identity:
+
+- Inspection `STOP_REPAIR` creates Inspection + Work Order + Downtime and marks Equipment DOWN: PASS
+- Maintenance transitions through `VERIFIED`: PASS
+- Calibration Log + Calibration Master update: PASS
+- Tooling Master + Plan + Modification full transition: PASS
+- rollback cleanup: PASS
+- final transaction-table counts after smoke: unchanged / zero
+
+The browser route `?phase3=supabase-test` exposes **Run rollback write smoke** so the same test can be executed from the real frontend session without leaving business records.
+
+### PASS — Backend workflow/RBAC checks
 
 Previously verified with transaction rollback:
 
@@ -73,25 +100,24 @@ Previously verified with transaction rollback:
 - authenticated user without app role is denied protected workflow mutations.
 - QUALITY can submit Daily Inspection and is denied manual Maintenance WO creation.
 
-Smoke tests use rollback and do not leave test transactions in business tables.
+The current `app_user_role` table contains only the ADMIN account, so a new non-ADMIN browser-session check should use a real authorized user when one is provisioned rather than creating disposable Auth users.
 
 ## Remaining gate before merge to `main`
 
-### PENDING — Browser smoke test on a real Vercel preview/local browser
+### PENDING — Real browser UX smoke
 
-Verify with a real authenticated browser session:
+Automated read/write cutover diagnostics are now available, but the actual user interaction paths still need one real browser pass:
 
-1. Equipment list loads 131 rows and thumbnails without request storm/errors.
+1. Equipment list loads 131 rows and 117 thumbnails without request storm/errors.
 2. Open Equipment 360 profile from image/ID/name.
 3. Edit Equipment and save without full-list reload/scroll loss.
-4. Paste an image into an empty Equipment photo cell and confirm the signed thumbnail refreshes.
-5. Submit a normal Daily Inspection.
-6. Submit an `X / STOP_REPAIR` inspection and verify WO + Downtime + Equipment DOWN.
-7. Run a Maintenance WO through role-appropriate workflow actions.
-8. Record Calibration Log and open the private certificate through signed URL.
-9. Create Tooling / Plan / Modification and run allowed transitions.
-10. Confirm non-ADMIN navigation/actions are hidden appropriately and backend still denies unauthorized direct calls.
-11. ADMIN opens Audit and sees server-side mutation history.
+4. Paste an image into one of the 14 empty Equipment photo cells and confirm the signed thumbnail refreshes.
+5. Open Inspection / Maintenance / Calibration / Tooling workspaces and confirm responsive layout/drawers/actions.
+6. Record/open a real Calibration certificate only when an approved test record/file is available; do not create fake operational evidence solely for cutover.
+7. Confirm ADMIN Audit screen loads.
+8. When a real non-ADMIN user exists, confirm navigation/actions are hidden appropriately and direct unauthorized calls are denied.
+
+For workflow mutation correctness without polluting business data, use **Run rollback write smoke** instead of creating fake operational transactions.
 
 ### PENDING — Vercel preview visibility
 
@@ -104,8 +130,9 @@ Do not merge this migration branch into `main` until the two PENDING gates above
 After confirmation:
 
 1. take final database/storage reconciliation snapshot;
-2. confirm Vercel environment contains only required public Supabase client variables;
-3. merge migration branch to `main`;
-4. deploy production;
-5. run the same browser smoke test on the canonical production URL;
-6. keep the old `main` commit available as rollback history, but do not restore Apps Script/Sheets runtime unless an explicit rollback decision is made.
+2. run browser read gate and rollback write smoke one final time;
+3. confirm Vercel environment contains only required public Supabase client variables;
+4. merge migration branch to `main`;
+5. deploy production;
+6. run the same browser diagnostics on the canonical production URL;
+7. keep the old `main` commit available as rollback history, but do not restore Apps Script/Sheets runtime unless an explicit rollback decision is made.
