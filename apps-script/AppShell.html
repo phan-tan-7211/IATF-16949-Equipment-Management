@@ -10,9 +10,11 @@
 </head>
 <body>
 <?!= HtmlService.createHtmlOutputFromFile('AppShellBody').getContent() ?>
+<?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminPanel').getContent() ?>
 <script>
 <? var clientTemplate = HtmlService.createTemplateFromFile('AppShellClient'); clientTemplate.contractVersion = contractVersion; ?>
 <?!= clientTemplate.evaluate().getContent() ?>
 </script>
+<script><?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminClient').getContent() ?></script>
 </body>
 </html>
