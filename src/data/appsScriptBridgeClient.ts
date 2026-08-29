@@ -28,6 +28,36 @@ type ReadTableResponse<T> = {
   actor: string
 }
 
+export type DailyInspectionMark = 'V' | 'URGENT_REPAIR' | 'MAINTENANCE_REQUIRED' | 'STOP_REPAIR'
+export type DailyInspectionShift = '' | 'MORNING' | 'AFTERNOON' | 'NIGHT'
+export type WorkOrderPriority = '' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+export type DailyInspectionSubmitInput = {
+  operationId: string
+  input: {
+    equipmentId: string
+    shift: DailyInspectionShift
+    area: string
+    overallMark: DailyInspectionMark
+    note: string
+    damagedParts: string
+    priority: WorkOrderPriority
+  }
+}
+
+type DailyInspectionSubmitResponse = {
+  ok: true
+  duplicate: boolean
+  operationId: string
+  result: {
+    inspectionId: string
+    overallMark: DailyInspectionMark
+    workOrderId: string | null
+    downtimeId: string | null
+    auditId: string
+  }
+}
+
 export class AppsScriptBridgeError extends Error {
   constructor(message: string) {
     super(message)
@@ -163,6 +193,21 @@ export function createAppsScriptBridgeClient(options?: {
         throw new AppsScriptBridgeError('READ_TABLE_RESPONSE_INVALID')
       }
       return response.rows
+    },
+
+    async submitDailyInspection(request: DailyInspectionSubmitInput): Promise<DailyInspectionSubmitResponse> {
+      if (!request.operationId.trim()) throw new AppsScriptBridgeError('OPERATION_ID_REQUIRED')
+      if (!request.input.equipmentId.trim()) throw new AppsScriptBridgeError('EQUIPMENT_ID_REQUIRED')
+
+      const response = await invoke<DailyInspectionSubmitResponse>({
+        action: 'dailyInspectionSubmit',
+        operationId: request.operationId,
+        input: request.input,
+      })
+      if (!response || response.ok !== true || !response.result?.inspectionId) {
+        throw new AppsScriptBridgeError('DAILY_INSPECTION_RESPONSE_INVALID')
+      }
+      return response
     },
 
     destroy() {
