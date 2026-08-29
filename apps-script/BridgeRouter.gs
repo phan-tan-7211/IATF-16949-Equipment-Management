@@ -12,6 +12,10 @@ function bridgeInvokeV2(request) {
     }
   }
 
+  if (request.action === 'readTable' && String(request.table || '') === 'Audit_Log') {
+    if (actor.role !== 'ADMIN') throw new Error('ROLE_NOT_ALLOWED')
+  }
+
   if (request.action === 'auditRead') {
     if (actor.role !== 'ADMIN') throw new Error('ROLE_NOT_ALLOWED')
     return { ok: true, rows: readTable_('Audit_Log') }
