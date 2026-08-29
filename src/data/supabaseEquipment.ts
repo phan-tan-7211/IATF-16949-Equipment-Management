@@ -29,6 +29,15 @@ export type EquipmentPhotoPreview = {
   signedUrl: string
 }
 
+export type EquipmentHistory = {
+  calibration: Array<Record<string, unknown>>
+  maintenance: Array<Record<string, unknown>>
+  inspections: Array<Record<string, unknown>>
+  downtime: Array<Record<string, unknown>>
+  movements: Array<Record<string, unknown>>
+  audit: Array<Record<string, unknown>>
+}
+
 export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
   const client = requireSupabase()
   const { data, error } = await client
@@ -60,6 +69,33 @@ export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
       updatedAt: String(row.updated_at || ''),
     }
   })
+}
+
+export async function loadEquipmentHistory(equipmentId: string): Promise<EquipmentHistory> {
+  const client = requireSupabase()
+  const id = equipmentId.trim()
+  if (!id) throw new Error('EQUIPMENT_ID_REQUIRED')
+
+  const [calibration, maintenance, inspections, downtime, movements, audit] = await Promise.all([
+    client.from('calibration_log').select('calibration_log_id,calibration_date,next_due_date,result,actor_email,created_at,source_data').eq('equipment_id', id).order('calibration_date', { ascending: false }).limit(50),
+    client.from('maintenance_work_order').select('work_order_id,status,priority,reason,source_type,source_id,created_by,created_at,updated_at,source_data').eq('equipment_id', id).order('created_at', { ascending: false }).limit(50),
+    client.from('daily_inspection').select('inspection_id,inspection_date,shift,area,overall_mark,note,actor_email,created_at,source_data').eq('equipment_id', id).order('inspection_date', { ascending: false }).limit(50),
+    client.from('downtime_event').select('downtime_id,work_order_id,started_at,ended_at,created_at,source_data').eq('equipment_id', id).order('started_at', { ascending: false }).limit(50),
+    client.from('equipment_movement_log').select('movement_id,from_location,to_location,actor_email,created_at,source_data').eq('equipment_id', id).order('created_at', { ascending: false }).limit(50),
+    client.from('audit_log').select('audit_id,entity_type,entity_id,action,actor_email,detail,created_at').eq('equipment_id', id).order('created_at', { ascending: false }).limit(50),
+  ])
+
+  const failures = [calibration, maintenance, inspections, downtime, movements, audit].filter((result) => result.error)
+  if (failures.length > 0) throw new Error(`SUPABASE_EQUIPMENT_HISTORY_FAILED: ${failures[0].error?.message}`)
+
+  return {
+    calibration: (calibration.data || []) as Array<Record<string, unknown>>,
+    maintenance: (maintenance.data || []) as Array<Record<string, unknown>>,
+    inspections: (inspections.data || []) as Array<Record<string, unknown>>,
+    downtime: (downtime.data || []) as Array<Record<string, unknown>>,
+    movements: (movements.data || []) as Array<Record<string, unknown>>,
+    audit: (audit.data || []) as Array<Record<string, unknown>>,
+  }
 }
 
 export async function updateSupabaseEquipment(input: EquipmentEditInput) {
