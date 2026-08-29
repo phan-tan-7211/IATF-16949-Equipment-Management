@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { AppErrorBoundary } from './AppErrorBoundary'
+import { AppRoleProvider, canViewAudit, type AppRole } from './auth/AppRoleContext'
+import { loadLiveSession } from './data/liveAudit'
 import { LiveAuditPanel } from './LiveAuditPanel'
 import { LiveCalibrationPanel } from './LiveCalibrationPanel'
 import { LiveDashboardPanel } from './LiveDashboardPanel'
@@ -12,14 +14,14 @@ import { PwaStatus } from './PwaStatus'
 
 type View = 'dashboard' | 'equipment' | 'inspection' | 'maintenance' | 'tooling' | 'calibration' | 'settings'
 
-const NAV: Array<{ id: View; label: string }> = [
+const NAV: Array<{ id: View; label: string; adminOnly?: boolean }> = [
   { id: 'dashboard', label: 'Tổng quan' },
   { id: 'equipment', label: 'Thiết bị' },
   { id: 'inspection', label: 'Kiểm tra ngày' },
   { id: 'maintenance', label: 'Bảo trì' },
   { id: 'tooling', label: 'Jig & Tooling' },
   { id: 'calibration', label: 'Hiệu chuẩn' },
-  { id: 'settings', label: 'Audit & Cấu hình' },
+  { id: 'settings', label: 'Audit & Cấu hình', adminOnly: true },
 ]
 
 function initialView(): View {
@@ -27,6 +29,10 @@ function initialView(): View {
   if (requested === 'equipment' || requested === 'dashboard' || requested === 'inspection' || requested === 'maintenance' || requested === 'tooling' || requested === 'calibration') return requested
   if (requested === 'audit') return 'settings'
   return 'dashboard'
+}
+
+function normalizeRole(value: string): AppRole {
+  return ['MAINTENANCE', 'SUPERVISOR', 'QUALITY', 'MANAGER', 'ADMIN'].includes(value) ? value as AppRole : 'UNKNOWN'
 }
 
 function LiveView({ view }: { view: View }) {
@@ -41,29 +47,76 @@ function LiveView({ view }: { view: View }) {
 
 export default function App() {
   const [view, setView] = useState<View>(initialView)
-  const active = useMemo(() => NAV.find((item) => item.id === view) ?? NAV[0], [view])
+  const [role, setRole] = useState<AppRole>('UNKNOWN')
+  const [sessionEmail, setSessionEmail] = useState('')
+  const [roleLoaded, setRoleLoaded] = useState(false)
 
   useEffect(() => {
-    const closeEquipmentEditorOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      const backdrop = document.querySelector<HTMLElement>('.equipment-drawer-backdrop')
-      backdrop?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
-    }
-    window.addEventListener('keydown', closeEquipmentEditorOnEscape)
-    return () => window.removeEventListener('keydown', closeEquipmentEditorOnEscape)
+    let active = true
+    void loadLiveSession()
+      .then((session) => {
+        if (!active) return
+        setRole(normalizeRole(session.role))
+        setSessionEmail(session.email)
+      })
+      .catch(() => {
+        if (!active) return
+        setRole('UNKNOWN')
+        setSessionEmail('')
+      })
+      .finally(() => { if (active) setRoleLoaded(true) })
+    return () => { active = false }
   }, [])
 
-  return <div className="app-shell">
-    <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
-    <PwaStatus />
+  useEffect(() => {
+    if (!roleLoaded) return
+    if (view === 'settings' && !canViewAudit(role)) setView('dashboard')
+  }, [role, roleLoaded, view])
 
-    <aside className="sidebar" aria-label="Điều hướng desktop">
-      <div className="brand">
-        <span className="brand-mark" aria-hidden="true">CEV</span>
-        <div><strong>Equipment</strong><small>IATF 16949</small></div>
+  const visibleNav = useMemo(() => NAV.filter((item) => !item.adminOnly || canViewAudit(role)), [role])
+  const active = useMemo(() => NAV.find((item) => item.id === view) ?? NAV[0], [view])
+
+  return <AppRoleProvider role={role}>
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
+      <PwaStatus />
+
+      <aside className="sidebar" aria-label="Điều hướng desktop">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">CEV</span>
+          <div><strong>Equipment</strong><small>IATF 16949</small></div>
+        </div>
+        <nav>
+          {visibleNav.map((item) => <button
+            key={item.id}
+            type="button"
+            className={item.id === view ? 'active' : ''}
+            aria-current={item.id === view ? 'page' : undefined}
+            onClick={() => setView(item.id)}
+          >{item.label}</button>)}
+        </nav>
+        <div className="sidebar-user">
+          <strong>{roleLoaded ? role : '...'}</strong>
+          <span>{sessionEmail || 'Supabase Auth'}</span>
+        </div>
+        <div className="sidebar-note">Vercel Frontend<br/>React + Vite + TypeScript<br/>Supabase Backend</div>
+      </aside>
+
+      <div className="app-body">
+        <header className="topbar">
+          <div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div>
+          <div className="topbar-status"><span className="role-pill">{roleLoaded ? role : 'AUTH...'}</span><span className="connection-pill" aria-label="Trạng thái kiến trúc: Vercel frontend kết nối Supabase backend">SUPABASE LIVE</span></div>
+        </header>
+
+        <main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}>
+          <AppErrorBoundary key={view}>
+            <LiveView view={view} />
+          </AppErrorBoundary>
+        </main>
       </div>
-      <nav>
-        {NAV.map((item) => <button
+
+      <nav className="bottom-nav" aria-label="Điều hướng mobile">
+        {visibleNav.map((item) => <button
           key={item.id}
           type="button"
           className={item.id === view ? 'active' : ''}
@@ -71,30 +124,6 @@ export default function App() {
           onClick={() => setView(item.id)}
         >{item.label}</button>)}
       </nav>
-      <div className="sidebar-note">Vercel Frontend<br/>React + Vite + TypeScript<br/>Supabase Backend</div>
-    </aside>
-
-    <div className="app-body">
-      <header className="topbar">
-        <div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div>
-        <span className="connection-pill" aria-label="Trạng thái kiến trúc: Vercel frontend kết nối Supabase backend">SUPABASE LIVE</span>
-      </header>
-
-      <main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}>
-        <AppErrorBoundary key={view}>
-          <LiveView view={view} />
-        </AppErrorBoundary>
-      </main>
     </div>
-
-    <nav className="bottom-nav" aria-label="Điều hướng mobile">
-      {NAV.map((item) => <button
-        key={item.id}
-        type="button"
-        className={item.id === view ? 'active' : ''}
-        aria-current={item.id === view ? 'page' : undefined}
-        onClick={() => setView(item.id)}
-      >{item.label}</button>)}
-    </nav>
-  </div>
+  </AppRoleProvider>
 }
