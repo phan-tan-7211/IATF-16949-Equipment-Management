@@ -70,7 +70,7 @@ export default function App() {
         <span className="connection-pill" aria-label="Trạng thái kiến trúc: Vercel frontend kết nối Apps Script backend">PRODUCTION LIVE</span>
       </header>
 
-      <main id="main-content" className="main-content" tabIndex={-1}>
+      <main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}>
         <AppErrorBoundary key={view}>
           <LiveView view={view} />
         </AppErrorBoundary>
