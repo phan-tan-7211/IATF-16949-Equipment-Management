@@ -11,12 +11,14 @@ const LiveDashboardPanel = lazy(() => import('./LiveDashboardPanel').then((modul
 const LiveEquipmentPanel = lazy(() => import('./LiveEquipmentPanel').then((module) => ({ default: module.LiveEquipmentPanel })))
 const LiveInspectionPanel = lazy(() => import('./LiveInspectionPanel').then((module) => ({ default: module.LiveInspectionPanel })))
 const LiveMaintenancePanel = lazy(() => import('./LiveMaintenancePanel').then((module) => ({ default: module.LiveMaintenancePanel })))
+const LiveQrScannerPanel = lazy(() => import('./LiveQrScannerPanel').then((module) => ({ default: module.LiveQrScannerPanel })))
 const LiveToolingPanel = lazy(() => import('./LiveToolingPanel').then((module) => ({ default: module.LiveToolingPanel })))
 
-type View = 'dashboard' | 'equipment' | 'inspection' | 'maintenance' | 'tooling' | 'calibration' | 'settings'
+type View = 'dashboard' | 'qr' | 'equipment' | 'inspection' | 'maintenance' | 'tooling' | 'calibration' | 'settings'
 
 const NAV: Array<{ id: View; label: string; adminOnly?: boolean }> = [
   { id: 'dashboard', label: 'Tổng quan' },
+  { id: 'qr', label: 'Quét QR' },
   { id: 'equipment', label: 'Thiết bị' },
   { id: 'inspection', label: 'Kiểm tra ngày' },
   { id: 'maintenance', label: 'Bảo trì' },
@@ -27,18 +29,24 @@ const NAV: Array<{ id: View; label: string; adminOnly?: boolean }> = [
 
 function initialView(): View {
   const requested = new URLSearchParams(window.location.search).get('phase3')
-  if (requested === 'equipment' || requested === 'dashboard' || requested === 'inspection' || requested === 'maintenance' || requested === 'tooling' || requested === 'calibration') return requested
+  if (requested === 'qr' || requested === 'equipment' || requested === 'dashboard' || requested === 'inspection' || requested === 'maintenance' || requested === 'tooling' || requested === 'calibration') return requested
   if (requested === 'audit') return 'settings'
   return 'dashboard'
+}
+
+function initialEquipmentTarget() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('equipment')?.trim().toUpperCase() || ''
 }
 
 function normalizeRole(value: string): AppRole {
   return ['MAINTENANCE', 'SUPERVISOR', 'QUALITY', 'MANAGER', 'ADMIN'].includes(value) ? value as AppRole : 'UNKNOWN'
 }
 
-function LiveView({ view }: { view: View }) {
+function LiveView({ view, equipmentTarget, onOpenEquipment }: { view: View; equipmentTarget: string; onOpenEquipment: (equipmentId: string) => void }) {
   if (view === 'dashboard') return <LiveDashboardPanel />
-  if (view === 'equipment') return <LiveEquipmentPanel />
+  if (view === 'qr') return <LiveQrScannerPanel onOpenEquipment={onOpenEquipment} />
+  if (view === 'equipment') return <LiveEquipmentPanel openEquipmentId={equipmentTarget} />
   if (view === 'inspection') return <LiveInspectionPanel />
   if (view === 'maintenance') return <LiveMaintenancePanel />
   if (view === 'tooling') return <LiveToolingPanel />
@@ -48,6 +56,7 @@ function LiveView({ view }: { view: View }) {
 
 export default function App() {
   const [view, setView] = useState<View>(initialView)
+  const [equipmentTarget, setEquipmentTarget] = useState(initialEquipmentTarget)
   const [role, setRole] = useState<AppRole>('UNKNOWN')
   const [sessionEmail, setSessionEmail] = useState('')
   const [roleLoaded, setRoleLoaded] = useState(false)
@@ -77,6 +86,20 @@ export default function App() {
   const visibleNav = useMemo(() => NAV.filter((item) => !item.adminOnly || canViewAudit(role)), [role])
   const active = useMemo(() => NAV.find((item) => item.id === view) ?? NAV[0], [view])
 
+  function openEquipmentFromQr(equipmentId: string) {
+    setEquipmentTarget(equipmentId)
+    setView('equipment')
+    const url = new URL(window.location.href)
+    url.searchParams.set('phase3', 'equipment')
+    url.searchParams.set('equipment', equipmentId)
+    window.history.replaceState({}, '', url)
+  }
+
+  function openView(nextView: View) {
+    setView(nextView)
+    if (nextView !== 'equipment') setEquipmentTarget('')
+  }
+
   return <AppRoleProvider role={role}>
     <div className="app-shell" data-role={role}>
       <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
@@ -93,7 +116,7 @@ export default function App() {
             type="button"
             className={item.id === view ? 'active' : ''}
             aria-current={item.id === view ? 'page' : undefined}
-            onClick={() => setView(item.id)}
+            onClick={() => openView(item.id)}
           >{item.label}</button>)}
         </nav>
         <div className="sidebar-user">
@@ -112,19 +135,21 @@ export default function App() {
         <main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}>
           <AppErrorBoundary key={view}>
             <Suspense fallback={<div className="workspace-loading" role="status">Đang mở workspace…</div>}>
-              <LiveView view={view} />
+              <LiveView view={view} equipmentTarget={equipmentTarget} onOpenEquipment={openEquipmentFromQr} />
             </Suspense>
           </AppErrorBoundary>
         </main>
       </div>
 
+      {view !== 'qr' ? <button className="qr-fab" type="button" aria-label="Quét QR thiết bị" onClick={() => openView('qr')}><span aria-hidden="true">⌗</span><b>Quét QR</b></button> : null}
+
       <nav className="bottom-nav" aria-label="Điều hướng mobile">
-        {visibleNav.map((item) => <button
+        {visibleNav.filter((item) => item.id !== 'qr').map((item) => <button
           key={item.id}
           type="button"
           className={item.id === view ? 'active' : ''}
           aria-current={item.id === view ? 'page' : undefined}
-          onClick={() => setView(item.id)}
+          onClick={() => openView(item.id)}
         >{item.label}</button>)}
       </nav>
     </div>
