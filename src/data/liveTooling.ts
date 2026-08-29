@@ -39,44 +39,33 @@ export async function loadLiveTooling() {
 }
 
 export async function createTooling(input: Record<string, unknown>) {
-  const toolingId = text(input.toolingId)
-  const { error } = await supabase.from('tooling_master').insert({ tooling_id: toolingId, tooling_type: text(input.toolingType), status: text(input.status) || 'IN_PRODUCTION', ownership: text(input.ownership), source_data: input })
+  const { data, error } = await supabase.rpc('rpc_create_tooling', { p_input: input })
   if (error) throw error
-  return { result: { toolingId } }
+  const result = (data || {}) as Record<string, unknown>
+  return { result: { toolingId: text(result.toolingId) } }
 }
 
 export async function createToolingPlan(input: Record<string, unknown>) {
-  const toolingPlanId = `TPL-${Date.now()}`
-  const { error } = await supabase.from('tooling_maintenance_plan').insert({ tooling_plan_id: toolingPlanId, tooling_id: text(input.toolingId), frequency_type: text(input.frequencyType), source_data: input })
+  const { data, error } = await supabase.rpc('rpc_create_tooling_plan', { p_input: input })
   if (error) throw error
-  return { result: { toolingPlanId } }
+  const result = (data || {}) as Record<string, unknown>
+  return { result: { toolingPlanId: text(result.toolingPlanId) } }
 }
 
 export async function createToolingModification(input: Record<string, unknown>) {
-  const modificationId = `TMOD-${Date.now()}`
-  const session = await supabase.auth.getSession()
-  const actor = session.data.session?.user.email || ''
-  const source = { ...input, proposedBy: actor }
-  const { error } = await supabase.from('tooling_modification').insert({ modification_id: modificationId, tooling_id: text(input.toolingId), modification_type: text(input.modificationType), status: 'PROPOSED', source_data: source })
+  const { data, error } = await supabase.rpc('rpc_create_tooling_modification', { p_input: input })
   if (error) throw error
-  return { result: { modificationId } }
+  const result = (data || {}) as Record<string, unknown>
+  return { result: { modificationId: text(result.modificationId), status: text(result.status) } }
 }
 
 export async function transitionToolingModification(modificationId: string, action: 'APPROVE' | 'QA_CONFIRM' | 'COMPLETE', updatedDocuments = '') {
-  const { data, error: readError } = await supabase.from('tooling_modification').select('*').eq('modification_id', modificationId).single()
-  if (readError) throw readError
-  const session = await supabase.auth.getSession()
-  const actor = session.data.session?.user.email || ''
-  const source = ((data.source_data as Record<string, unknown> | null) || {})
-  let status = text(data.status)
-  if (action === 'APPROVE') { source.approvedBy = actor; status = 'APPROVED' }
-  if (action === 'QA_CONFIRM') { source.qaConfirmedBy = actor; status = 'QA_CONFIRMED' }
-  if (action === 'COMPLETE') {
-    if (!text(source.approvedBy)) throw new Error('Modification phải được approve trước khi complete')
-    source.updatedDocuments = updatedDocuments
-    status = 'COMPLETED'
-  }
-  const { error } = await supabase.from('tooling_modification').update({ status, source_data: source, updated_at: new Date().toISOString() }).eq('modification_id', modificationId)
+  const { data, error } = await supabase.rpc('rpc_transition_tooling_modification', {
+    p_modification_id: modificationId,
+    p_action: action,
+    p_updated_documents: updatedDocuments,
+  })
   if (error) throw error
-  return { result: { modificationId, status } }
+  const result = (data || {}) as Record<string, unknown>
+  return { result: { modificationId: text(result.modificationId), status: text(result.status) } }
 }
