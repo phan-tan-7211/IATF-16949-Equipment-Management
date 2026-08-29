@@ -8,6 +8,7 @@ import { PwaStatus } from './PwaStatus'
 const LiveAuditPanel = lazy(() => import('./LiveAuditPanel').then((module) => ({ default: module.LiveAuditPanel })))
 const LiveCalibrationPanel = lazy(() => import('./LiveCalibrationPanel').then((module) => ({ default: module.LiveCalibrationPanel })))
 const LiveDashboardPanel = lazy(() => import('./LiveDashboardPanel').then((module) => ({ default: module.LiveDashboardPanel })))
+const LiveDowntimePanel = lazy(() => import('./LiveDowntimePanel').then((module) => ({ default: module.LiveDowntimePanel })))
 const LiveEquipmentPanel = lazy(() => import('./LiveEquipmentPanel').then((module) => ({ default: module.LiveEquipmentPanel })))
 const LiveHandoverPanel = lazy(() => import('./LiveHandoverPanel').then((module) => ({ default: module.LiveHandoverPanel })))
 const LiveInspectionPanel = lazy(() => import('./LiveInspectionPanel').then((module) => ({ default: module.LiveInspectionPanel })))
@@ -47,25 +48,13 @@ function normalizeRole(value: string): AppRole {
   return ['MAINTENANCE', 'SUPERVISOR', 'QUALITY', 'MANAGER', 'ADMIN'].includes(value) ? value as AppRole : 'UNKNOWN'
 }
 
-function LiveView({
-  view,
-  equipmentTarget,
-  onOpenEquipment,
-  onCloseQrResult,
-  onEditQrResult,
-}: {
-  view: View
-  equipmentTarget: string
-  onOpenEquipment: (equipmentId: string) => void
-  onCloseQrResult: () => void
-  onEditQrResult: () => void
-}) {
+function LiveView({ view, equipmentTarget, onOpenEquipment, onCloseQrResult, onEditQrResult }: { view: View; equipmentTarget: string; onOpenEquipment: (equipmentId: string) => void; onCloseQrResult: () => void; onEditQrResult: () => void }) {
   if (view === 'dashboard') return <LiveDashboardPanel />
   if (view === 'qr') return <LiveQrScannerPanel onOpenEquipment={onOpenEquipment} />
   if (view === 'equipment' && equipmentTarget) return <QrEquipmentResult equipmentId={equipmentTarget} onClose={onCloseQrResult} onEdit={onEditQrResult} />
   if (view === 'equipment') return <LiveEquipmentPanel />
   if (view === 'inspection') return <LiveInspectionPanel />
-  if (view === 'maintenance') return <div className="maintenance-workspace-stack"><LiveMaintenancePlanPanel /><LiveMaintenanceResultPanel /><LiveHandoverPanel /><LiveMaintenancePanel /></div>
+  if (view === 'maintenance') return <div className="maintenance-workspace-stack"><LiveMaintenancePlanPanel /><LiveMaintenanceResultPanel /><LiveHandoverPanel /><LiveDowntimePanel /><LiveMaintenancePanel /></div>
   if (view === 'tooling') return <LiveToolingPanel />
   if (view === 'calibration') return <LiveCalibrationPanel />
   return <LiveAuditPanel />
@@ -80,25 +69,11 @@ export default function App() {
 
   useEffect(() => {
     let active = true
-    void loadLiveSession()
-      .then((session) => {
-        if (!active) return
-        setRole(normalizeRole(session.role))
-        setSessionEmail(session.email)
-      })
-      .catch(() => {
-        if (!active) return
-        setRole('UNKNOWN')
-        setSessionEmail('')
-      })
-      .finally(() => { if (active) setRoleLoaded(true) })
+    void loadLiveSession().then((session) => { if (!active) return; setRole(normalizeRole(session.role)); setSessionEmail(session.email) }).catch(() => { if (!active) return; setRole('UNKNOWN'); setSessionEmail('') }).finally(() => { if (active) setRoleLoaded(true) })
     return () => { active = false }
   }, [])
 
-  useEffect(() => {
-    if (!roleLoaded) return
-    if (view === 'settings' && !canViewAudit(role)) setView('dashboard')
-  }, [role, roleLoaded, view])
+  useEffect(() => { if (roleLoaded && view === 'settings' && !canViewAudit(role)) setView('dashboard') }, [role, roleLoaded, view])
 
   const visibleNav = useMemo(() => NAV.filter((item) => !item.adminOnly || canViewAudit(role)), [role])
   const active = useMemo(() => NAV.find((item) => item.id === view) ?? NAV[0], [view])
@@ -106,85 +81,21 @@ export default function App() {
   function syncUrl(nextView: View, equipmentId = '') {
     const url = new URL(window.location.href)
     url.searchParams.set('phase3', nextView === 'settings' ? 'audit' : nextView)
-    if (equipmentId) url.searchParams.set('equipment', equipmentId)
-    else url.searchParams.delete('equipment')
+    if (equipmentId) url.searchParams.set('equipment', equipmentId); else url.searchParams.delete('equipment')
     window.history.replaceState({}, '', url)
   }
 
-  function openEquipmentFromQr(equipmentId: string) {
-    setEquipmentTarget(equipmentId)
-    setView('equipment')
-    syncUrl('equipment', equipmentId)
-  }
-
-  function openView(nextView: View) {
-    setView(nextView)
-    setEquipmentTarget('')
-    syncUrl(nextView)
-  }
-
-  function closeQrResult() {
-    setEquipmentTarget('')
-    setView('qr')
-    syncUrl('qr')
-  }
-
-  function editQrResult() {
-    setEquipmentTarget('')
-    setView('equipment')
-    syncUrl('equipment')
-  }
+  function openEquipmentFromQr(equipmentId: string) { setEquipmentTarget(equipmentId); setView('equipment'); syncUrl('equipment', equipmentId) }
+  function openView(nextView: View) { setView(nextView); setEquipmentTarget(''); syncUrl(nextView) }
+  function closeQrResult() { setEquipmentTarget(''); setView('qr'); syncUrl('qr') }
+  function editQrResult() { setEquipmentTarget(''); setView('equipment'); syncUrl('equipment') }
 
   return <AppRoleProvider role={role}>
     <div className="app-shell" data-role={role}>
-      <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
-      <PwaStatus />
-
-      <aside className="sidebar" aria-label="Điều hướng desktop">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">CEV</span>
-          <div><strong>Equipment</strong><small>IATF 16949</small></div>
-        </div>
-        <nav>
-          {visibleNav.map((item) => <button
-            key={item.id}
-            type="button"
-            className={item.id === view ? 'active' : ''}
-            aria-current={item.id === view ? 'page' : undefined}
-            onClick={() => openView(item.id)}
-          >{item.label}</button>)}
-        </nav>
-        <div className="sidebar-user">
-          <strong>{roleLoaded ? role : '...'}</strong>
-          <span>{sessionEmail || 'Supabase Auth'}</span>
-        </div>
-        <div className="sidebar-note">Vercel Frontend<br/>React + Vite + TypeScript<br/>Supabase Backend</div>
-      </aside>
-
-      <div className="app-body">
-        <header className="topbar">
-          <div><p className="eyebrow">CEV Equipment</p><h1>{equipmentTarget || active.label}</h1></div>
-          <div className="topbar-status"><span className="role-pill">{roleLoaded ? role : 'AUTH...'}</span><span className="connection-pill" aria-label="Trạng thái kiến trúc: Vercel frontend kết nối Supabase backend">SUPABASE LIVE</span></div>
-        </header>
-
-        <main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}>
-          <AppErrorBoundary key={`${view}:${equipmentTarget}`}>
-            <Suspense fallback={<div className="workspace-loading" role="status">Đang mở workspace…</div>}>
-              <LiveView view={view} equipmentTarget={equipmentTarget} onOpenEquipment={openEquipmentFromQr} onCloseQrResult={closeQrResult} onEditQrResult={editQrResult} />
-            </Suspense>
-          </AppErrorBoundary>
-        </main>
-      </div>
-
-      <nav className="bottom-nav" aria-label="Điều hướng mobile">
-        {visibleNav.map((item) => <button
-          key={item.id}
-          type="button"
-          className={item.id === view && !equipmentTarget ? 'active' : ''}
-          aria-current={item.id === view && !equipmentTarget ? 'page' : undefined}
-          onClick={() => openView(item.id)}
-        >{item.label}</button>)}
-      </nav>
+      <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a><PwaStatus />
+      <aside className="sidebar" aria-label="Điều hướng desktop"><div className="brand"><span className="brand-mark" aria-hidden="true">CEV</span><div><strong>Equipment</strong><small>IATF 16949</small></div></div><nav>{visibleNav.map((item) => <button key={item.id} type="button" className={item.id === view ? 'active' : ''} aria-current={item.id === view ? 'page' : undefined} onClick={() => openView(item.id)}>{item.label}</button>)}</nav><div className="sidebar-user"><strong>{roleLoaded ? role : '...'}</strong><span>{sessionEmail || 'Supabase Auth'}</span></div><div className="sidebar-note">Vercel Frontend<br/>React + Vite + TypeScript<br/>Supabase Backend</div></aside>
+      <div className="app-body"><header className="topbar"><div><p className="eyebrow">CEV Equipment</p><h1>{equipmentTarget || active.label}</h1></div><div className="topbar-status"><span className="role-pill">{roleLoaded ? role : 'AUTH...'}</span><span className="connection-pill">SUPABASE LIVE</span></div></header><main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}><AppErrorBoundary key={`${view}:${equipmentTarget}`}><Suspense fallback={<div className="workspace-loading" role="status">Đang mở workspace…</div>}><LiveView view={view} equipmentTarget={equipmentTarget} onOpenEquipment={openEquipmentFromQr} onCloseQrResult={closeQrResult} onEditQrResult={editQrResult} /></Suspense></AppErrorBoundary></main></div>
+      <nav className="bottom-nav" aria-label="Điều hướng mobile">{visibleNav.map((item) => <button key={item.id} type="button" className={item.id === view && !equipmentTarget ? 'active' : ''} aria-current={item.id === view && !equipmentTarget ? 'page' : undefined} onClick={() => openView(item.id)}>{item.label}</button>)}</nav>
     </div>
   </AppRoleProvider>
 }
