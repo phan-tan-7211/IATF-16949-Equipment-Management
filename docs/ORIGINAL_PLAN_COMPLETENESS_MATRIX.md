@@ -7,9 +7,9 @@ Purpose: prevent feature drift between `SOURCE_FIRST_IMPLEMENTATION_PLAN.md` and
 | Equipment list/profile | DONE | browser smoke |
 | QR entry point | IMPLEMENTED / DEVICE TEST | Android + iPhone real-camera smoke |
 | Daily inspection form | DONE | browser smoke |
-| Maintenance Plan | PARTIAL REVIEW | verify BM03 UI coverage |
+| Maintenance Plan | IMPLEMENTED / BROWSER TEST | verify BM03 create/edit + Item/Standard/Method UX |
 | Maintenance Work Order | DONE | browser smoke |
-| Maintenance Execution / Result | PARTIAL REVIEW | verify BM08 coverage |
+| Maintenance Execution / Result | IMPLEMENTED / BROWSER TEST | verify BM08 ○/△/× + abnormal-action UX |
 | Equipment Handover | PARTIAL REVIEW | BM05 release gate exists; verify dedicated UX/evidence |
 | Downtime / KPI | PARTIAL REVIEW | verify BM06 report coverage |
 | Tooling Master / Change | DONE CORE | browser smoke |
@@ -19,6 +19,29 @@ Purpose: prevent feature drift between `SOURCE_FIRST_IMPLEMENTATION_PLAN.md` and
 | Immutable/server audit | DONE CORE | ADMIN browser smoke |
 | A4/PDF renderer | MISSING | required before declaring original plan complete |
 | Export audit package | MISSING | required before declaring original plan complete |
+
+## BM03 implementation contract
+
+BM-TBSX-03 now persists through `rpc_upsert_maintenance_plan()` into `maintenance_plan` + `maintenance_plan_item` atomically and writes Audit in the same transaction.
+
+- Production Equipment only.
+- Maintenance type PM / PdM / CM.
+- Frequency, planned date/window, responsible person and note.
+- Multiple detailed `Item / Standard / Method` rows.
+- Create/edit uses replace-items transaction semantics so header and detail rows cannot drift.
+- Backend rollback smoke verified plan + 2 items + audit and left zero test records.
+
+## BM08 implementation contract
+
+BM-TBSX-08 now persists through `rpc_record_maintenance_result()` into `maintenance_execution` + `maintenance_result_item`, plus Maintenance Log + Audit in one transaction.
+
+- Linked to an IN_PROGRESS/COMPLETED Work Order.
+- Execution date, periodic frequency and inspection department.
+- Item rows are prefilled from active BM03 where available.
+- Result marks: `○` good, `△` warning, `×` repair.
+- `△/×` requires repair or maintenance action content at backend authority.
+- Each row records repair content, maintenance content and inspector.
+- Backend rollback smoke verified Execution + 2 Result Items + Log + Audit and left zero test records.
 
 ## QR implementation contract
 
@@ -39,4 +62,4 @@ QR is a first-class mobile entry point, not a post-cutover extra.
 
 ## Rule
 
-No future statement that the original plan is "complete" may be made while this matrix contains `MISSING`, `PARTIAL REVIEW`, or `DEVICE TEST` items.
+No future statement that the original plan is "complete" may be made while this matrix contains `MISSING`, `PARTIAL REVIEW`, `BROWSER TEST`, or `DEVICE TEST` items.
