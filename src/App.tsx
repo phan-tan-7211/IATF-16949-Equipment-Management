@@ -71,13 +71,13 @@ export default function App() {
           onClick={() => setView(item.id)}
         >{item.label}</button>)}
       </nav>
-      <div className="sidebar-note">Vercel Frontend<br/>Apps Script Backend<br/>Google Sheets / Drive</div>
+      <div className="sidebar-note">Vercel Frontend<br/>React + Vite + TypeScript<br/>Supabase Backend</div>
     </aside>
 
     <div className="app-body">
       <header className="topbar">
         <div><p className="eyebrow">CEV Equipment</p><h1>{active.label}</h1></div>
-        <span className="connection-pill" aria-label="Trạng thái kiến trúc: Vercel frontend kết nối Apps Script backend">PRODUCTION LIVE</span>
+        <span className="connection-pill" aria-label="Trạng thái kiến trúc: Vercel frontend kết nối Supabase backend">SUPABASE LIVE</span>
       </header>
 
       <main id="main-content" className={`main-content${view === 'equipment' ? ' equipment-main' : ''}`} tabIndex={-1}>
