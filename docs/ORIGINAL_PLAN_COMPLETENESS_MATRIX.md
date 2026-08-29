@@ -14,7 +14,8 @@ Purpose: prevent feature drift between `SOURCE_FIRST_IMPLEMENTATION_PLAN.md` and
 | Downtime / KPI | IMPLEMENTED / BROWSER TEST | verify BM06 monthly report + downtime entry UX |
 | Tooling Master / Change | DONE CORE | browser smoke |
 | Calibration Master / Due | DONE CORE | browser smoke |
-| Calibration Vendor Quote History | MISSING/REVIEW | must reconcile with source requirement |
+| Calibration post-evaluation | IMPLEMENTED / BROWSER TEST | verify pending → evaluated workflow and role UX |
+| Calibration Vendor Quote History | IMPLEMENTED / BROWSER TEST | verify source snapshot + provider/date subtotal UX |
 | Auth / RBAC | DONE CORE | non-ADMIN real-user smoke |
 | Immutable/server audit | DONE CORE | ADMIN browser smoke |
 | A4/PDF renderer | MISSING | required before declaring original plan complete |
@@ -69,6 +70,24 @@ BM-TBSX-06 now uses `downtime_event` as the event source and `rpc_upsert_downtim
 - Monthly equipment table marks days with downtime and shows downtime minutes/failure count.
 - Cause Pareto is derived from the same downtime events.
 - Backend rollback smoke verified create + close/update + Audit and left zero test records.
+
+## Calibration parity contract
+
+Post-evaluation is restored without adding a 21st G1 table:
+
+- `rpc_evaluate_calibration()` updates the existing Calibration Log source snapshot and writes Audit.
+- Results are `PASS`, `LIMITED_USE`, `FAIL`.
+- `LIMITED_USE`/`FAIL` require an evaluation note.
+- One Calibration Log can be evaluated only once.
+- Allowed roles: QUALITY, MANAGER, ADMIN.
+- Backend rollback smoke verified evaluation + Audit + duplicate-evaluation guard.
+
+Vendor quote history follows the frozen domain schema:
+
+- Calibration ID, provider, amount VND, source date and source document.
+- Stored in `calibration_vendor_quote` as historical source snapshot, not live price master data.
+- UI groups snapshots by provider/source date and shows item count/subtotal without inventing missing source values.
+- Backend rollback smoke verified quote + Audit and left zero test records.
 
 ## QR implementation contract
 
