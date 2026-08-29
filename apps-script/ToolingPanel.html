@@ -1,0 +1,59 @@
+<section id="toolingWorkflowPanel" style="display:none;max-width:1400px;margin:0 auto 20px">
+  <div class="box">
+    <div class="head"><div><h2>BM-TBSX-09 · Đăng ký Jig, Gá và Dụng cụ sản xuất</h2><div class="muted">Mã dụng cụ là mã quản lý chính thức. Dụng cụ khách hàng phải giữ mã gốc của khách hàng.</div></div></div>
+    <form id="toolingMasterForm" class="body" onsubmit="submitToolingMaster(event)">
+      <div class="grid">
+        <div class="field"><label for="tId">Mã quản lý *</label><input id="tId" required></div>
+        <div class="field"><label for="tName">Tên jig/gá/dụng cụ *</label><input id="tName" required></div>
+        <div class="field"><label for="tType">Loại *</label><select id="tType"><option value="JIG">Jig</option><option value="FIXTURE">Gá</option><option value="MOLD">Khuôn</option><option value="DIE">Khuôn dập</option><option value="CUTTING_TOOL">Dao cụ</option><option value="PERISHABLE_TOOL">Dụng cụ nhanh hỏng</option><option value="OTHER">Khác</option></select></div>
+        <div class="field"><label for="tSerial">Số serial / tài sản</label><input id="tSerial"></div>
+        <div class="field wide"><label for="tUsedFor">Sử dụng cho sản phẩm / line / máy</label><input id="tUsedFor"></div>
+        <div class="field"><label for="tOwnership">Sở hữu *</label><select id="tOwnership" onchange="syncToolingOwnership()"><option value="COMPANY">Công ty</option><option value="CUSTOMER">Khách hàng</option></select></div>
+        <div class="field"><label for="tCustomer">Tên khách hàng</label><input id="tCustomer"></div>
+        <div class="field"><label for="tDepartment">Bộ phận chủ quản</label><input id="tDepartment" value="Phòng Kỹ thuật"></div>
+        <div class="field"><label for="tLocation">Vị trí lưu giữ</label><input id="tLocation"></div>
+        <div class="field"><label for="tCommission">Ngày đưa vào sử dụng</label><input id="tCommission" type="date"></div>
+        <div class="field"><label for="tCycle">Chu kỳ kiểm tra (ngày)</label><input id="tCycle" type="number" min="1"></div>
+        <div class="field wide"><label for="tNote">Ghi chú</label><textarea id="tNote"></textarea></div>
+      </div>
+      <div class="buttons"><button id="tSave" class="btn primary">Lưu danh mục dụng cụ</button><span id="tStatus" class="muted"></span></div>
+    </form>
+  </div>
+
+  <div class="box">
+    <div class="head"><div><h2>BM-TBSX-10 · Kế hoạch kiểm tra / bảo trì</h2><div class="muted">Kế hoạch phải bám vào một mã dụng cụ đã có trong BM-09.</div></div></div>
+    <form id="toolingPlanForm" class="body" onsubmit="submitToolingPlan(event)">
+      <div class="grid">
+        <div class="field"><label for="tpTooling">Dụng cụ *</label><select id="tpTooling" required></select></div>
+        <div class="field"><label for="tpItem">Hạng mục kiểm tra *</label><input id="tpItem" required></div>
+        <div class="field wide"><label for="tpCriteria">Tiêu chuẩn chấp nhận *</label><input id="tpCriteria" required></div>
+        <div class="field"><label for="tpFrequencyType">Tần suất *</label><select id="tpFrequencyType"><option value="DAY">Ngày</option><option value="WEEK">Tuần</option><option value="MONTH">Tháng</option><option value="USE_COUNT">Số lần sử dụng</option><option value="OUTPUT_COUNT">Sản lượng</option></select></div>
+        <div class="field"><label for="tpFrequencyValue">Giá trị tần suất *</label><input id="tpFrequencyValue" type="number" min="1" required></div>
+        <div class="field"><label for="tpResponsible">Người thực hiện</label><input id="tpResponsible"></div>
+        <div class="field"><label for="tpLastDate">Kết quả gần nhất</label><input id="tpLastDate" type="date"></div>
+        <div class="field wide"><label for="tpNote">Ghi chú</label><textarea id="tpNote"></textarea></div>
+      </div>
+      <div class="buttons"><button id="tpSave" class="btn primary">Lưu kế hoạch</button><span id="tpStatus" class="muted"></span></div>
+    </form>
+  </div>
+
+  <div class="box">
+    <div class="head"><div><h2>BM-TBSX-11 · Thay đổi thiết kế / sửa đổi dụng cụ</h2><div class="muted">Thay đổi thiết kế phải lập hồ sơ trước khi thực hiện. Hoàn tất chỉ khi tài liệu liên quan đã được cập nhật.</div></div></div>
+    <form id="toolingModificationForm" class="body" onsubmit="submitToolingModification(event)">
+      <div class="grid">
+        <div class="field"><label for="tmTooling">Dụng cụ *</label><select id="tmTooling" required></select></div>
+        <div class="field"><label for="tmDate">Ngày *</label><input id="tmDate" type="date" required></div>
+        <div class="field"><label for="tmType">Loại *</label><select id="tmType"><option value="DESIGN_CHANGE">Thay đổi thiết kế</option><option value="PHYSICAL_MODIFICATION">Sửa đổi vật lý</option></select></div>
+        <div class="field"><label for="tmEcn">Số ECN</label><input id="tmEcn"></div>
+        <div class="field wide"><label for="tmReason">Lý do *</label><textarea id="tmReason" required></textarea></div>
+        <div class="field wide"><label for="tmBeforeAfter">Nội dung trước → sau *</label><textarea id="tmBeforeAfter" required></textarea></div>
+      </div>
+      <div class="buttons"><button id="tmSave" class="btn primary">Tạo hồ sơ thay đổi</button><span id="tmStatus" class="muted"></span></div>
+    </form>
+  </div>
+
+  <div class="box">
+    <div class="head"><div><h2>Theo dõi hồ sơ thay đổi</h2><div class="muted">Nếu thay đổi ảnh hưởng chất lượng, thực hiện xác nhận Chất lượng trước khi áp dụng.</div></div><span id="tmSummary" class="muted"></span></div>
+    <div class="table"><table><thead><tr><th>Mã hồ sơ</th><th>Dụng cụ</th><th>Loại / lý do</th><th>Đề xuất / phê duyệt / QA</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="toolingModificationRows"></tbody></table></div>
+  </div>
+</section>
