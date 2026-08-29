@@ -23,6 +23,12 @@ export type EquipmentEditInput = {
   status: string
 }
 
+export type EquipmentPhotoPreview = {
+  exists: boolean
+  path: string
+  signedUrl: string
+}
+
 export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
   const client = requireSupabase()
   const { data, error } = await client
@@ -149,9 +155,25 @@ export async function listEquipmentPhotos(equipmentId: string) {
   return data || []
 }
 
+export async function getEquipmentPhotoPreview(equipmentId: string): Promise<EquipmentPhotoPreview> {
+  const client = requireSupabase()
+  const normalizedId = equipmentId.trim()
+  if (!normalizedId) return { exists: false, path: '', signedUrl: '' }
+
+  const files = await listEquipmentPhotos(normalizedId)
+  const canonical = files.find((file) => file.name === EQUIPMENT_PHOTO_NAME)
+  const selected = canonical || files[0]
+  if (!selected) return { exists: false, path: '', signedUrl: '' }
+
+  const path = `${normalizedId}/${selected.name}`
+  const { data, error } = await client.storage.from('equipment-photos').createSignedUrl(path, 3600)
+  if (error) throw new Error(`SUPABASE_PHOTO_URL_FAILED: ${error.message}`)
+  return { exists: true, path, signedUrl: data.signedUrl }
+}
+
 export async function hasEquipmentPhoto(equipmentId: string) {
-  const files = await listEquipmentPhotos(equipmentId)
-  return files.some((file) => file.name === EQUIPMENT_PHOTO_NAME) || files.length > 0
+  const preview = await getEquipmentPhotoPreview(equipmentId)
+  return preview.exists
 }
 
 export async function uploadEquipmentPhoto(equipmentId: string, file: File) {
@@ -163,13 +185,12 @@ export async function uploadEquipmentPhoto(equipmentId: string, file: File) {
   const path = `${normalizedId}/${EQUIPMENT_PHOTO_NAME}`
 
   const { error } = await client.storage.from('equipment-photos').upload(path, optimizedFile, {
-    cacheControl: '31536000',
+    cacheControl: '3600',
     upsert: true,
     contentType: 'image/webp',
   })
   if (error) throw new Error(`SUPABASE_PHOTO_UPLOAD_FAILED: ${error.message}`)
 
-  // Enforce 1 equipment = 1 photo. Remove legacy timestamp files after the canonical upload succeeds.
   const files = await listEquipmentPhotos(normalizedId)
   const stalePaths = files
     .filter((item) => item.name !== EQUIPMENT_PHOTO_NAME)
