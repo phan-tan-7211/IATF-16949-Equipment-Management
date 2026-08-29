@@ -1,3 +1,4 @@
+<script>
 var calibrationEntryMasters=[],calibrationEntryEquipments=[];
 var openScreenCalibrationEntryBase_=openScreen;
 openScreen=function(name){
@@ -69,3 +70,4 @@ function submitCalibrationEntry(event){
 setTimeout(function(){
   if(el('screenCalibration')&&el('screenCalibration').classList.contains('on'))toggleCalibrationEntry_('Calibration');
 },500);
+</script>
