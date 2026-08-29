@@ -5,30 +5,68 @@ export type MaintenanceEquipmentOption = { equipmentId: string; equipmentName: s
 export type LiveMaintenanceWorkOrder = {
   workOrderId: string; equipmentId: string; sourceType: string; requestedAt: string; requestedBy: string; reason: string; priority: string; status: MaintenanceWorkflowStatus; approvedBy: string; approvedAt: string
 }
-export type LiveMaintenancePlan = { planId: string; equipmentId: string; maintenanceType: string; plannedDate: string; responsiblePerson: string; status: string }
+export type LiveMaintenancePlanItem = { itemId: string; itemName: string; standard: string; method: string; note: string; sequence: number }
+export type LiveMaintenancePlan = {
+  planId: string; equipmentId: string; maintenanceType: string; frequency: string; plannedDate: string; responsiblePerson: string; scheduledWindow: string; note: string; status: string; active: boolean; items: LiveMaintenancePlanItem[]
+}
 export type LiveHandover = { handoverId: string; workOrderId: string; equipmentId: string; accepted: boolean; condition: string; handoverAt: string }
+export type MaintenancePlanInput = {
+  planId?: string
+  equipmentId: string
+  maintenanceType: string
+  frequency: string
+  plannedDate: string
+  responsiblePerson: string
+  scheduledWindow: string
+  note: string
+  active?: boolean
+  items: Array<{ itemName: string; standard: string; method: string; note?: string }>
+}
 
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 function bool(value: unknown) { return value === true || ['TRUE', '1', 'YES'].includes(text(value).toUpperCase()) }
+function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 
 export async function loadLiveMaintenance() {
-  const [equipmentResult, planResult, woResult, handoverResult] = await Promise.all([
+  const [equipmentResult, planResult, planItemResult, woResult, handoverResult] = await Promise.all([
     supabase.from('equipment_master').select('equipment_id,equipment_name,equipment_type,status,active').eq('active', true),
-    supabase.from('maintenance_plan').select('*'),
+    supabase.from('maintenance_plan').select('*').order('created_at', { ascending: false }),
+    supabase.from('maintenance_plan_item').select('*'),
     supabase.from('maintenance_work_order').select('*').order('created_at', { ascending: false }),
     supabase.from('equipment_handover').select('*').order('created_at', { ascending: false }),
   ])
-  for (const result of [equipmentResult, planResult, woResult, handoverResult]) if (result.error) throw result.error
+  for (const result of [equipmentResult, planResult, planItemResult, woResult, handoverResult]) if (result.error) throw result.error
 
   const equipment: MaintenanceEquipmentOption[] = ((equipmentResult.data || []) as Array<Record<string, unknown>>)
     .filter((row) => text(row.equipment_id) && text(row.equipment_type) === 'PRODUCTION' && text(row.status) !== 'DISPOSED')
     .map((row) => ({ equipmentId: text(row.equipment_id), equipmentName: text(row.equipment_name) }))
     .toSorted((a, b) => a.equipmentId.localeCompare(b.equipmentId))
 
+  const itemsByPlan = new Map<string, LiveMaintenancePlanItem[]>()
+  for (const row of (planItemResult.data || []) as Array<Record<string, unknown>>) {
+    const source = (row.source_data as Record<string, unknown> | null) || {}
+    const item: LiveMaintenancePlanItem = {
+      itemId: text(row.item_id), itemName: text(source.itemName), standard: text(source.standard), method: text(source.method), note: text(source.note), sequence: number(source.sequence),
+    }
+    const planId = text(row.plan_id)
+    itemsByPlan.set(planId, [...(itemsByPlan.get(planId) || []), item])
+  }
+
   const plans: LiveMaintenancePlan[] = ((planResult.data || []) as Array<Record<string, unknown>>).map((row) => {
     const source = (row.source_data as Record<string, unknown> | null) || {}
+    const planId = text(row.plan_id)
     return {
-      planId: text(row.plan_id), equipmentId: text(row.equipment_id), maintenanceType: text(source.maintenanceType), plannedDate: text(source.plannedDate), responsiblePerson: text(source.responsiblePerson), status: text(source.status) || (row.active === false ? 'INACTIVE' : 'ACTIVE'),
+      planId,
+      equipmentId: text(row.equipment_id),
+      maintenanceType: text(source.maintenanceType),
+      frequency: text(source.frequency),
+      plannedDate: text(source.plannedDate),
+      responsiblePerson: text(source.responsiblePerson),
+      scheduledWindow: text(source.scheduledWindow),
+      note: text(source.note),
+      status: text(source.status) || (row.active === false ? 'INACTIVE' : 'ACTIVE'),
+      active: row.active !== false,
+      items: (itemsByPlan.get(planId) || []).toSorted((a, b) => a.sequence - b.sequence),
     }
   })
 
@@ -44,6 +82,13 @@ export async function loadLiveMaintenance() {
   }))
 
   return { equipment, plans, workOrders, handovers }
+}
+
+export async function upsertMaintenancePlan(input: MaintenancePlanInput) {
+  const { data, error } = await supabase.rpc('rpc_upsert_maintenance_plan', { p_input: input })
+  if (error) throw error
+  const result = (data || {}) as Record<string, unknown>
+  return { planId: text(result.planId), equipmentId: text(result.equipmentId), itemCount: number(result.itemCount) }
 }
 
 export async function createManualWorkOrder(request: { operationId: string; input: { equipmentId: string; sourceType: string; sourceId: string; reason: string; priority: string; method?: string; plannedStartAt?: string; plannedEndAt?: string } }) {
