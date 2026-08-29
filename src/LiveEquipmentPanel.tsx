@@ -4,6 +4,7 @@ import { EquipmentProfile } from './EquipmentProfile'
 import { type LiveEquipment } from './data/liveEquipment'
 import {
   getEquipmentPhotoPreview,
+  getEquipmentPhotoPreviews,
   loadSupabaseEquipment,
   updateSupabaseEquipment,
   uploadEquipmentPhoto,
@@ -88,8 +89,20 @@ export function LiveEquipmentPanel() {
   }
 
   async function refreshPhotoStates(result: LiveEquipment[]) {
-    setPhotos(Object.fromEntries(result.map((row) => [row.equipmentId, { state: 'loading', url: '' } as PhotoInfo])))
-    await Promise.all(result.map((row) => refreshOnePhoto(row.equipmentId)))
+    const loadingState = Object.fromEntries(result.map((row) => [row.equipmentId, { state: 'loading', url: '' } as PhotoInfo]))
+    setPhotos(loadingState)
+    try {
+      const previews = await getEquipmentPhotoPreviews(result.map((row) => row.equipmentId))
+      setPhotos(Object.fromEntries(result.map((row) => {
+        const preview = previews[row.equipmentId]
+        return [row.equipmentId, {
+          state: preview?.exists ? 'yes' : 'no',
+          url: preview?.signedUrl || '',
+        } as PhotoInfo]
+      })))
+    } catch {
+      setPhotos(Object.fromEntries(result.map((row) => [row.equipmentId, { state: 'error', url: '' } as PhotoInfo])))
+    }
   }
 
   async function reloadEquipment() {
