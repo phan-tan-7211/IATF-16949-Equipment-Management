@@ -7,5 +7,29 @@ function bridgeInvokeV2(request) {
     return executeDailyInspectionSubmit_(request, actor)
   }
 
+  if (request.action === 'toolingCreate') {
+    return toolingCreate(request)
+  }
+
+  if (request.action === 'toolingPlanCreate') {
+    return toolingPlanCreate(request)
+  }
+
+  if (request.action === 'toolingModificationCreate') {
+    return toolingModificationCreate(request)
+  }
+
+  if (request.action === 'toolingModificationApprove') {
+    return toolingModificationApprove(request)
+  }
+
+  if (request.action === 'toolingModificationConfirmQuality') {
+    return toolingModificationConfirmQuality(request)
+  }
+
+  if (request.action === 'toolingModificationComplete') {
+    return toolingModificationComplete(request)
+  }
+
   return executeTransportRequest_(request, actor)
 }
