@@ -173,10 +173,8 @@ export default function App() {
         </main>
       </div>
 
-      {view !== 'qr' && !equipmentTarget ? <button className="qr-fab" type="button" aria-label="Quét QR thiết bị" onClick={() => openView('qr')}><span aria-hidden="true">⌗</span><b>Quét QR</b></button> : null}
-
       <nav className="bottom-nav" aria-label="Điều hướng mobile">
-        {visibleNav.filter((item) => item.id !== 'qr').map((item) => <button
+        {visibleNav.map((item) => <button
           key={item.id}
           type="button"
           className={item.id === view && !equipmentTarget ? 'active' : ''}
