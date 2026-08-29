@@ -1,6 +1,7 @@
 import { EVIDENCE_FOLDERS, PERSISTENCE_CONTRACT_VERSION, PERSISTENCE_TABLES } from './persistenceContract'
 
 const DEFAULT_APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzykTZpW60nZEdwXC3Wn2nRZe1ePrvhUwoER1cHjciiDNGZ34kWv_vfvhEpwSor-f95/exec'
+const CANONICAL_VERCEL_FRONTEND_ORIGIN = 'https://iatf-16949-equipment-management.vercel.app'
 
 export const GOOGLE_PERSISTENCE_CONFIG = {
   contractVersion: PERSISTENCE_CONTRACT_VERSION,
@@ -18,8 +19,9 @@ export const GOOGLE_PERSISTENCE_CONFIG = {
     'handover-records': '1Q38dxWv-jh4l4nK0_Yii8WfPnhZ0cpPD',
     'official-pdf-snapshots': '1B-x4wnMLJIxu_mc-XVOHrbRVbhtXE7Im',
   } satisfies Record<(typeof EVIDENCE_FOLDERS)[number], string>,
-  frontendDirectGoogleApiAllowed: false,
   frontendRuntime: 'VERCEL_REACT',
+  canonicalFrontendOrigin: CANONICAL_VERCEL_FRONTEND_ORIGIN,
+  frontendDirectGoogleApiAllowed: false,
   persistenceBoundary: 'APPS_SCRIPT_BACKEND',
   browserTransport: 'POSTMESSAGE_APPS_SCRIPT_BRIDGE',
   diagnosticUi: 'APPS_SCRIPT_APPSHELL',
