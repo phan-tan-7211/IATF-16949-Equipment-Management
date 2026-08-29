@@ -12,6 +12,17 @@ function sourceText(source: unknown, key: string) {
   return value === null || value === undefined ? '' : String(value).trim()
 }
 
+export type EquipmentEditInput = {
+  oldEquipmentId: string
+  equipmentId: string
+  equipmentType: 'PRODUCTION' | 'MEASUREMENT'
+  equipmentName: string
+  department: string
+  model: string
+  serialNumber: string
+  status: string
+}
+
 export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
   const client = requireSupabase()
   const { data, error } = await client
@@ -43,6 +54,23 @@ export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
       updatedAt: String(row.updated_at || ''),
     }
   })
+}
+
+export async function updateSupabaseEquipment(input: EquipmentEditInput) {
+  const client = requireSupabase()
+  const payload = {
+    p_old_equipment_id: input.oldEquipmentId.trim(),
+    p_equipment_id: input.equipmentId.trim(),
+    p_equipment_type: input.equipmentType,
+    p_equipment_name: input.equipmentName.trim(),
+    p_model: input.model.trim(),
+    p_serial_number: input.serialNumber.trim(),
+    p_department: input.department.trim(),
+    p_status: input.status.trim() || 'RUNNING',
+  }
+
+  const { error } = await client.rpc('admin_update_equipment', payload)
+  if (error) throw new Error(`SUPABASE_EQUIPMENT_SAVE_FAILED: ${error.message}`)
 }
 
 function safeFileName(name: string) {
