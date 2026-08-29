@@ -28,6 +28,42 @@ export function SupabaseTestPanel() {
     return () => data.subscription.unsubscribe()
   }, [])
 
+  async function signUpAndBootstrapAdmin() {
+    if (!supabase) return
+    setLoading(true)
+    const { data, error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      setLoading(false)
+      setMessage(`SIGNUP_ERROR: ${error.message}`)
+      return
+    }
+    if (!data.session) {
+      setLoading(false)
+      setMessage('SIGNUP_OK: confirm the email first, then Sign in TEST and click Bootstrap first ADMIN.')
+      return
+    }
+    const { error: bootstrapError } = await supabase.rpc('bootstrap_first_admin')
+    setLoading(false)
+    if (bootstrapError) {
+      setMessage(`BOOTSTRAP_ERROR: ${bootstrapError.message}`)
+      return
+    }
+    setSessionEmail(data.user?.email || '')
+    setMessage('SIGNUP_OK + ADMIN_BOOTSTRAP_OK')
+  }
+
+  async function bootstrapAdmin() {
+    if (!supabase) return
+    setLoading(true)
+    const { error } = await supabase.rpc('bootstrap_first_admin')
+    setLoading(false)
+    if (error) {
+      setMessage(`BOOTSTRAP_ERROR: ${error.message}`)
+      return
+    }
+    setMessage('ADMIN_BOOTSTRAP_OK')
+  }
+
   async function signIn() {
     if (!supabase) return
     setLoading(true)
@@ -97,11 +133,15 @@ export function SupabaseTestPanel() {
         <div className="card stack-sm">
           <label>Email<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" /></label>
           <label>Password<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" /></label>
-          <button type="button" disabled={!config.configured || loading || !email || !password} onClick={() => void signIn()}>Sign in TEST</button>
+          <div className="actions-row">
+            <button type="button" disabled={!config.configured || loading || !email || !password} onClick={() => void signUpAndBootstrapAdmin()}>Create first TEST Admin</button>
+            <button type="button" disabled={!config.configured || loading || !email || !password} onClick={() => void signIn()}>Sign in TEST</button>
+          </div>
         </div>
       )}
 
       <div className="actions-row">
+        <button type="button" disabled={!sessionEmail || loading} onClick={() => void bootstrapAdmin()}>Bootstrap first ADMIN</button>
         <button type="button" disabled={!sessionEmail || loading} onClick={() => void loadEquipment()}>Read Equipment</button>
         <button type="button" disabled={!sessionEmail || loading} onClick={() => void testStorage()}>Test Storage</button>
         <button type="button" disabled={!sessionEmail || loading} onClick={() => void signOut()}>Sign out</button>
