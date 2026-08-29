@@ -28,6 +28,15 @@ type Check = {
   detail: string
 }
 
+const WORKSPACE_SMOKE = [
+  { phase: 'equipment', label: 'Equipment', verify: '131 rows · thumbnails · profile · edit drawer · paste ảnh' },
+  { phase: 'inspection', label: 'Inspection', verify: 'history · filter · drawer nhập kiểm tra · X/STOP_REPAIR UI' },
+  { phase: 'maintenance', label: 'Maintenance', verify: 'WO table · detail drawer · workflow actions · BM-05 gate' },
+  { phase: 'calibration', label: 'Calibration', verify: 'profile · log history · record calibration · certificate action' },
+  { phase: 'tooling', label: 'Tooling', verify: 'Master / Plan / Modification tabs · workflow drawer' },
+  { phase: 'audit', label: 'Audit', verify: 'ADMIN-only navigation · filters · before/after detail' },
+] as const
+
 export function SupabaseTestPanel() {
   const config = getSupabaseConfigStatus()
   const [email, setEmail] = useState('')
@@ -38,6 +47,7 @@ export function SupabaseTestPanel() {
   const [checks, setChecks] = useState<Check[]>([])
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
   const [writeSmoke, setWriteSmoke] = useState<WriteSmoke | null>(null)
+  const [workspaceDone, setWorkspaceDone] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!supabase) return
@@ -65,6 +75,7 @@ export function SupabaseTestPanel() {
     setChecks([])
     setDiagnostics(null)
     setWriteSmoke(null)
+    setWorkspaceDone({})
     setMessage('Signed out')
   }
 
@@ -141,6 +152,7 @@ export function SupabaseTestPanel() {
   }
 
   const failedCount = checks.filter((check) => check.state === 'FAIL').length
+  const workspacePassCount = WORKSPACE_SMOKE.filter((item) => workspaceDone[item.phase]).length
 
   return (
     <section className="panel stack-lg" aria-label="Supabase cutover diagnostic">
@@ -194,6 +206,22 @@ export function SupabaseTestPanel() {
         <div>Canonical equipment photos: {diagnostics.storage.canonical_photo_objects}</div>
         <div>Noncanonical photos: {diagnostics.storage.noncanonical_photo_objects}</div>
         <div>Photo IDs without Equipment: {diagnostics.storage.photo_ids_without_equipment}</div>
+      </div> : null}
+
+      {sessionEmail ? <div className="card stack-sm">
+        <strong>Browser UX smoke · {workspacePassCount}/{WORKSPACE_SMOKE.length}</strong>
+        <p>Mở từng workspace trong tab mới để giữ session. Sau khi kiểm UI thật, đánh dấu PASS tại đây.</p>
+        {WORKSPACE_SMOKE.map((item) => <div key={item.phase} className="actions-row">
+          <input
+            aria-label={`Đánh dấu ${item.label} PASS`}
+            type="checkbox"
+            checked={Boolean(workspaceDone[item.phase])}
+            onChange={(event) => setWorkspaceDone((current) => ({ ...current, [item.phase]: event.target.checked }))}
+          />
+          <a href={`?phase3=${item.phase}`} target="_blank" rel="noreferrer">Mở {item.label}</a>
+          <span>{item.verify}</span>
+        </div>)}
+        <strong>{workspacePassCount === WORKSPACE_SMOKE.length ? 'BROWSER UX CHECKLIST PASS' : 'BROWSER UX CHECKLIST PENDING'}</strong>
       </div> : null}
     </section>
   )
