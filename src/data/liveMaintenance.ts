@@ -6,7 +6,7 @@ export type LiveMaintenanceWorkOrder = {
   workOrderId: string; equipmentId: string; sourceType: string; requestedAt: string; requestedBy: string; reason: string; priority: string; status: MaintenanceWorkflowStatus; approvedBy: string; approvedAt: string
 }
 export type LiveMaintenancePlan = { planId: string; equipmentId: string; maintenanceType: string; plannedDate: string; responsiblePerson: string; status: string }
-export type LiveHandover = { handoverId: string; equipmentId: string; accepted: boolean; condition: string; handoverAt: string }
+export type LiveHandover = { handoverId: string; workOrderId: string; equipmentId: string; accepted: boolean; condition: string; handoverAt: string }
 
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 function bool(value: unknown) { return value === true || ['TRUE', '1', 'YES'].includes(text(value).toUpperCase()) }
@@ -23,7 +23,7 @@ export async function loadLiveMaintenance() {
   const equipment: MaintenanceEquipmentOption[] = ((equipmentResult.data || []) as Array<Record<string, unknown>>)
     .filter((row) => text(row.equipment_id) && text(row.equipment_type) === 'PRODUCTION' && text(row.status) !== 'DISPOSED')
     .map((row) => ({ equipmentId: text(row.equipment_id), equipmentName: text(row.equipment_name) }))
-    .sort((a, b) => a.equipmentId.localeCompare(b.equipmentId))
+    .toSorted((a, b) => a.equipmentId.localeCompare(b.equipmentId))
 
   const plans: LiveMaintenancePlan[] = ((planResult.data || []) as Array<Record<string, unknown>>).map((row) => {
     const source = (row.source_data as Record<string, unknown> | null) || {}
@@ -40,7 +40,7 @@ export async function loadLiveMaintenance() {
   })
 
   const handovers: LiveHandover[] = ((handoverResult.data || []) as Array<Record<string, unknown>>).map((row) => ({
-    handoverId: text(row.handover_id), equipmentId: text(row.equipment_id), accepted: bool(row.accepted), condition: text(row.equipment_condition), handoverAt: text(row.created_at),
+    handoverId: text(row.handover_id), workOrderId: text(row.work_order_id), equipmentId: text(row.equipment_id), accepted: bool(row.accepted), condition: text(row.equipment_condition), handoverAt: text(row.created_at),
   }))
 
   return { equipment, plans, workOrders, handovers }
