@@ -11,6 +11,7 @@ const LiveDashboardPanel = lazy(() => import('./LiveDashboardPanel').then((modul
 const LiveEquipmentPanel = lazy(() => import('./LiveEquipmentPanel').then((module) => ({ default: module.LiveEquipmentPanel })))
 const LiveInspectionPanel = lazy(() => import('./LiveInspectionPanel').then((module) => ({ default: module.LiveInspectionPanel })))
 const LiveMaintenancePanel = lazy(() => import('./LiveMaintenancePanel').then((module) => ({ default: module.LiveMaintenancePanel })))
+const LiveMaintenancePlanPanel = lazy(() => import('./LiveMaintenancePlanPanel').then((module) => ({ default: module.LiveMaintenancePlanPanel })))
 const LiveQrScannerPanel = lazy(() => import('./LiveQrScannerPanel').then((module) => ({ default: module.LiveQrScannerPanel })))
 const QrEquipmentResult = lazy(() => import('./QrEquipmentResult').then((module) => ({ default: module.QrEquipmentResult })))
 const LiveToolingPanel = lazy(() => import('./LiveToolingPanel').then((module) => ({ default: module.LiveToolingPanel })))
@@ -62,7 +63,7 @@ function LiveView({
   if (view === 'equipment' && equipmentTarget) return <QrEquipmentResult equipmentId={equipmentTarget} onClose={onCloseQrResult} onEdit={onEditQrResult} />
   if (view === 'equipment') return <LiveEquipmentPanel />
   if (view === 'inspection') return <LiveInspectionPanel />
-  if (view === 'maintenance') return <LiveMaintenancePanel />
+  if (view === 'maintenance') return <div className="maintenance-workspace-stack"><LiveMaintenancePlanPanel /><LiveMaintenancePanel /></div>
   if (view === 'tooling') return <LiveToolingPanel />
   if (view === 'calibration') return <LiveCalibrationPanel />
   return <LiveAuditPanel />
