@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { type LiveEquipment } from './data/liveEquipment'
 import {
+  hasEquipmentPhoto,
   loadSupabaseEquipment,
   updateSupabaseEquipment,
   uploadEquipmentPhoto,
@@ -15,6 +16,8 @@ const statusLabel: Record<string, string> = {
   DISPOSED: 'Thanh lý',
   UNKNOWN: 'Chưa rõ',
 }
+
+type PhotoState = 'loading' | 'yes' | 'no' | 'error'
 
 function clipboardFileExtension(mimeType: string) {
   if (mimeType === 'image/png') return 'png'
@@ -39,12 +42,25 @@ function toDraft(row: LiveEquipment): EquipmentEditInput {
 export function LiveEquipmentPanel() {
   const [rows, setRows] = useState<LiveEquipment[]>([])
   const [drafts, setDrafts] = useState<Record<string, EquipmentEditInput>>({})
+  const [photoStates, setPhotoStates] = useState<Record<string, PhotoState>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [uploadingId, setUploadingId] = useState('')
   const [savingId, setSavingId] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
+
+  async function refreshPhotoStates(result: LiveEquipment[]) {
+    setPhotoStates(Object.fromEntries(result.map((row) => [row.equipmentId, 'loading' as PhotoState])))
+    await Promise.all(result.map(async (row) => {
+      try {
+        const exists = await hasEquipmentPhoto(row.equipmentId)
+        setPhotoStates((current) => ({ ...current, [row.equipmentId]: exists ? 'yes' : 'no' }))
+      } catch {
+        setPhotoStates((current) => ({ ...current, [row.equipmentId]: 'error' }))
+      }
+    }))
+  }
 
   async function reloadEquipment() {
     setLoading(true)
@@ -53,6 +69,7 @@ export function LiveEquipmentPanel() {
       setRows(result)
       setDrafts(Object.fromEntries(result.map((row) => [row.equipmentId, toDraft(row)])))
       setError('')
+      void refreshPhotoStates(result)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể tải Equipment Master')
     } finally {
@@ -91,13 +108,33 @@ export function LiveEquipmentPanel() {
     }
   }
 
+  async function confirmPhotoReplacement(equipmentId: string) {
+    let state = photoStates[equipmentId]
+    if (!state || state === 'loading' || state === 'error') {
+      try {
+        const exists = await hasEquipmentPhoto(equipmentId)
+        state = exists ? 'yes' : 'no'
+        setPhotoStates((current) => ({ ...current, [equipmentId]: state as PhotoState }))
+      } catch {
+        state = 'error'
+      }
+    }
+    if (state !== 'yes') return true
+    return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Bạn có chắc muốn thay thế ảnh hiện tại?`)
+  }
+
   async function handlePhotoUpload(equipmentId: string, file: File | undefined) {
     if (!file) return
+    if (!await confirmPhotoReplacement(equipmentId)) {
+      setMessage('Đã hủy thay ảnh.')
+      return
+    }
     setUploadingId(equipmentId)
     setMessage('')
     try {
       const path = await uploadEquipmentPhoto(equipmentId, file)
-      setMessage(`UPLOAD_OK: ${path}`)
+      setPhotoStates((current) => ({ ...current, [equipmentId]: 'yes' }))
+      setMessage(`Ảnh đã lưu: ${path}`)
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'UPLOAD_FAILED')
     } finally {
@@ -107,7 +144,7 @@ export function LiveEquipmentPanel() {
 
   async function handleClipboardUpload(equipmentId: string) {
     if (!navigator.clipboard?.read) {
-      setMessage('CLIPBOARD_IMAGE_NOT_SUPPORTED')
+      setMessage('Trình duyệt không hỗ trợ đọc ảnh từ clipboard.')
       return
     }
 
@@ -118,14 +155,19 @@ export function LiveEquipmentPanel() {
       for (const item of clipboardItems) {
         const imageType = item.types.find((type) => type.startsWith('image/'))
         if (!imageType) continue
+        if (!await confirmPhotoReplacement(equipmentId)) {
+          setMessage('Đã hủy thay ảnh.')
+          return
+        }
         const blob = await item.getType(imageType)
         const extension = clipboardFileExtension(imageType)
-        const file = new File([blob], `clipboard-${Date.now()}.${extension}`, { type: imageType })
+        const file = new File([blob], `clipboard.${extension}`, { type: imageType })
         const path = await uploadEquipmentPhoto(equipmentId, file)
-        setMessage(`CLIPBOARD_UPLOAD_OK: ${path}`)
+        setPhotoStates((current) => ({ ...current, [equipmentId]: 'yes' }))
+        setMessage(`Ảnh đã lưu: ${path}`)
         return
       }
-      setMessage('CLIPBOARD_NO_IMAGE: Clipboard không có ảnh.')
+      setMessage('Clipboard không có ảnh.')
     } catch (cause) {
       setMessage(cause instanceof Error ? `CLIPBOARD_UPLOAD_FAILED: ${cause.message}` : 'CLIPBOARD_UPLOAD_FAILED')
     } finally {
@@ -153,7 +195,7 @@ export function LiveEquipmentPanel() {
         <div>
           <p className="eyebrow">BM-TBSX-01 · 02 · Production data</p>
           <h2 id="live-equipment-title">Equipment Master</h2>
-          <small>Sửa trực tiếp từng dòng rồi bấm Lưu. QR tự đồng bộ theo Mã thiết bị.</small>
+          <small>1 thiết bị = 1 ảnh. Ảnh mới sẽ thay ảnh cũ sau khi xác nhận.</small>
         </div>
         <div>
           <label className="sr-only" htmlFor="equipment-type-filter">Lọc loại thiết bị</label>
@@ -176,14 +218,13 @@ export function LiveEquipmentPanel() {
           <tbody>{filteredRows.map((equipment) => {
             const draft = drafts[equipment.equipmentId] || toDraft(equipment)
             const uploadTargetId = draft.equipmentId.trim() || equipment.equipmentId
+            const photoState = photoStates[equipment.equipmentId] || 'loading'
             return <tr key={equipment.equipmentId}>
               <td>
                 <input value={draft.equipmentId} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentId: event.target.value })} />
                 <small>QR tự theo mã</small>
               </td>
-              <td>
-                <input value={draft.equipmentName} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentName: event.target.value })} />
-              </td>
+              <td><input value={draft.equipmentName} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentName: event.target.value })} /></td>
               <td>
                 <select value={draft.equipmentType} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}>
                   <option value="PRODUCTION">PRODUCTION</option>
@@ -204,6 +245,7 @@ export function LiveEquipmentPanel() {
               </td>
               <td>
                 <div className="stack-sm">
+                  <strong>{photoState === 'yes' ? '✓ Đã có ảnh' : photoState === 'no' ? '— Chưa có ảnh' : photoState === 'error' ? '? Không kiểm tra được' : 'Đang kiểm tra ảnh…'}</strong>
                   <label>
                     <span className="sr-only">Tải ảnh cho {uploadTargetId}</span>
                     <input
@@ -218,9 +260,9 @@ export function LiveEquipmentPanel() {
                     />
                   </label>
                   <button type="button" disabled={uploadingId === uploadTargetId} onClick={() => void handleClipboardUpload(uploadTargetId)}>
-                    Dán ảnh từ clipboard
+                    {photoState === 'yes' ? 'Dán ảnh mới / Thay thế' : 'Dán ảnh từ clipboard'}
                   </button>
-                  <small>{uploadingId === uploadTargetId ? 'Đang tải…' : 'Ctrl+C ảnh → bấm Dán · tối đa 5 MB'}</small>
+                  <small>{uploadingId === uploadTargetId ? 'Đang nén và tải…' : 'Ảnh được nén tự động trước khi lưu'}</small>
                 </div>
               </td>
               <td>
