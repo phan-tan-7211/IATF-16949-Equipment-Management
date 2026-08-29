@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { AppErrorBoundary } from './AppErrorBoundary'
 import { LiveAuditPanel } from './LiveAuditPanel'
@@ -42,6 +42,16 @@ function LiveView({ view }: { view: View }) {
 export default function App() {
   const [view, setView] = useState<View>(initialView)
   const active = useMemo(() => NAV.find((item) => item.id === view) ?? NAV[0], [view])
+
+  useEffect(() => {
+    const closeEquipmentEditorOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const backdrop = document.querySelector<HTMLElement>('.equipment-drawer-backdrop')
+      backdrop?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    }
+    window.addEventListener('keydown', closeEquipmentEditorOnEscape)
+    return () => window.removeEventListener('keydown', closeEquipmentEditorOnEscape)
+  }, [])
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
