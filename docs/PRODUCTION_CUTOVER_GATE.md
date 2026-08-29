@@ -106,7 +106,16 @@ The current `app_user_role` table contains only the ADMIN account, so a new non-
 
 ### PENDING — Real browser UX smoke
 
-Automated read/write cutover diagnostics are now available, but the actual user interaction paths still need one real browser pass:
+Automated read/write cutover diagnostics are available. The same `?phase3=supabase-test` screen now contains a **Browser UX smoke** checklist with direct links that open each workspace in a new tab while preserving the Supabase browser session:
+
+- Equipment
+- Inspection
+- Maintenance
+- Calibration
+- Tooling
+- Audit
+
+Required browser pass:
 
 1. Equipment list loads 131 rows and 117 thumbnails without request storm/errors.
 2. Open Equipment 360 profile from image/ID/name.
@@ -119,13 +128,18 @@ Automated read/write cutover diagnostics are now available, but the actual user 
 
 For workflow mutation correctness without polluting business data, use **Run rollback write smoke** instead of creating fake operational transactions.
 
-### PENDING — Vercel preview visibility
+### BLOCKED EXTERNALLY — Vercel preview visibility
 
-The currently connected Vercel team is visible through the connector but the project list is empty, so preview status cannot be verified from the connector session. Do not merge solely to work around this.
+The connected Vercel account currently exposes the team `Phantan's projects`, but:
+
+- project list returns empty;
+- direct lookup using project slug `iatf-16949-equipment-management` returns `404 Not Found`.
+
+Therefore preview/deployment state cannot be verified or changed safely from the current Vercel connector session. Do not deploy to an unknown project and do not merge to `main` merely to bypass this visibility problem.
 
 ## Merge rule
 
-Do not merge this migration branch into `main` until the two PENDING gates above are explicitly confirmed.
+Do not merge this migration branch into `main` until browser UX smoke is confirmed and the correct Vercel project is visible/verified.
 
 After confirmation:
 
