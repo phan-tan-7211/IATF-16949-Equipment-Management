@@ -1,3 +1,4 @@
+<script>
 var calibrationAdminSource=[],calibrationAdminEquipment=[];
 var openScreenBase_=openScreen;
 openScreen=function(name){
@@ -75,3 +76,4 @@ function unlinkCalibrationMaster_(sourceId,equipmentId){
 setTimeout(function(){
   if(el('screenCalibration')&&el('screenCalibration').classList.contains('on'))toggleCalibrationAdmin_('Calibration');
 },500);
+</script>
