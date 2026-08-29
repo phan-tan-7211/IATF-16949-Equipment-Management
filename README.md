@@ -22,6 +22,7 @@ Xem chi tiết tại:
 - `AGENTS.md`
 - `docs/KIEN_TRUC_LUONG_HE_THONG.md`
 - `docs/SOURCE_FIRST_IMPLEMENTATION_PLAN.md`
+- `docs/MASTER_IMPLEMENTATION_PLAN.md`
 
 ## Phạm vi hệ thống
 
@@ -50,6 +51,14 @@ Apps Script Backend (`apps-script/`)
 Google Sheets / Google Drive
 ```
 
+Canonical frontend production origin:
+
+```text
+https://iatf-16949-equipment-management.vercel.app
+```
+
+Deployment hash và git-branch aliases không phải canonical production origin.
+
 ### 1. Vercel Frontend
 
 - Là **frontend production chính thức** của hệ thống.
@@ -72,6 +81,18 @@ Backend chịu trách nhiệm:
 - đọc/ghi Google Sheets và Google Drive.
 
 Không dùng Vercel/serverless hoặc Node API để ghi trực tiếp vào Google Sheets/Drive production nếu chưa có thay đổi kiến trúc được phê duyệt.
+
+### Browser transport
+
+Frontend Vercel dùng một **Apps Script postMessage bridge ẩn** để gọi backend trong browser mà vẫn giữ Google session và tránh CORS/redirect của Apps Script Web App.
+
+Bridge này:
+
+- chỉ là transport backend;
+- không phải AppShell;
+- không phải frontend;
+- không có UI cho người dùng;
+- không được phát triển thành giao diện thay thế Vercel.
 
 ### 3. Google Sheets / Google Drive
 
@@ -100,6 +121,7 @@ Việc AppShell chạy/render đúng chỉ chứng minh backend test shell hoạ
 - AppShell chỉ được giữ control tối thiểu phục vụ test backend.
 - Review PR phải kiểm tra cả `src/` và `apps-script/` để tránh bỏ quên frontend.
 - Nếu phải lựa chọn giữa làm UI nhanh trong AppShell và làm đúng trong Vercel frontend, ưu tiên **Vercel frontend**.
+- Hidden Apps Script bridge chỉ là transport; tuyệt đối không xem bridge hoặc AppShell là production UI.
 
 ## Identity / quyền
 

@@ -3,12 +3,15 @@ import { EVIDENCE_FOLDERS, PERSISTENCE_CONTRACT_VERSION, PERSISTENCE_TABLES } fr
 import { GOOGLE_PERSISTENCE_CONFIG } from './persistenceConfig'
 
 describe('GOOGLE_PERSISTENCE_CONFIG', () => {
-  it('points to the frozen G1 contract through the Apps Script boundary', () => {
+  it('points to the frozen G1 contract through the Vercel frontend / Apps Script backend boundary', () => {
     expect(GOOGLE_PERSISTENCE_CONFIG.contractVersion).toBe(PERSISTENCE_CONTRACT_VERSION)
     expect(GOOGLE_PERSISTENCE_CONFIG.tables).toBe(PERSISTENCE_TABLES)
     expect(GOOGLE_PERSISTENCE_CONFIG.frontendDirectGoogleApiAllowed).toBe(false)
-    expect(GOOGLE_PERSISTENCE_CONFIG.persistenceBoundary).toBe('APPS_SCRIPT_WEB_APP')
-    expect(GOOGLE_PERSISTENCE_CONFIG.browserTransport).toBe('APPS_SCRIPT_HTML_BRIDGE')
+    expect(GOOGLE_PERSISTENCE_CONFIG.frontendRuntime).toBe('VERCEL_REACT')
+    expect(GOOGLE_PERSISTENCE_CONFIG.canonicalFrontendOrigin).toBe('https://iatf-16949-equipment-management.vercel.app')
+    expect(GOOGLE_PERSISTENCE_CONFIG.persistenceBoundary).toBe('APPS_SCRIPT_BACKEND')
+    expect(GOOGLE_PERSISTENCE_CONFIG.browserTransport).toBe('POSTMESSAGE_APPS_SCRIPT_BRIDGE')
+    expect(GOOGLE_PERSISTENCE_CONFIG.diagnosticUi).toBe('APPS_SCRIPT_APPSHELL')
     expect(GOOGLE_PERSISTENCE_CONFIG.deploymentUrlEnv).toBe('VITE_APPS_SCRIPT_WEB_APP_URL')
     expect(GOOGLE_PERSISTENCE_CONFIG.defaultWebAppUrl).toMatch(/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/)
   })
