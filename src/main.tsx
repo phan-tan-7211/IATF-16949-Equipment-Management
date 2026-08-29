@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import { AppErrorBoundary } from './AppErrorBoundary'
+import { LiveAuditPanel } from './LiveAuditPanel'
 import { LiveCalibrationPanel } from './LiveCalibrationPanel'
 import { LiveDashboardPanel } from './LiveDashboardPanel'
 import { LiveEquipmentPanel } from './LiveEquipmentPanel'
@@ -23,7 +24,9 @@ const content = phase3Preview === 'dashboard'
           ? <div className="app-body"><main id="main-content" className="main-content"><LiveMaintenancePanel /></main></div>
           : phase3Preview === 'tooling'
             ? <div className="app-body"><main id="main-content" className="main-content"><LiveToolingPanel /></main></div>
-            : <App />
+            : phase3Preview === 'audit'
+              ? <div className="app-body"><main id="main-content" className="main-content"><LiveAuditPanel /></main></div>
+              : <App />
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
