@@ -1,3 +1,4 @@
+<script>
 var toolingMasterRows=[],toolingPlanRows=[],toolingModificationRowsData=[];
 var openScreenToolingBase_=openScreen;
 openScreen=function(name){openScreenToolingBase_(name);toggleToolingWorkflow_(name)};
@@ -62,3 +63,4 @@ function confirmToolingQuality(id){if(!confirm('Xác nhận Chất lượng cho 
 function completeToolingModification(id){var docs=prompt('Liệt kê tài liệu đã cập nhật (bản vẽ, BM-09, hướng dẫn vận hành, QC phòng ngừa...):','');if(!docs)return;call('toolingModificationComplete',{operationId:'ui-tooling-complete-'+Date.now()+'-'+Math.random().toString(36).slice(2),modificationId:id,updatedDocuments:docs},function(){loadToolingWorkflow_();loadAudit()})}
 
 setTimeout(function(){syncToolingOwnership();if(el('screenTooling')&&el('screenTooling').classList.contains('on'))toggleToolingWorkflow_('Tooling')},500);
+</script>
