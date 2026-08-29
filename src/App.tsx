@@ -22,6 +22,13 @@ const NAV: Array<{ id: View; label: string }> = [
   { id: 'settings', label: 'Audit & Cấu hình' },
 ]
 
+function initialView(): View {
+  const requested = new URLSearchParams(window.location.search).get('phase3')
+  if (requested === 'equipment' || requested === 'dashboard' || requested === 'inspection' || requested === 'maintenance' || requested === 'tooling' || requested === 'calibration') return requested
+  if (requested === 'audit') return 'settings'
+  return 'dashboard'
+}
+
 function LiveView({ view }: { view: View }) {
   if (view === 'dashboard') return <LiveDashboardPanel />
   if (view === 'equipment') return <LiveEquipmentPanel />
@@ -33,7 +40,7 @@ function LiveView({ view }: { view: View }) {
 }
 
 export default function App() {
-  const [view, setView] = useState<View>('dashboard')
+  const [view, setView] = useState<View>(initialView)
   const active = useMemo(() => NAV.find((item) => item.id === view) ?? NAV[0], [view])
 
   return <div className="app-shell">
