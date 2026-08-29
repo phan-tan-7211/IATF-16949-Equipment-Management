@@ -98,11 +98,66 @@ export async function loadEquipmentHistory(equipmentId: string): Promise<Equipme
   }
 }
 
+const PHOTO_BUCKET = 'equipment-photos'
+const EQUIPMENT_PHOTO_NAME = 'photo.webp'
+
+async function preparePhotoIdMigration(oldEquipmentId: string, newEquipmentId: string) {
+  const client = requireSupabase()
+  const oldId = oldEquipmentId.trim()
+  const newId = newEquipmentId.trim()
+  if (!oldId || !newId || oldId === newId) return [] as string[]
+
+  const [oldResult, newResult] = await Promise.all([
+    client.storage.from(PHOTO_BUCKET).list(oldId, { limit: 100 }),
+    client.storage.from(PHOTO_BUCKET).list(newId, { limit: 100 }),
+  ])
+  if (oldResult.error) throw new Error(`SUPABASE_PHOTO_ID_MIGRATION_SOURCE_FAILED: ${oldResult.error.message}`)
+  if (newResult.error) throw new Error(`SUPABASE_PHOTO_ID_MIGRATION_TARGET_FAILED: ${newResult.error.message}`)
+
+  const sourceFiles = oldResult.data || []
+  const targetFiles = newResult.data || []
+  if (targetFiles.length > 0) throw new Error(`EQUIPMENT_NEW_ID_PHOTO_CONFLICT: ${newId}`)
+  if (sourceFiles.length === 0) return [] as string[]
+
+  const copiedPaths: string[] = []
+  try {
+    for (const file of sourceFiles) {
+      const sourcePath = `${oldId}/${file.name}`
+      const targetPath = `${newId}/${file.name}`
+      const { error } = await client.storage.from(PHOTO_BUCKET).copy(sourcePath, targetPath)
+      if (error) throw new Error(`SUPABASE_PHOTO_ID_COPY_FAILED: ${error.message}`)
+      copiedPaths.push(targetPath)
+    }
+    return copiedPaths
+  } catch (cause) {
+    if (copiedPaths.length > 0) await client.storage.from(PHOTO_BUCKET).remove(copiedPaths)
+    throw cause
+  }
+}
+
+async function finalizePhotoIdMigration(oldEquipmentId: string, newEquipmentId: string, copiedPaths: string[]) {
+  if (copiedPaths.length === 0 || oldEquipmentId.trim() === newEquipmentId.trim()) return
+  const client = requireSupabase()
+  const oldFiles = await listEquipmentPhotos(oldEquipmentId)
+  const oldPaths = oldFiles.map((file) => `${oldEquipmentId.trim()}/${file.name}`)
+  if (oldPaths.length === 0) return
+  const { error } = await client.storage.from(PHOTO_BUCKET).remove(oldPaths)
+  if (error) throw new Error(`SUPABASE_PHOTO_ID_CLEANUP_FAILED: ${error.message}`)
+}
+
+async function rollbackPreparedPhotoMigration(copiedPaths: string[]) {
+  if (copiedPaths.length === 0) return
+  const client = requireSupabase()
+  await client.storage.from(PHOTO_BUCKET).remove(copiedPaths)
+}
+
 export async function updateSupabaseEquipment(input: EquipmentEditInput) {
   const client = requireSupabase()
+  const oldEquipmentId = input.oldEquipmentId.trim()
+  const newEquipmentId = input.equipmentId.trim()
   const payload = {
-    p_old_equipment_id: input.oldEquipmentId.trim(),
-    p_equipment_id: input.equipmentId.trim(),
+    p_old_equipment_id: oldEquipmentId,
+    p_equipment_id: newEquipmentId,
     p_equipment_type: input.equipmentType,
     p_equipment_name: input.equipmentName.trim(),
     p_model: input.model.trim(),
@@ -111,8 +166,14 @@ export async function updateSupabaseEquipment(input: EquipmentEditInput) {
     p_status: input.status.trim() || 'RUNNING',
   }
 
+  const copiedPaths = await preparePhotoIdMigration(oldEquipmentId, newEquipmentId)
   const { error } = await client.rpc('admin_update_equipment', payload)
-  if (error) throw new Error(`SUPABASE_EQUIPMENT_SAVE_FAILED: ${error.message}`)
+  if (error) {
+    await rollbackPreparedPhotoMigration(copiedPaths)
+    throw new Error(`SUPABASE_EQUIPMENT_SAVE_FAILED: ${error.message}`)
+  }
+
+  await finalizePhotoIdMigration(oldEquipmentId, newEquipmentId, copiedPaths)
 }
 
 const PHOTO_MAX_INPUT_BYTES = 25 * 1024 * 1024
@@ -120,7 +181,6 @@ const PHOTO_MAX_EDGE = 1920
 const PHOTO_TARGET_BYTES = 1.5 * 1024 * 1024
 const PHOTO_INITIAL_QUALITY = 0.82
 const PHOTO_MIN_QUALITY = 0.66
-const EQUIPMENT_PHOTO_NAME = 'photo.webp'
 
 function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
   return new Promise<Blob>((resolve, reject) => {
@@ -183,7 +243,7 @@ async function optimizeEquipmentPhoto(file: File) {
 
 export async function listEquipmentPhotos(equipmentId: string) {
   const client = requireSupabase()
-  const { data, error } = await client.storage.from('equipment-photos').list(equipmentId, {
+  const { data, error } = await client.storage.from(PHOTO_BUCKET).list(equipmentId, {
     limit: 100,
     sortBy: { column: 'created_at', order: 'desc' },
   })
@@ -202,7 +262,7 @@ export async function getEquipmentPhotoPreview(equipmentId: string): Promise<Equ
   if (!selected) return { exists: false, path: '', signedUrl: '' }
 
   const path = `${normalizedId}/${selected.name}`
-  const { data, error } = await client.storage.from('equipment-photos').createSignedUrl(path, 3600)
+  const { data, error } = await client.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600)
   if (error) throw new Error(`SUPABASE_PHOTO_URL_FAILED: ${error.message}`)
   return { exists: true, path, signedUrl: data.signedUrl }
 }
@@ -220,7 +280,7 @@ export async function uploadEquipmentPhoto(equipmentId: string, file: File) {
   const optimizedFile = await optimizeEquipmentPhoto(file)
   const path = `${normalizedId}/${EQUIPMENT_PHOTO_NAME}`
 
-  const { error } = await client.storage.from('equipment-photos').upload(path, optimizedFile, {
+  const { error } = await client.storage.from(PHOTO_BUCKET).upload(path, optimizedFile, {
     cacheControl: '3600',
     upsert: true,
     contentType: 'image/webp',
@@ -232,7 +292,7 @@ export async function uploadEquipmentPhoto(equipmentId: string, file: File) {
     .filter((item) => item.name !== EQUIPMENT_PHOTO_NAME)
     .map((item) => `${normalizedId}/${item.name}`)
   if (stalePaths.length > 0) {
-    const { error: removeError } = await client.storage.from('equipment-photos').remove(stalePaths)
+    const { error: removeError } = await client.storage.from(PHOTO_BUCKET).remove(stalePaths)
     if (removeError) throw new Error(`SUPABASE_PHOTO_CLEANUP_FAILED: ${removeError.message}`)
   }
 
