@@ -84,51 +84,23 @@ export async function submitLiveInspection(request: {
   damagedParts: string
   priority: WorkOrderPriority
 }) {
-  const session = await supabase.auth.getSession()
-  const actorEmail = session.data.session?.user.email || ''
-  const now = new Date()
-  const stamp = now.toISOString().replace(/\D/g, '').slice(0, 14)
-  const suffix = request.operationId.slice(-6).replace(/[^a-zA-Z0-9]/g, '') || Math.random().toString(36).slice(2, 8)
-  const inspectionId = `INSP-${stamp}-${suffix}`
-
-  const { error: inspectionError } = await supabase.from('daily_inspection').insert({
-    inspection_id: inspectionId,
-    equipment_id: request.equipmentId,
-    inspection_date: now.toISOString().slice(0, 10),
-    shift: request.shift,
-    area: request.area,
-    overall_mark: request.overallMark,
-    note: request.note.trim() || null,
-    actor_email: actorEmail || null,
-    source_data: { damagedParts: request.damagedParts.trim(), operationId: request.operationId },
+  const { data, error } = await supabase.rpc('rpc_submit_daily_inspection', {
+    p_operation_id: request.operationId,
+    p_equipment_id: request.equipmentId,
+    p_shift: request.shift,
+    p_area: request.area,
+    p_overall_mark: request.overallMark,
+    p_note: request.note,
+    p_damaged_parts: request.damagedParts,
+    p_priority: request.priority,
   })
-  if (inspectionError) throw inspectionError
-
-  let workOrderId = ''
-  if (request.overallMark === 'STOP_REPAIR') {
-    workOrderId = `WO-${stamp}-${suffix}`
-    const downtimeId = `DT-${stamp}-${suffix}`
-    const { error: woError } = await supabase.from('maintenance_work_order').insert({
-      work_order_id: workOrderId,
-      equipment_id: request.equipmentId,
-      status: 'OPEN',
-      priority: request.priority || 'HIGH',
-      reason: request.note.trim(),
-      source_type: 'DAILY_INSPECTION',
-      source_id: inspectionId,
-      created_by: actorEmail || null,
-      source_data: { damagedParts: request.damagedParts.trim(), operationId: request.operationId },
-    })
-    if (woError) throw woError
-    const { error: downtimeError } = await supabase.from('downtime_event').insert({
-      downtime_id: downtimeId,
-      equipment_id: request.equipmentId,
-      work_order_id: workOrderId,
-      started_at: now.toISOString(),
-      source_data: { inspectionId },
-    })
-    if (downtimeError) throw downtimeError
+  if (error) throw error
+  const result = (data || {}) as Record<string, unknown>
+  return {
+    result: {
+      inspectionId: text(result.inspectionId),
+      workOrderId: text(result.workOrderId),
+      downtimeId: text(result.downtimeId),
+    },
   }
-
-  return { result: { inspectionId, workOrderId } }
 }
