@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import { createAppsScriptBridgeClient, type DailyInspectionMark, type DailyInspectionShift, type WorkOrderPriority } from './data/appsScriptBridgeClient'
 import { loadLiveInspection, submitLiveInspection, type InspectionEquipmentOption, type LiveInspection } from './data/liveInspection'
 
