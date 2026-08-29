@@ -10,7 +10,7 @@ Purpose: prevent feature drift between `SOURCE_FIRST_IMPLEMENTATION_PLAN.md` and
 | Maintenance Plan | IMPLEMENTED / BROWSER TEST | verify BM03 create/edit + Item/Standard/Method UX |
 | Maintenance Work Order | DONE | browser smoke |
 | Maintenance Execution / Result | IMPLEMENTED / BROWSER TEST | verify BM08 ○/△/× + abnormal-action UX |
-| Equipment Handover | PARTIAL REVIEW | BM05 release gate exists; verify dedicated UX/evidence |
+| Equipment Handover | IMPLEMENTED / BROWSER TEST | verify BM05 form + accepted release gate UX |
 | Downtime / KPI | PARTIAL REVIEW | verify BM06 report coverage |
 | Tooling Master / Change | DONE CORE | browser smoke |
 | Calibration Master / Due | DONE CORE | browser smoke |
@@ -42,6 +42,19 @@ BM-TBSX-08 now persists through `rpc_record_maintenance_result()` into `maintena
 - `△/×` requires repair or maintenance action content at backend authority.
 - Each row records repair content, maintenance content and inspector.
 - Backend rollback smoke verified Execution + 2 Result Items + Log + Audit and left zero test records.
+
+## BM05 implementation contract
+
+BM-TBSX-05 now persists through `rpc_record_equipment_handover()` into `equipment_handover` + Audit in one transaction.
+
+- Supports a standalone equipment handover or a handover tied to a Work Order.
+- A Work Order-linked handover is accepted only after the Work Order is `VERIFIED`.
+- Captures handover time/location, chair department, meeting content and participants.
+- Captures handover/receiver person, title and department.
+- Captures handover reason and condition (`NORMAL`, `MINOR_ISSUE`, `NOT_OPERATIONAL`).
+- Captures attached documents/accessories, both-party comments and other agreements.
+- Receiver acceptance is recorded explicitly; only `accepted=true` satisfies the existing RELEASE gate.
+- Backend rollback smoke verified VERIFIED → accepted BM05 → RELEASED and left zero test records.
 
 ## QR implementation contract
 
