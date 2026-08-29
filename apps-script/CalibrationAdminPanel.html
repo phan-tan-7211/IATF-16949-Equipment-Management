@@ -1,0 +1,30 @@
+<section id="calibrationAdminPanel" class="box" style="display:none;max-width:1400px;margin:0 auto 20px">
+  <div class="head">
+    <div>
+      <h2>Liên kết hồ sơ hiệu chuẩn với thiết bị gốc</h2>
+      <div class="muted">Chỉ quản trị viên. Không tự ghép theo tên, model hoặc số sê-ri.</div>
+    </div>
+  </div>
+  <form class="body" onsubmit="linkCalibrationMaster(event)">
+    <div class="grid">
+      <div class="field">
+        <label for="calibrationSourceRecord">Hồ sơ hiệu chuẩn chưa liên kết *</label>
+        <select id="calibrationSourceRecord" required></select>
+      </div>
+      <div class="field">
+        <label for="calibrationRootEquipment">Thiết bị đo kiểm trong danh mục gốc *</label>
+        <select id="calibrationRootEquipment" required></select>
+      </div>
+    </div>
+    <div class="buttons">
+      <button id="calibrationLinkButton" class="btn primary">Liên kết</button>
+      <span id="calibrationLinkStatus" class="muted"></span>
+    </div>
+  </form>
+  <div class="table">
+    <table>
+      <thead><tr><th>Hồ sơ hiệu chuẩn</th><th>Mã thiết bị gốc</th><th>Tên thiết bị</th><th>Thao tác</th></tr></thead>
+      <tbody id="calibrationLinkRows"></tbody>
+    </table>
+  </div>
+</section>
