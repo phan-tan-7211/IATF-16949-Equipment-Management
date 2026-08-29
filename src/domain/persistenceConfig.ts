@@ -19,8 +19,10 @@ export const GOOGLE_PERSISTENCE_CONFIG = {
     'official-pdf-snapshots': '1B-x4wnMLJIxu_mc-XVOHrbRVbhtXE7Im',
   } satisfies Record<(typeof EVIDENCE_FOLDERS)[number], string>,
   frontendDirectGoogleApiAllowed: false,
-  persistenceBoundary: 'APPS_SCRIPT_WEB_APP',
-  browserTransport: 'APPS_SCRIPT_HTML_BRIDGE',
+  frontendRuntime: 'VERCEL_REACT',
+  persistenceBoundary: 'APPS_SCRIPT_BACKEND',
+  browserTransport: 'POSTMESSAGE_APPS_SCRIPT_BRIDGE',
+  diagnosticUi: 'APPS_SCRIPT_APPSHELL',
   deploymentUrlEnv: 'VITE_APPS_SCRIPT_WEB_APP_URL',
   defaultWebAppUrl: DEFAULT_APPS_SCRIPT_WEB_APP_URL,
 } as const
