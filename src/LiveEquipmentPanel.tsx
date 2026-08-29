@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { type LiveEquipment } from './data/liveEquipment'
 import {
-  hasEquipmentPhoto,
+  getEquipmentPhotoPreview,
   loadSupabaseEquipment,
   updateSupabaseEquipment,
   uploadEquipmentPhoto,
@@ -17,7 +17,10 @@ const statusLabel: Record<string, string> = {
   UNKNOWN: 'Chưa rõ',
 }
 
-type PhotoState = 'loading' | 'yes' | 'no' | 'error'
+type PhotoInfo = {
+  state: 'loading' | 'yes' | 'no' | 'error'
+  url: string
+}
 
 function clipboardFileExtension(mimeType: string) {
   if (mimeType === 'image/png') return 'png'
@@ -42,7 +45,7 @@ function toDraft(row: LiveEquipment): EquipmentEditInput {
 export function LiveEquipmentPanel() {
   const [rows, setRows] = useState<LiveEquipment[]>([])
   const [drafts, setDrafts] = useState<Record<string, EquipmentEditInput>>({})
-  const [photoStates, setPhotoStates] = useState<Record<string, PhotoState>>({})
+  const [photos, setPhotos] = useState<Record<string, PhotoInfo>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -50,16 +53,24 @@ export function LiveEquipmentPanel() {
   const [savingId, setSavingId] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
 
+  async function refreshOnePhoto(equipmentId: string) {
+    setPhotos((current) => ({ ...current, [equipmentId]: { state: 'loading', url: current[equipmentId]?.url || '' } }))
+    try {
+      const preview = await getEquipmentPhotoPreview(equipmentId)
+      setPhotos((current) => ({
+        ...current,
+        [equipmentId]: { state: preview.exists ? 'yes' : 'no', url: preview.signedUrl },
+      }))
+      return preview.exists
+    } catch {
+      setPhotos((current) => ({ ...current, [equipmentId]: { state: 'error', url: '' } }))
+      return false
+    }
+  }
+
   async function refreshPhotoStates(result: LiveEquipment[]) {
-    setPhotoStates(Object.fromEntries(result.map((row) => [row.equipmentId, 'loading' as PhotoState])))
-    await Promise.all(result.map(async (row) => {
-      try {
-        const exists = await hasEquipmentPhoto(row.equipmentId)
-        setPhotoStates((current) => ({ ...current, [row.equipmentId]: exists ? 'yes' : 'no' }))
-      } catch {
-        setPhotoStates((current) => ({ ...current, [row.equipmentId]: 'error' }))
-      }
-    }))
+    setPhotos(Object.fromEntries(result.map((row) => [row.equipmentId, { state: 'loading', url: '' } as PhotoInfo])))
+    await Promise.all(result.map((row) => refreshOnePhoto(row.equipmentId)))
   }
 
   async function reloadEquipment() {
@@ -99,7 +110,7 @@ export function LiveEquipmentPanel() {
     setMessage('')
     try {
       await updateSupabaseEquipment(draft)
-      setMessage(`SAVE_OK: ${draft.equipmentId}`)
+      setMessage(`Đã lưu ${draft.equipmentId}`)
       await reloadEquipment()
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'SAVE_FAILED')
@@ -109,18 +120,29 @@ export function LiveEquipmentPanel() {
   }
 
   async function confirmPhotoReplacement(equipmentId: string) {
-    let state = photoStates[equipmentId]
-    if (!state || state === 'loading' || state === 'error') {
-      try {
-        const exists = await hasEquipmentPhoto(equipmentId)
-        state = exists ? 'yes' : 'no'
-        setPhotoStates((current) => ({ ...current, [equipmentId]: state as PhotoState }))
-      } catch {
-        state = 'error'
-      }
+    let photo = photos[equipmentId]
+    if (!photo || photo.state === 'loading' || photo.state === 'error') {
+      await refreshOnePhoto(equipmentId)
+      const preview = await getEquipmentPhotoPreview(equipmentId).catch(() => null)
+      if (!preview?.exists) return true
+    } else if (photo.state !== 'yes') {
+      return true
     }
-    if (state !== 'yes') return true
-    return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Bạn có chắc muốn thay thế ảnh hiện tại?`)
+    return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`)
+  }
+
+  async function uploadAndRefresh(equipmentId: string, file: File) {
+    setUploadingId(equipmentId)
+    setMessage('')
+    try {
+      await uploadEquipmentPhoto(equipmentId, file)
+      await refreshOnePhoto(equipmentId)
+      setMessage(`Đã lưu ảnh cho ${equipmentId}`)
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'UPLOAD_FAILED')
+    } finally {
+      setUploadingId('')
+    }
   }
 
   async function handlePhotoUpload(equipmentId: string, file: File | undefined) {
@@ -129,17 +151,7 @@ export function LiveEquipmentPanel() {
       setMessage('Đã hủy thay ảnh.')
       return
     }
-    setUploadingId(equipmentId)
-    setMessage('')
-    try {
-      const path = await uploadEquipmentPhoto(equipmentId, file)
-      setPhotoStates((current) => ({ ...current, [equipmentId]: 'yes' }))
-      setMessage(`Ảnh đã lưu: ${path}`)
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'UPLOAD_FAILED')
-    } finally {
-      setUploadingId('')
-    }
+    await uploadAndRefresh(equipmentId, file)
   }
 
   async function handleClipboardUpload(equipmentId: string) {
@@ -148,8 +160,6 @@ export function LiveEquipmentPanel() {
       return
     }
 
-    setUploadingId(equipmentId)
-    setMessage('')
     try {
       const clipboardItems = await navigator.clipboard.read()
       for (const item of clipboardItems) {
@@ -162,16 +172,12 @@ export function LiveEquipmentPanel() {
         const blob = await item.getType(imageType)
         const extension = clipboardFileExtension(imageType)
         const file = new File([blob], `clipboard.${extension}`, { type: imageType })
-        const path = await uploadEquipmentPhoto(equipmentId, file)
-        setPhotoStates((current) => ({ ...current, [equipmentId]: 'yes' }))
-        setMessage(`Ảnh đã lưu: ${path}`)
+        await uploadAndRefresh(equipmentId, file)
         return
       }
       setMessage('Clipboard không có ảnh.')
     } catch (cause) {
       setMessage(cause instanceof Error ? `CLIPBOARD_UPLOAD_FAILED: ${cause.message}` : 'CLIPBOARD_UPLOAD_FAILED')
-    } finally {
-      setUploadingId('')
     }
   }
 
@@ -182,94 +188,62 @@ export function LiveEquipmentPanel() {
     [rows, typeFilter],
   )
 
-  return <div className="stack">
-    <section className="metric-grid" aria-label="Tổng quan Equipment Master live">
-      <article><span>Tổng thiết bị</span><strong>{rows.length}</strong><small>equipment_master live</small></article>
-      <article><span>Thiết bị sản xuất</span><strong>{productionCount}</strong><small>PRODUCTION</small></article>
-      <article><span>Thiết bị đo kiểm</span><strong>{measurementCount}</strong><small>MEASUREMENT</small></article>
-      <article><span>Nguồn dữ liệu</span><strong>LIVE</strong><small>Supabase PostgreSQL + Storage</small></article>
+  return <div className="stack equipment-master-page">
+    <section className="metric-grid equipment-metrics" aria-label="Tổng quan Equipment Master live">
+      <article><span>Tổng thiết bị</span><strong>{rows.length}</strong></article>
+      <article><span>Sản xuất</span><strong>{productionCount}</strong></article>
+      <article><span>Đo kiểm</span><strong>{measurementCount}</strong></article>
+      <article><span>Nguồn</span><strong>LIVE</strong><small>Supabase</small></article>
     </section>
 
-    <section className="content-card" aria-labelledby="live-equipment-title">
-      <div className="section-heading">
+    <section className="content-card equipment-card" aria-labelledby="live-equipment-title">
+      <div className="section-heading equipment-heading">
         <div>
-          <p className="eyebrow">BM-TBSX-01 · 02 · Production data</p>
+          <p className="eyebrow">BM-TBSX-01 · 02</p>
           <h2 id="live-equipment-title">Equipment Master</h2>
-          <small>1 thiết bị = 1 ảnh. Ảnh mới sẽ thay ảnh cũ sau khi xác nhận.</small>
         </div>
-        <div>
-          <label className="sr-only" htmlFor="equipment-type-filter">Lọc loại thiết bị</label>
-          <select id="equipment-type-filter" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}>
-            <option value="ALL">Tất cả</option>
-            <option value="PRODUCTION">Thiết bị sản xuất</option>
-            <option value="MEASUREMENT">Thiết bị đo kiểm</option>
-          </select>
-        </div>
+        <select id="equipment-type-filter" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}>
+          <option value="ALL">Tất cả</option>
+          <option value="PRODUCTION">Sản xuất</option>
+          <option value="MEASUREMENT">Đo kiểm</option>
+        </select>
       </div>
 
-      {loading ? <p className="muted" role="status">Đang tải Equipment Master từ Supabase…</p> : null}
-      {error ? <div className="record-card" role="alert"><b>Không kết nối được Supabase</b><p>{error}</p><small>Kiểm tra session đăng nhập và RLS của equipment_master.</small></div> : null}
-      {message ? <div className="record-card" role="status"><p>{message}</p></div> : null}
+      {loading ? <p className="muted" role="status">Đang tải…</p> : null}
+      {error ? <div className="record-card" role="alert"><b>Không kết nối được Supabase</b><p>{error}</p></div> : null}
+      {message ? <div className="equipment-toast" role="status">{message}</div> : null}
 
-      {!loading && !error ? <div className="table-wrap">
-        <table>
+      {!loading && !error ? <div className="table-wrap equipment-table-wrap">
+        <table className="equipment-table">
           <caption className="sr-only">Danh sách Equipment Master từ Supabase</caption>
-          <thead><tr><th scope="col">Mã</th><th scope="col">Thiết bị</th><th scope="col">Loại</th><th scope="col">Bộ phận</th><th scope="col">Model</th><th scope="col">Serial Number</th><th scope="col">Trạng thái</th><th scope="col">Ảnh thiết bị</th><th scope="col">Lưu</th></tr></thead>
+          <thead><tr><th>Mã</th><th>Thiết bị</th><th>Loại</th><th>Bộ phận</th><th>Model</th><th>Serial Number</th><th>Trạng thái</th><th>Ảnh</th><th></th></tr></thead>
           <tbody>{filteredRows.map((equipment) => {
             const draft = drafts[equipment.equipmentId] || toDraft(equipment)
             const uploadTargetId = draft.equipmentId.trim() || equipment.equipmentId
-            const photoState = photoStates[equipment.equipmentId] || 'loading'
+            const photo = photos[equipment.equipmentId] || { state: 'loading', url: '' }
             return <tr key={equipment.equipmentId}>
-              <td>
-                <input value={draft.equipmentId} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentId: event.target.value })} />
-                <small>QR tự theo mã</small>
-              </td>
+              <td><input className="equipment-id-input" value={draft.equipmentId} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentId: event.target.value })} /></td>
               <td><input value={draft.equipmentName} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentName: event.target.value })} /></td>
-              <td>
-                <select value={draft.equipmentType} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}>
-                  <option value="PRODUCTION">PRODUCTION</option>
-                  <option value="MEASUREMENT">MEASUREMENT</option>
-                </select>
-              </td>
+              <td><select value={draft.equipmentType} onChange={(event) => patchDraft(equipment.equipmentId, { equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}><option value="PRODUCTION">PRODUCTION</option><option value="MEASUREMENT">MEASUREMENT</option></select></td>
               <td><input value={draft.department} onChange={(event) => patchDraft(equipment.equipmentId, { department: event.target.value })} /></td>
               <td><input value={draft.model} onChange={(event) => patchDraft(equipment.equipmentId, { model: event.target.value })} /></td>
               <td><input value={draft.serialNumber} onChange={(event) => patchDraft(equipment.equipmentId, { serialNumber: event.target.value })} /></td>
-              <td>
-                <select value={draft.status} onChange={(event) => patchDraft(equipment.equipmentId, { status: event.target.value })}>
-                  <option value="RUNNING">{statusLabel.RUNNING}</option>
-                  <option value="STOPPED">{statusLabel.STOPPED}</option>
-                  <option value="MAINTENANCE">{statusLabel.MAINTENANCE}</option>
-                  <option value="DOWN">{statusLabel.DOWN}</option>
-                  <option value="DISPOSED">{statusLabel.DISPOSED}</option>
-                </select>
-              </td>
-              <td>
-                <div className="stack-sm">
-                  <strong>{photoState === 'yes' ? '✓ Đã có ảnh' : photoState === 'no' ? '— Chưa có ảnh' : photoState === 'error' ? '? Không kiểm tra được' : 'Đang kiểm tra ảnh…'}</strong>
-                  <label>
-                    <span className="sr-only">Tải ảnh cho {uploadTargetId}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={uploadingId === uploadTargetId}
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0]
-                        void handlePhotoUpload(uploadTargetId, file)
-                        event.currentTarget.value = ''
-                      }}
-                    />
-                  </label>
-                  <button type="button" disabled={uploadingId === uploadTargetId} onClick={() => void handleClipboardUpload(uploadTargetId)}>
-                    {photoState === 'yes' ? 'Dán ảnh mới / Thay thế' : 'Dán ảnh từ clipboard'}
-                  </button>
-                  <small>{uploadingId === uploadTargetId ? 'Đang nén và tải…' : 'Ảnh được nén tự động trước khi lưu'}</small>
+              <td><select value={draft.status} onChange={(event) => patchDraft(equipment.equipmentId, { status: event.target.value })}><option value="RUNNING">{statusLabel.RUNNING}</option><option value="STOPPED">{statusLabel.STOPPED}</option><option value="MAINTENANCE">{statusLabel.MAINTENANCE}</option><option value="DOWN">{statusLabel.DOWN}</option><option value="DISPOSED">{statusLabel.DISPOSED}</option></select></td>
+              <td className="equipment-photo-cell">
+                <div className="equipment-photo-box">
+                  {photo.state === 'yes' && photo.url
+                    ? <img src={photo.url} alt={`Ảnh ${equipment.equipmentId}`} loading="lazy" />
+                    : <div className={`equipment-photo-empty ${photo.state}`}>{photo.state === 'loading' ? '…' : photo.state === 'error' ? '!' : 'Chưa có ảnh'}</div>}
+                  <div className="equipment-photo-actions">
+                    <button type="button" disabled={uploadingId === uploadTargetId} onClick={() => void handleClipboardUpload(uploadTargetId)}>{uploadingId === uploadTargetId ? 'Đang tải…' : photo.state === 'yes' ? 'Thay ảnh' : 'Dán ảnh'}</button>
+                    <label className="equipment-file-button">
+                      Chọn
+                      <input type="file" accept="image/*" disabled={uploadingId === uploadTargetId} onChange={(event) => { const file = event.currentTarget.files?.[0]; void handlePhotoUpload(uploadTargetId, file); event.currentTarget.value = '' }} />
+                    </label>
+                  </div>
                 </div>
               </td>
-              <td>
-                <button type="button" disabled={savingId === equipment.equipmentId} onClick={() => void handleSave(equipment.equipmentId)}>
-                  {savingId === equipment.equipmentId ? 'Đang lưu…' : 'Lưu'}
-                </button>
-              </td>
+              <td><button className="equipment-save-button" type="button" disabled={savingId === equipment.equipmentId} onClick={() => void handleSave(equipment.equipmentId)}>{savingId === equipment.equipmentId ? '…' : 'Lưu'}</button></td>
             </tr>
           })}</tbody>
         </table>
