@@ -11,6 +11,13 @@ const statusLabel: Record<string, string> = {
   UNKNOWN: 'Chưa rõ',
 }
 
+function clipboardFileExtension(mimeType: string) {
+  if (mimeType === 'image/png') return 'png'
+  if (mimeType === 'image/webp') return 'webp'
+  if (mimeType === 'image/gif') return 'gif'
+  return 'jpg'
+}
+
 export function LiveEquipmentPanel() {
   const [rows, setRows] = useState<LiveEquipment[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,6 +57,34 @@ export function LiveEquipmentPanel() {
       setMessage(`UPLOAD_OK: ${path}`)
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'UPLOAD_FAILED')
+    } finally {
+      setUploadingId('')
+    }
+  }
+
+  async function handleClipboardUpload(equipmentId: string) {
+    if (!navigator.clipboard?.read) {
+      setMessage('CLIPBOARD_IMAGE_NOT_SUPPORTED')
+      return
+    }
+
+    setUploadingId(equipmentId)
+    setMessage('')
+    try {
+      const clipboardItems = await navigator.clipboard.read()
+      for (const item of clipboardItems) {
+        const imageType = item.types.find((type) => type.startsWith('image/'))
+        if (!imageType) continue
+        const blob = await item.getType(imageType)
+        const extension = clipboardFileExtension(imageType)
+        const file = new File([blob], `clipboard-${Date.now()}.${extension}`, { type: imageType })
+        const path = await uploadEquipmentPhoto(equipmentId, file)
+        setMessage(`CLIPBOARD_UPLOAD_OK: ${path}`)
+        return
+      }
+      setMessage('CLIPBOARD_NO_IMAGE: Clipboard không có ảnh.')
+    } catch (cause) {
+      setMessage(cause instanceof Error ? `CLIPBOARD_UPLOAD_FAILED: ${cause.message}` : 'CLIPBOARD_UPLOAD_FAILED')
     } finally {
       setUploadingId('')
     }
@@ -100,20 +135,29 @@ export function LiveEquipmentPanel() {
             <td><b>{equipment.serialNumber || '—'}</b></td>
             <td><span className={`badge ${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status] || equipment.status}</span></td>
             <td>
-              <label>
-                <span className="sr-only">Tải ảnh cho {equipment.equipmentId}</span>
-                <input
-                  type="file"
-                  accept="image/*"
+              <div className="stack-sm">
+                <label>
+                  <span className="sr-only">Tải ảnh cho {equipment.equipmentId}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingId === equipment.equipmentId}
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0]
+                      void handlePhotoUpload(equipment.equipmentId, file)
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
                   disabled={uploadingId === equipment.equipmentId}
-                  onChange={(event) => {
-                    const file = event.currentTarget.files?.[0]
-                    void handlePhotoUpload(equipment.equipmentId, file)
-                    event.currentTarget.value = ''
-                  }}
-                />
-              </label>
-              <small>{uploadingId === equipment.equipmentId ? 'Đang tải…' : 'Tối đa 5 MB'}</small>
+                  onClick={() => void handleClipboardUpload(equipment.equipmentId)}
+                >
+                  Dán ảnh từ clipboard
+                </button>
+                <small>{uploadingId === equipment.equipmentId ? 'Đang tải…' : 'Ctrl+C ảnh → bấm Dán · tối đa 5 MB'}</small>
+              </div>
             </td>
           </tr>)}</tbody>
         </table>
