@@ -3,9 +3,12 @@ import { z } from 'zod'
 const NonEmpty = z.string().trim().min(1)
 const OptionalText = z.string().trim().optional()
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải theo YYYY-MM-DD')
+const IsoDateTime = z.string().datetime({ offset: true })
 
 export const CalibrationInstrumentStatusSchema = z.enum(['ACTIVE', 'HOLD', 'OUT_OF_SERVICE'])
 export const CalibrationDueStatusSchema = z.enum(['VALID', 'DUE_SOON', 'OVERDUE', 'NO_PLAN'])
+export const CalibrationResultSchema = z.enum(['PASS', 'FAIL', 'LIMITED_USE'])
+export const CalibrationEvaluationStatusSchema = z.enum(['PENDING', 'EVALUATED'])
 
 export const CalibrationMasterSchema = z.object({
   calibrationEquipmentId: NonEmpty,
@@ -28,6 +31,26 @@ export const CalibrationMasterSchema = z.object({
   active: z.boolean(),
 })
 
+export const CalibrationEvaluationSchema = z
+  .object({
+    calibrationId: NonEmpty,
+    equipmentId: NonEmpty,
+    calibrationResult: CalibrationResultSchema,
+    evaluationResult: CalibrationResultSchema,
+    evaluationNote: OptionalText,
+    evaluatedBy: NonEmpty,
+    evaluatedAt: IsoDateTime,
+  })
+  .superRefine((value, ctx) => {
+    if (value.evaluationResult !== 'PASS' && !value.evaluationNote) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['evaluationNote'],
+        message: 'Nhận xét đánh giá là bắt buộc khi Hạn chế sử dụng hoặc Không đạt',
+      })
+    }
+  })
+
 export const CalibrationVendorQuoteSchema = z.object({
   calibrationEquipmentId: NonEmpty,
   provider: NonEmpty,
@@ -47,6 +70,7 @@ export const CalibrationQuoteSummarySchema = z.object({
 
 export type CalibrationMaster = z.infer<typeof CalibrationMasterSchema>
 export type CalibrationDueStatus = z.infer<typeof CalibrationDueStatusSchema>
+export type CalibrationEvaluation = z.infer<typeof CalibrationEvaluationSchema>
 export type CalibrationVendorQuote = z.infer<typeof CalibrationVendorQuoteSchema>
 export type CalibrationQuoteSummary = z.infer<typeof CalibrationQuoteSummarySchema>
 
