@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
 import './Equipment.css'
 import { type LiveEquipment } from './data/liveEquipment'
 import {
@@ -211,6 +211,26 @@ export function LiveEquipmentPanel() {
     }
   }
 
+  async function handleEmptyPhotoCellPaste(equipmentId: string, event: ClipboardEvent<HTMLTableCellElement>) {
+    const current = photos[equipmentId]
+    if (current?.state !== 'no' || uploadingId) return
+
+    const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/'))
+    if (!imageItem) {
+      setMessage('Clipboard không có ảnh.')
+      return
+    }
+
+    event.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file) {
+      setMessage('Không đọc được ảnh từ clipboard.')
+      return
+    }
+
+    await uploadAndRefresh(equipmentId, file)
+  }
+
   const productionCount = rows.filter((row) => row.equipmentType === 'PRODUCTION').length
   const measurementCount = rows.filter((row) => row.equipmentType === 'MEASUREMENT').length
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -264,11 +284,19 @@ export function LiveEquipmentPanel() {
           <tbody>
             {filteredRows.map((equipment) => {
               const photo = photos[equipment.equipmentId] || { state: 'loading', url: '' }
+              const pasteReady = photo.state === 'no'
               return <tr key={equipment.equipmentId}>
-                <td className="equipment-image-col">
+                <td
+                  className={`equipment-image-col${pasteReady ? ' paste-ready' : ''}`}
+                  tabIndex={pasteReady ? 0 : undefined}
+                  title={pasteReady ? 'Click ô ảnh rồi Ctrl+V để dán ảnh' : undefined}
+                  onPaste={pasteReady ? (event) => void handleEmptyPhotoCellPaste(equipment.equipmentId, event) : undefined}
+                >
                   {photo.state === 'yes' && photo.url
                     ? <img className="equipment-thumb" src={photo.url} alt={`Ảnh ${equipment.equipmentName}`} loading="lazy" />
-                    : <div className={`equipment-thumb-placeholder ${photo.state}`} aria-label="Chưa có ảnh">{photo.state === 'loading' ? '…' : '—'}</div>}
+                    : <div className={`equipment-thumb-placeholder ${photo.state}`} aria-label="Chưa có ảnh">
+                        {uploadingId === equipment.equipmentId ? 'Đang tải…' : photo.state === 'loading' ? '…' : photo.state === 'no' ? <><span>Chưa có ảnh</span><small>Click + Ctrl+V</small></> : '—'}
+                      </div>}
                 </td>
                 <td><strong className="equipment-code">{equipment.equipmentId}</strong></td>
                 <td><span className="equipment-name">{equipment.equipmentName}</span></td>
