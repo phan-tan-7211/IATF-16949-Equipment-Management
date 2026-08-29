@@ -7,10 +7,10 @@ const linkLabel: Record<CalibrationLinkState, string> = {
   LINKED: 'Đã liên kết', UNLINKED: 'Chưa liên kết', ORPHAN: 'Mã gốc không tồn tại', INVALID_TYPE: 'Sai loại thiết bị',
 }
 
-type DueFilter = 'ALL' | 'OVERDUE' | 'DUE_SOON' | 'VALID' | 'UNKNOWN'
+type DueFilter = 'ALL' | 'OVERDUE' | 'DUE_SOON' | 'VALID' | 'NO_PLAN'
 
 function dueLabel(value: string) {
-  const labels: Record<string, string> = { OVERDUE: 'Quá hạn', DUE_SOON: 'Sắp đến hạn', VALID: 'Còn hạn', UNKNOWN: 'Chưa có hạn' }
+  const labels: Record<string, string> = { OVERDUE: 'Quá hạn', DUE_SOON: 'Sắp đến hạn', VALID: 'Còn hạn', NO_PLAN: 'Chưa có hạn' }
   return labels[value] || value
 }
 
@@ -60,7 +60,7 @@ export function LiveCalibrationPanel() {
       .filter(Boolean).join(' ').toLocaleLowerCase().includes(normalizedQuery)
   }), [rows, linkFilter, dueFilter, normalizedQuery, today])
   const selected = selectedId ? rows.find((row) => row.calibrationEquipmentId === selectedId) || null : null
-  const selectedDue = selected ? getCalibrationDueStatus(selected.nextDueDate, today) : 'UNKNOWN'
+  const selectedDue = selected ? getCalibrationDueStatus(selected.nextDueDate, today) : 'NO_PLAN'
 
   return <div className="calibration-page">
     <section className="calibration-summary" aria-label="Tổng quan hiệu chuẩn">
@@ -79,7 +79,7 @@ export function LiveCalibrationPanel() {
       <div className="calibration-toolbar" role="search">
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm control no., mã máy, model, serial, tên thiết bị…" aria-label="Tìm thiết bị hiệu chuẩn" />
         <select value={dueFilter} onChange={(event) => setDueFilter(event.target.value as DueFilter)} aria-label="Lọc hạn hiệu chuẩn">
-          <option value="ALL">Tất cả hạn</option><option value="OVERDUE">Quá hạn</option><option value="DUE_SOON">Sắp đến hạn</option><option value="VALID">Còn hạn</option><option value="UNKNOWN">Chưa có hạn</option>
+          <option value="ALL">Tất cả hạn</option><option value="OVERDUE">Quá hạn</option><option value="DUE_SOON">Sắp đến hạn</option><option value="VALID">Còn hạn</option><option value="NO_PLAN">Chưa có hạn</option>
         </select>
         <select value={linkFilter} onChange={(event) => setLinkFilter(event.target.value as typeof linkFilter)} aria-label="Lọc trạng thái liên kết">
           <option value="ALL">Tất cả liên kết</option><option value="LINKED">Đã liên kết</option><option value="UNLINKED">Chưa liên kết</option><option value="ORPHAN">Orphan</option><option value="INVALID_TYPE">Sai loại</option>
