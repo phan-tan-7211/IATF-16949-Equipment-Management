@@ -2,25 +2,9 @@ const EQUIPMENT_TYPES = Object.freeze(['PRODUCTION', 'MEASUREMENT'])
 const EQUIPMENT_STATUSES = Object.freeze(['RUNNING', 'DOWN', 'MAINTENANCE', 'STOPPED', 'DISPOSED'])
 const EQUIPMENT_CRITICALITIES = Object.freeze(['A', 'B', 'C', 'D'])
 const EQUIPMENT_MUTABLE_FIELDS = Object.freeze([
-  'equipmentName',
-  'equipmentType',
-  'equipmentCategory',
-  'manufacturer',
-  'supplier',
-  'model',
-  'serialNumber',
-  'productionYear',
-  'purchaseDate',
-  'commissionDate',
-  'currentArea',
-  'currentLine',
-  'managingDepartment',
-  'usingDepartment',
-  'technicalSpecification',
-  'maintenanceCycleMonths',
-  'criticality',
-  'imageUrl',
-  'manualUrl',
+  'equipmentName', 'equipmentType', 'equipmentCategory', 'manufacturer', 'supplier', 'model', 'serialNumber',
+  'productionYear', 'purchaseDate', 'commissionDate', 'currentArea', 'currentLine', 'managingDepartment',
+  'usingDepartment', 'technicalSpecification', 'maintenanceCycleMonths', 'criticality', 'imageUrl', 'manualUrl',
   'setupDocumentUrl',
 ])
 
@@ -34,11 +18,9 @@ function equipmentCreate(request) {
   if (!operationId) throw new Error('OPERATION_ID_REQUIRED')
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('EQUIPMENT_INPUT_REQUIRED')
 
+  const equipmentId = normalizeEquipmentId_(input.equipmentId)
   const equipmentName = requiredEquipmentText_(input.equipmentName, 'EQUIPMENT_NAME_REQUIRED')
   const equipmentType = normalizeEquipmentEnum_(input.equipmentType, EQUIPMENT_TYPES, 'EQUIPMENT_TYPE_INVALID')
-  const status = input.status ? normalizeEquipmentEnum_(input.status, EQUIPMENT_STATUSES, 'EQUIPMENT_STATUS_INVALID') : 'RUNNING'
-  if (status === 'DISPOSED') throw new Error('NEW_EQUIPMENT_CANNOT_BE_DISPOSED')
-
   const normalized = normalizeEquipmentFields_(input)
   normalized.equipmentName = equipmentName
   normalized.equipmentType = equipmentType
@@ -49,12 +31,12 @@ function equipmentCreate(request) {
   try {
     const previous = findOperationResult_('CREATE_EQUIPMENT', operationId)
     if (previous) return { ok: true, duplicate: true, operationId: operationId, result: previous }
+    if (findEquipmentRow_(equipmentId)) throw new Error('EQUIPMENT_ID_ALREADY_EXISTS')
 
-    const equipmentId = createEquipmentId_()
     const now = new Date().toISOString()
     const record = Object.assign({}, normalized, {
       equipmentId: equipmentId,
-      status: status,
+      status: 'RUNNING',
       qrCode: equipmentId,
       active: true,
       updatedAt: now,
@@ -66,13 +48,12 @@ function equipmentCreate(request) {
       const auditId = Utilities.getUuid()
       const result = {
         equipmentId: equipmentId,
-        status: status,
+        status: 'RUNNING',
         active: true,
         updatedAt: now,
         rowNumber: appended.rowNumber,
         auditId: auditId,
       }
-
       appendAudit_({
         auditId: auditId,
         userId: actor.email,
@@ -81,14 +62,9 @@ function equipmentCreate(request) {
         entityId: equipmentId,
         newValueJson: JSON.stringify({ operationId: operationId, result: result, equipment: record }),
       })
-
       return { ok: true, duplicate: false, operationId: operationId, result: result }
     } catch (error) {
-      if (appended) {
-        compensateOrThrow_(error, function () {
-          deleteRecordRow_('Equipment_Master', appended.rowNumber)
-        })
-      }
+      if (appended) compensateOrThrow_(error, function () { deleteRecordRow_('Equipment_Master', appended.rowNumber) })
       throw error
     }
   } finally {
@@ -105,21 +81,18 @@ function equipmentUpdate(request) {
   const equipmentId = String(request.equipmentId || '').trim()
   const expectedUpdatedAt = String(request.expectedUpdatedAt || '').trim()
   const input = request.input
-
   if (!operationId) throw new Error('OPERATION_ID_REQUIRED')
   if (!equipmentId) throw new Error('EQUIPMENT_ID_REQUIRED')
   if (!expectedUpdatedAt) throw new Error('EXPECTED_UPDATED_AT_REQUIRED')
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('EQUIPMENT_INPUT_REQUIRED')
   if (Object.prototype.hasOwnProperty.call(input, 'equipmentId')) throw new Error('EQUIPMENT_ID_IMMUTABLE')
-  if (Object.prototype.hasOwnProperty.call(input, 'active')) throw new Error('USE_EQUIPMENT_LIFECYCLE_ACTION')
-  if (Object.prototype.hasOwnProperty.call(input, 'status')) throw new Error('USE_EQUIPMENT_LIFECYCLE_ACTION')
+  if (Object.prototype.hasOwnProperty.call(input, 'active') || Object.prototype.hasOwnProperty.call(input, 'status')) throw new Error('USE_EQUIPMENT_LIFECYCLE_ACTION')
 
   const patch = normalizeEquipmentFields_(input, true)
   if (!Object.keys(patch).length) throw new Error('EQUIPMENT_UPDATE_EMPTY')
 
   const lock = LockService.getScriptLock()
   lock.waitLock(30000)
-
   try {
     const previous = findOperationResult_('UPDATE_EQUIPMENT', operationId)
     if (previous) return { ok: true, duplicate: true, operationId: operationId, result: previous }
@@ -127,11 +100,9 @@ function equipmentUpdate(request) {
     const located = findEquipmentRow_(equipmentId)
     if (!located) throw new Error('EQUIPMENT_NOT_FOUND')
     assertEquipmentVersion_(located.record, expectedUpdatedAt)
-
     const oldRecord = located.record
     const now = new Date().toISOString()
     const nextRecord = Object.assign({}, oldRecord, patch, { updatedAt: now })
-
     writeEquipmentRow_(located.rowNumber, nextRecord)
 
     try {
@@ -148,9 +119,7 @@ function equipmentUpdate(request) {
       })
       return { ok: true, duplicate: false, operationId: operationId, result: result }
     } catch (error) {
-      compensateOrThrow_(error, function () {
-        writeEquipmentRow_(located.rowNumber, oldRecord)
-      })
+      compensateOrThrow_(error, function () { writeEquipmentRow_(located.rowNumber, oldRecord) })
       throw error
     }
   } finally {
@@ -167,7 +136,6 @@ function equipmentSetLifecycle(request) {
   const equipmentId = String(request.equipmentId || '').trim()
   const expectedUpdatedAt = String(request.expectedUpdatedAt || '').trim()
   const action = String(request.action || '').trim().toUpperCase()
-
   if (!operationId) throw new Error('OPERATION_ID_REQUIRED')
   if (!equipmentId) throw new Error('EQUIPMENT_ID_REQUIRED')
   if (!expectedUpdatedAt) throw new Error('EXPECTED_UPDATED_AT_REQUIRED')
@@ -175,7 +143,6 @@ function equipmentSetLifecycle(request) {
 
   const lock = LockService.getScriptLock()
   lock.waitLock(30000)
-
   try {
     const previous = findOperationResult_('EQUIPMENT_LIFECYCLE', operationId)
     if (previous) return { ok: true, duplicate: true, operationId: operationId, result: previous }
@@ -183,9 +150,7 @@ function equipmentSetLifecycle(request) {
     const located = findEquipmentRow_(equipmentId)
     if (!located) throw new Error('EQUIPMENT_NOT_FOUND')
     assertEquipmentVersion_(located.record, expectedUpdatedAt)
-
     const oldRecord = located.record
-    const now = new Date().toISOString()
     const nextRecord = Object.assign({}, oldRecord)
 
     if (action === 'DEACTIVATE') {
@@ -195,24 +160,16 @@ function equipmentSetLifecycle(request) {
       if (oldRecord.status === 'DISPOSED') throw new Error('DISPOSED_EQUIPMENT_CANNOT_BE_RESTORED')
       nextRecord.active = true
       if (nextRecord.status === 'STOPPED') nextRecord.status = 'RUNNING'
-    } else if (action === 'DISPOSE') {
+    } else {
       nextRecord.active = false
       nextRecord.status = 'DISPOSED'
     }
 
-    nextRecord.updatedAt = now
+    nextRecord.updatedAt = new Date().toISOString()
     writeEquipmentRow_(located.rowNumber, nextRecord)
-
     try {
       const auditId = Utilities.getUuid()
-      const result = {
-        equipmentId: equipmentId,
-        action: action,
-        status: nextRecord.status,
-        active: nextRecord.active,
-        updatedAt: now,
-        auditId: auditId,
-      }
+      const result = { equipmentId: equipmentId, action: action, status: nextRecord.status, active: nextRecord.active, updatedAt: nextRecord.updatedAt, auditId: auditId }
       appendAudit_({
         auditId: auditId,
         userId: actor.email,
@@ -224,9 +181,7 @@ function equipmentSetLifecycle(request) {
       })
       return { ok: true, duplicate: false, operationId: operationId, result: result }
     } catch (error) {
-      compensateOrThrow_(error, function () {
-        writeEquipmentRow_(located.rowNumber, oldRecord)
-      })
+      compensateOrThrow_(error, function () { writeEquipmentRow_(located.rowNumber, oldRecord) })
       throw error
     }
   } finally {
@@ -242,14 +197,12 @@ function equipmentDelete(request) {
   const operationId = String(request.operationId || '').trim()
   const equipmentId = String(request.equipmentId || '').trim()
   const expectedUpdatedAt = String(request.expectedUpdatedAt || '').trim()
-
   if (!operationId) throw new Error('OPERATION_ID_REQUIRED')
   if (!equipmentId) throw new Error('EQUIPMENT_ID_REQUIRED')
   if (!expectedUpdatedAt) throw new Error('EXPECTED_UPDATED_AT_REQUIRED')
 
   const lock = LockService.getScriptLock()
   lock.waitLock(30000)
-
   try {
     const previous = findOperationResult_('DELETE_EQUIPMENT', operationId)
     if (previous) return { ok: true, duplicate: true, operationId: operationId, result: previous }
@@ -257,13 +210,11 @@ function equipmentDelete(request) {
     const located = findEquipmentRow_(equipmentId)
     if (!located) throw new Error('EQUIPMENT_NOT_FOUND')
     assertEquipmentVersion_(located.record, expectedUpdatedAt)
-
     const references = findEquipmentReferences_(equipmentId)
     if (references.length) throw new Error('EQUIPMENT_HAS_HISTORY:' + references.join(','))
 
     const oldRecord = located.record
     deleteRecordRow_('Equipment_Master', located.rowNumber)
-
     try {
       const auditId = Utilities.getUuid()
       const result = { equipmentId: equipmentId, deleted: true, auditId: auditId }
@@ -278,9 +229,7 @@ function equipmentDelete(request) {
       })
       return { ok: true, duplicate: false, operationId: operationId, result: result }
     } catch (error) {
-      compensateOrThrow_(error, function () {
-        appendRecord_('Equipment_Master', oldRecord)
-      })
+      compensateOrThrow_(error, function () { appendRecord_('Equipment_Master', oldRecord) })
       throw error
     }
   } finally {
@@ -297,12 +246,11 @@ function assertEquipmentAdmin_(actor) {
   if (!actor || actor.role !== 'ADMIN') throw new Error('ROLE_NOT_ALLOWED')
 }
 
-function createEquipmentId_() {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const candidate = 'EQ-' + Utilities.getUuid().replace(/-/g, '').slice(0, 12).toUpperCase()
-    if (!findEquipmentRow_(candidate)) return candidate
-  }
-  throw new Error('EQUIPMENT_ID_GENERATION_FAILED')
+function normalizeEquipmentId_(value) {
+  const text = String(value || '').trim()
+  if (!text) throw new Error('EQUIPMENT_ID_REQUIRED')
+  if (text.length > 80 || /[\u0000-\u001F\u007F]/.test(text)) throw new Error('EQUIPMENT_ID_INVALID')
+  return text
 }
 
 function findEquipmentRow_(equipmentId) {
@@ -312,29 +260,17 @@ function findEquipmentRow_(equipmentId) {
   if (idIndex === -1) throw new Error('EQUIPMENT_ID_HEADER_REQUIRED')
   const lastRow = sheet.getLastRow()
   if (lastRow < 2) return null
-
-  const match = sheet
-    .getRange(2, idIndex + 1, lastRow - 1, 1)
-    .createTextFinder(String(equipmentId))
-    .matchEntireCell(true)
-    .findNext()
+  const match = sheet.getRange(2, idIndex + 1, lastRow - 1, 1).createTextFinder(String(equipmentId)).matchEntireCell(true).findNext()
   if (!match) return null
-
   const values = sheet.getRange(match.getRow(), 1, 1, headers.length).getDisplayValues()[0]
-  const record = headers.reduce(function (result, header, index) {
-    result[header] = values[index] === '' ? null : values[index]
-    return result
-  }, {})
+  const record = headers.reduce(function (result, header, index) { result[header] = values[index] === '' ? null : values[index]; return result }, {})
   return { rowNumber: match.getRow(), record: record }
 }
 
 function writeEquipmentRow_(rowNumber, record) {
   const sheet = getSheet_('Equipment_Master')
   const headers = getHeaders_(sheet)
-  const row = headers.map(function (header) {
-    const value = record[header]
-    return value === undefined || value === null ? '' : value
-  })
+  const row = headers.map(function (header) { const value = record[header]; return value === undefined || value === null ? '' : value })
   sheet.getRange(rowNumber, 1, 1, headers.length).setValues([row])
 }
 
@@ -345,12 +281,7 @@ function findEquipmentReferences_(equipmentId) {
     const headers = getHeaders_(sheet)
     const equipmentIdIndex = headers.indexOf('equipmentId')
     if (equipmentIdIndex === -1 || sheet.getLastRow() < 2) return false
-    const match = sheet
-      .getRange(2, equipmentIdIndex + 1, sheet.getLastRow() - 1, 1)
-      .createTextFinder(String(equipmentId))
-      .matchEntireCell(true)
-      .findNext()
-    return Boolean(match)
+    return Boolean(sheet.getRange(2, equipmentIdIndex + 1, sheet.getLastRow() - 1, 1).createTextFinder(String(equipmentId)).matchEntireCell(true).findNext())
   })
 }
 
@@ -360,77 +291,47 @@ function assertEquipmentVersion_(record, expectedUpdatedAt) {
   if (actual !== expectedUpdatedAt) throw new Error('EQUIPMENT_VERSION_CONFLICT')
 }
 
-function normalizeEquipmentFields_(input, patchMode) {
+function normalizeEquipmentFields_(input) {
   const result = {}
   const source = input || {}
-
   Object.keys(source).forEach(function (key) {
+    if (key === 'equipmentId') return
     if (EQUIPMENT_MUTABLE_FIELDS.indexOf(key) === -1) {
-      if (['status', 'active', 'equipmentId', 'qrCode', 'updatedAt'].indexOf(key) === -1) {
-        throw new Error('EQUIPMENT_FIELD_NOT_ALLOWED:' + key)
-      }
+      if (['status', 'active', 'qrCode', 'updatedAt'].indexOf(key) === -1) throw new Error('EQUIPMENT_FIELD_NOT_ALLOWED:' + key)
       return
     }
-
     const value = source[key]
-    if (key === 'equipmentName') {
-      result[key] = requiredEquipmentText_(value, 'EQUIPMENT_NAME_REQUIRED')
-      return
-    }
-    if (key === 'equipmentType') {
-      result[key] = normalizeEquipmentEnum_(value, EQUIPMENT_TYPES, 'EQUIPMENT_TYPE_INVALID')
-      return
-    }
+    if (key === 'equipmentName') { result[key] = requiredEquipmentText_(value, 'EQUIPMENT_NAME_REQUIRED'); return }
+    if (key === 'equipmentType') { result[key] = normalizeEquipmentEnum_(value, EQUIPMENT_TYPES, 'EQUIPMENT_TYPE_INVALID'); return }
     if (key === 'criticality') {
       const text = String(value || '').trim().toUpperCase()
-      if (!text) {
-        result[key] = ''
-      } else {
-        result[key] = normalizeEquipmentEnum_(text, EQUIPMENT_CRITICALITIES, 'EQUIPMENT_CRITICALITY_INVALID')
-      }
+      result[key] = text ? normalizeEquipmentEnum_(text, EQUIPMENT_CRITICALITIES, 'EQUIPMENT_CRITICALITY_INVALID') : ''
       return
     }
     if (key === 'productionYear') {
-      if (value === '' || value === null || value === undefined) {
-        result[key] = ''
-      } else {
-        const year = Number(value)
-        if (!Number.isInteger(year) || year < 1900 || year > 2200) throw new Error('EQUIPMENT_PRODUCTION_YEAR_INVALID')
-        result[key] = year
-      }
-      return
+      if (value === '' || value === null || value === undefined) { result[key] = ''; return }
+      const year = Number(value)
+      if (!Number.isInteger(year) || year < 1900 || year > 2200) throw new Error('EQUIPMENT_PRODUCTION_YEAR_INVALID')
+      result[key] = year; return
     }
     if (key === 'maintenanceCycleMonths') {
-      if (value === '' || value === null || value === undefined) {
-        result[key] = ''
-      } else {
-        const months = Number(value)
-        if (!Number.isInteger(months) || months <= 0) throw new Error('EQUIPMENT_MAINTENANCE_CYCLE_INVALID')
-        result[key] = months
-      }
-      return
+      if (value === '' || value === null || value === undefined) { result[key] = ''; return }
+      const months = Number(value)
+      if (!Number.isInteger(months) || months <= 0) throw new Error('EQUIPMENT_MAINTENANCE_CYCLE_INVALID')
+      result[key] = months; return
     }
     if (key === 'purchaseDate' || key === 'commissionDate') {
       const dateText = String(value || '').trim()
       if (dateText && !/^\d{4}-\d{2}-\d{2}$/.test(dateText)) throw new Error('EQUIPMENT_DATE_INVALID:' + key)
-      result[key] = dateText
-      return
+      result[key] = dateText; return
     }
     if (key === 'imageUrl' || key === 'manualUrl' || key === 'setupDocumentUrl') {
       const url = String(value || '').trim()
       if (url && !/^https:\/\//i.test(url)) throw new Error('EQUIPMENT_URL_INVALID:' + key)
-      result[key] = url
-      return
+      result[key] = url; return
     }
-
     result[key] = String(value === null || value === undefined ? '' : value).trim()
   })
-
-  if (!patchMode) {
-    if (!result.equipmentName && source.equipmentName !== undefined) throw new Error('EQUIPMENT_NAME_REQUIRED')
-    if (!result.equipmentType && source.equipmentType !== undefined) throw new Error('EQUIPMENT_TYPE_INVALID')
-  }
-
   return result
 }
 
