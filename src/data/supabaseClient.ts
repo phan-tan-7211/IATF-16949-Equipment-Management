@@ -10,12 +10,18 @@ export function getSupabaseConfigStatus() {
   }
 }
 
-export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-    })
-  : null
+// Keep a concrete client type so production data modules compile without nullable
+// checks. The config status above remains the source of truth for diagnostics.
+// Missing env values intentionally point to a non-routable placeholder and will
+// fail at runtime rather than silently falling back to another backend.
+export const supabase = createClient(
+  supabaseUrl || 'https://supabase-not-configured.invalid',
+  supabaseAnonKey || 'supabase-not-configured',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  },
+)
