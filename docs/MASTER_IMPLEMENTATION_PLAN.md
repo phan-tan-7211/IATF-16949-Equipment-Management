@@ -1,6 +1,6 @@
 # MASTER IMPLEMENTATION PLAN — CEV Equipment Management
 
-## Kiến trúc bắt buộc
+## Kiến trúc bắt buộc hiện tại
 
 ```text
 User
@@ -8,192 +8,150 @@ User
 Vercel Frontend
 React + Vite + TypeScript
   ↓
-Apps Script Backend
-workflow / validation / RBAC / audit / persistence API
-  ↓
-Google Sheets + Google Drive
-production data + evidence
+Supabase
+├─ PostgreSQL
+├─ Auth / app role
+├─ RLS
+├─ private Storage
+└─ RPC / transactional workflow
 ```
 
-`AppShell` chỉ là màn hình test kỹ thuật của Apps Script backend. Không phải frontend production.
+Apps Script / Google Sheets / Google Drive không còn thuộc runtime mới trên nhánh này.
 
-Browser không gọi Google Sheets/Drive trực tiếp. Frontend Vercel giao tiếp với Apps Script backend qua postMessage bridge ẩn để giữ Google session và tránh CORS/redirect của Apps Script Web App. Bridge là **transport backend**, không phải UI và không thay thế Vercel frontend.
-
-Canonical production frontend origin:
+Canonical frontend origin:
 
 `https://iatf-16949-equipment-management.vercel.app`
-
-Không coi deployment hash hoặc git-branch alias là canonical production origin.
 
 ## Nguyên tắc dữ liệu cốt lõi
 
 **Một thiết bị = một mã thiết bị = một hồ sơ gốc = toàn bộ nghiệp vụ cùng tham chiếu mã đó.**
 
-- `Equipment_Master` là master thiết bị duy nhất.
+- `equipment_master` là master thiết bị duy nhất.
 - `PRODUCTION` và `MEASUREMENT` dùng chung Equipment Master.
-- `Calibration_Master` là hồ sơ nghiệp vụ hiệu chuẩn của thiết bị MEASUREMENT.
-- Tooling có lifecycle riêng theo `toolingId`.
-- Không tạo thêm master song song theo phòng ban.
+- `calibration_master` là hồ sơ nghiệp vụ hiệu chuẩn của thiết bị MEASUREMENT.
+- Tooling có lifecycle riêng theo `tooling_id`.
+- Không tạo master song song theo phòng ban.
+- Đổi `equipment_id` phải propagate FK an toàn và xử lý Storage path tương ứng.
 
 ---
 
-# Phase 1 — G1 data contract / domain foundation — COMPLETE
+# Phase 1 — G1 contract / domain foundation — COMPLETE
 
 - G1 contract frozen: `G1-frozen-2026-08-28`.
-- 20 Google Sheets tables.
-- 9 Google Drive evidence folders.
+- 20 business tables.
 - Domain schemas, workflow guards, KPI engine.
+- Source-first / canonical equipment identity được giữ nguyên.
 
-# Phase 2 — Apps Script backend workflows — COMPLETE
+# Phase 2 — Supabase persistence cutover — COMPLETE
 
-- Equipment lifecycle.
-- Daily inspection.
-- Maintenance Work Order lifecycle.
-- Maintenance execution / verification / handover.
-- Downtime and KPI.
-- Tooling BM-09 / BM-10A / BM-11.
-- Calibration link / log / post-calibration evaluation.
-- Audit, lock, idempotency and rollback guards.
-- AppShell retained as backend diagnostic shell only.
+- PostgreSQL schema + FK/index.
+- Auth + `app_user_role`.
+- RLS.
+- 9 private evidence buckets.
+- Equipment data migration.
+- Apps Script/Google runtime code đã purge khỏi branch.
 
-## Production data current state
+# Phase 3 — Transactional workflow RPC — COMPLETE
 
-- Equipment_Master: 19 PRODUCTION + 52 MEASUREMENT.
-- New measurement IDs: `CEV-ME-001` … `CEV-ME-052`.
-- Calibration_Master: 52 current 2026 records, linked 1:1 to the 52 MEASUREMENT devices.
-- 2024 Calibration_Master snapshot backed up separately before replacement.
+Đã chuyển các mutation quan trọng xuống database authority:
 
----
+- Daily Inspection.
+- `STOP_REPAIR` → Inspection + Work Order + Downtime + Equipment DOWN trong một transaction.
+- Maintenance Work Order create/transition.
+- BM-05 accepted gate trước `RELEASE`.
+- Tooling Master / Plan / Modification workflow.
+- Calibration Log + Calibration Master update + Audit.
+- Equipment Master update + Audit.
 
-# Phase 3 — Vercel production frontend — CURRENT PRIORITY
+Role/RLS smoke test và transaction rollback test đã thực hiện.
 
-## 3.1 Frontend architecture reset — IMPLEMENTED ON FEATURE BRANCH
+# Phase 4 — Enterprise frontend — COMPLETE FOR CORE WORKSPACES
 
-- `src/` remains the production UI.
-- `AppShell` remains diagnostic-only.
-- Added typed Apps Script bridge client for Vercel React.
-- Browser has no direct Google API access.
-- Contract version remains validated across the bridge.
-- `persistenceConfig` now explicitly locks:
-  - `frontendRuntime = VERCEL_REACT`
-  - `persistenceBoundary = APPS_SCRIPT_BACKEND`
-  - `browserTransport = POSTMESSAGE_APPS_SCRIPT_BRIDGE`
-  - `diagnosticUi = APPS_SCRIPT_APPSHELL`
-  - canonical production origin = `https://iatf-16949-equipment-management.vercel.app`
-- Added `vercel.json` for Vite build/deploy.
+Các workspace chính:
 
-## 3.2 Equipment live — IMPLEMENTED ON FEATURE BRANCH
+1. Dashboard Control Center + Action Queue.
+2. Equipment Master + profile 360° + ảnh.
+3. Daily Inspection.
+4. Maintenance / Work Order.
+5. Jig & Tooling.
+6. Calibration + log/chứng chỉ.
+7. Audit & Cấu hình.
 
-- `Equipment_Master` read live via Apps Script backend.
-- Live UI supports `ALL / PRODUCTION / MEASUREMENT` filters.
-- Expected production state: **71 total = 19 PRODUCTION + 52 MEASUREMENT**.
-- Preview route: `?phase3=equipment`.
-- Test / Build / Lint PASS.
+UI pattern chuẩn:
 
-## 3.3 Calibration live — IMPLEMENTED ON FEATURE BRANCH
+```text
+KPI → search/filter → data table → detail/profile drawer → explicit action
+```
 
-- Reads `Calibration_Master + Equipment_Master` through backend.
-- Calculates canonical link state only by exact `equipmentId`:
-  - LINKED
-  - UNLINKED
-  - ORPHAN
-  - INVALID_TYPE
-- No fuzzy matching by serial/model/name.
-- Live UI shows control number, instrument, department, model/serial, calibration date, next due and link state.
-- Expected production state: **52 records / 52 LINKED / 0 reconciliation**.
-- Preview route: `?phase3=calibration`.
-- Test / Build / Lint PASS.
+Drawer/profile hỗ trợ `Esc` và click backdrop để đóng nhanh.
 
-## 3.4 Next implementation order
+## Permission UX
 
-1. Dashboard live summary.
-2. Daily Inspection live.
-3. Maintenance / Work Order live including backend mutations.
-4. Tooling live.
-5. Audit & Configuration live.
-6. QR / PWA workflow.
-7. After live preview gates pass, replace remaining mock production paths inside `App.tsx`.
+Frontend mirror role-check backend từ một permission matrix trung tâm:
 
-Each module is only DONE when:
+- `MAINTENANCE`
+- `SUPERVISOR`
+- `QUALITY`
+- `MANAGER`
+- `ADMIN`
 
-- live backend data is shown;
-- mutations use Apps Script workflow APIs;
-- loading/error/empty states exist;
-- mobile + tablet + desktop pass;
-- tests pass;
-- no mock data is used in the production path.
+RLS/RPC vẫn là authority thực sự; ẩn button ở UI không thay thế security backend.
 
-## 3.5 UX quality gate
+# Phase 5 — Performance / cleanup — CURRENT
 
-Production frontend must be visibly more professional than AppShell:
+## 5.1 Code splitting
 
-- responsive layout;
-- clear information hierarchy;
-- cards/tables appropriate to screen size;
-- usable mobile interaction;
-- accessible labels/focus states;
-- no debug wording such as LOCAL UI / mock / source snapshot in production;
-- Vietnamese terminology consistent with business forms.
+- Workspace được `React.lazy` theo màn.
+- `main.tsx` không được static-import workspace vì sẽ vô hiệu dynamic import.
+- Supabase diagnostics được lazy-load riêng.
 
-## 3.6 Vercel deployment gate
+## 5.2 Cleanup
 
-Vercel project already exists. Canonical domain:
+- Xóa runtime Apps Script/Google cũ.
+- Giữ `source/**` vì đây là hồ sơ/quy trình nghiệp vụ IATF.
+- Dọn CSS component cũ chỉ khi xác nhận không còn class reference.
+- README/docs phải mô tả Supabase-only là kiến trúc hiện hành của branch.
 
-`https://iatf-16949-equipment-management.vercel.app`
+## 5.3 Quality gate
 
-Current production deployment is still from `main` before Phase 3 live slices.
+Mọi thay đổi core phải đạt:
 
-The Phase 3 branch preview is currently blocked by Vercel Hobby deployment rate limit with status **“Deployment rate limited — retry in 24 hours.”** This is an infrastructure quota issue, not a frontend build failure. The same PR builds successfully in GitHub Quality Gate and Netlify preview; Netlify remains test-only and does not change the production architecture.
+```text
+npm test
+npm run build
+npm run lint
+```
 
-Do not merge just to bypass the Vercel preview gate.
-
-Merge gate:
-
-- GitHub Quality Gate PASS on latest HEAD.
-- Vercel preview can build after rate limit resets.
-- Apps Script allowed parent origins includes canonical Vercel origin.
-- `?phase3=equipment` confirms live `71 = 19 + 52`.
-- `?phase3=calibration` confirms live `52 LINKED / 0 reconciliation`.
-- Then replace default Equipment/Calibration mock paths with live modules and merge.
+GitHub Quality Gate phải PASS trước production cutover.
 
 ---
 
-# Phase 4 — Production hardening
+# Phase 6 — Production cutover gate — NEXT
 
-After Vercel frontend reaches feature parity:
+Không merge/cutover chỉ vì UI chạy được. Cần đủ các gate sau:
 
-- remove all remaining mock-data imports from production bundle;
-- verify Apps Script allowed-origin policy;
-- security review RBAC and endpoint exposure;
-- browser never controls actor/role;
-- rate/duplicate protections on writes;
-- error telemetry and audit review;
-- backup/recovery procedure;
-- operator/admin guide.
+1. GitHub Quality Gate PASS trên HEAD cuối.
+2. Vercel build/deploy preview thành công khi quota cho phép.
+3. Supabase env production được cấu hình đúng trên Vercel.
+4. Auth/session + app role được xác nhận trong browser.
+5. RLS negative tests cho non-ADMIN/non-authorized roles PASS.
+6. Equipment read/edit/photo upload PASS.
+7. Inspection `V` và `STOP_REPAIR` PASS.
+8. Maintenance full workflow + BM-05 gate PASS.
+9. Calibration Log + certificate upload/read PASS.
+10. Tooling workflow PASS.
+11. Audit ADMIN-only PASS.
+12. Reconcile record counts và canonical equipment IDs.
+13. Backup/rollback plan được chốt trước khi đổi `main`.
 
-# Phase 5 — G2 extensions
+# Phase 7 — Post-cutover hardening
 
-Only after G1 frontend production is stable:
+Sau production cutover:
 
-- BM-10B tooling replacement program;
-- advanced maintenance analytics;
-- richer evidence/document workflow;
-- notifications/reminders if approved;
-- additional production modules only from official source requirements.
-
----
-
-# Mandatory anti-drift rules
-
-1. New user-facing UI work goes to `src/`, not `apps-script/AppShell*`.
-2. AppShell changes are allowed only when backend diagnostic coverage needs them.
-3. A backend feature with no Vercel UI is not considered product-complete if users need to operate it.
-4. Google Sheets/Drive are persistence, never the browser's direct API target.
-5. Apps Script is backend authority for actor, role, workflow validation and audit.
-6. The hidden Apps Script bridge is transport only; it must never become the visible production UI.
-7. No new parallel equipment master or department-specific equipment code system.
-8. Every phase must have build/test/live gates before being marked complete.
-
-## Current next action
-
-Continue Phase 3 with **Dashboard live summary**, while waiting for Vercel Hobby preview quota to reset. Do not return UI work to AppShell.
+- observability/error telemetry;
+- backup/recovery drill;
+- operator/admin guide;
+- performance monitoring;
+- evidence retention policy;
+- G2/BM-10B extensions;
+- advanced maintenance analytics.
