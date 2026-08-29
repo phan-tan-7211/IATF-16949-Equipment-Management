@@ -53,7 +53,7 @@
                 error: error && error.message ? error.message : String(error),
               })
             })
-            .bridgeInvoke(request)
+            .bridgeInvokeV2(request)
         })
 
         if (window.parent && window.parent !== window) {
