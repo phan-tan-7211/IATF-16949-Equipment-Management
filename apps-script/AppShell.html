@@ -10,6 +10,7 @@
 </head>
 <body>
 <?!= HtmlService.createHtmlOutputFromFile('AppShellBody').getContent() ?>
+<?!= HtmlService.createHtmlOutputFromFile('KpiPanel').getContent() ?>
 <?!= HtmlService.createHtmlOutputFromFile('ToolingPanel').getContent() ?>
 <?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminPanel').getContent() ?>
 <?!= HtmlService.createHtmlOutputFromFile('CalibrationEntryPanel').getContent() ?>
@@ -18,6 +19,7 @@
 <? var clientTemplate = HtmlService.createTemplateFromFile('AppShellClient'); clientTemplate.contractVersion = contractVersion; ?>
 <?!= clientTemplate.evaluate().getContent() ?>
 </script>
+<script><?!= HtmlService.createHtmlOutputFromFile('KpiClient').getContent() ?></script>
 <script><?!= HtmlService.createHtmlOutputFromFile('ToolingClient').getContent() ?></script>
 <script><?!= HtmlService.createHtmlOutputFromFile('CalibrationAdminClient').getContent() ?></script>
 <script><?!= HtmlService.createHtmlOutputFromFile('CalibrationEntryClient').getContent() ?></script>
