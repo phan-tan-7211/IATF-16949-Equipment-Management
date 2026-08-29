@@ -10,6 +10,18 @@ type Diagnostics = {
   storage: Record<string, number>
 }
 
+type WriteSmoke = {
+  pass: boolean
+  inspection: boolean
+  maintenance: boolean
+  calibration: boolean
+  tooling: boolean
+  rollbackCleanup: boolean
+  error: string
+  productionEquipmentId: string
+  measurementEquipmentId: string
+}
+
 type Check = {
   label: string
   state: 'PASS' | 'FAIL' | 'WAIT'
@@ -25,6 +37,7 @@ export function SupabaseTestPanel() {
   const [loading, setLoading] = useState(false)
   const [checks, setChecks] = useState<Check[]>([])
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
+  const [writeSmoke, setWriteSmoke] = useState<WriteSmoke | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -51,6 +64,7 @@ export function SupabaseTestPanel() {
     await supabase.auth.signOut()
     setChecks([])
     setDiagnostics(null)
+    setWriteSmoke(null)
     setMessage('Signed out')
   }
 
@@ -96,6 +110,36 @@ export function SupabaseTestPanel() {
     }
   }
 
+  async function runWriteSmoke() {
+    if (!supabase) return
+    setLoading(true)
+    setWriteSmoke(null)
+    try {
+      const session = await loadLiveSession()
+      if (session.role !== 'ADMIN') throw new Error(`ADMIN_REQUIRED: current role is ${session.role}`)
+      const { data, error } = await supabase.rpc('rpc_cutover_write_smoke')
+      if (error) throw new Error(`CUTOVER_WRITE_SMOKE_RPC_FAILED: ${error.message}`)
+      const result = data as WriteSmoke
+      setWriteSmoke(result)
+      setMessage(result.pass ? 'CUTOVER_BROWSER_WRITE_GATE_PASS' : `CUTOVER_BROWSER_WRITE_GATE_FAIL: ${result.error || 'UNKNOWN'}`)
+    } catch (cause) {
+      setWriteSmoke({
+        pass: false,
+        inspection: false,
+        maintenance: false,
+        calibration: false,
+        tooling: false,
+        rollbackCleanup: false,
+        error: cause instanceof Error ? cause.message : 'UNKNOWN_ERROR',
+        productionEquipmentId: '',
+        measurementEquipmentId: '',
+      })
+      setMessage('CUTOVER_BROWSER_WRITE_GATE_FAIL')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const failedCount = checks.filter((check) => check.state === 'FAIL').length
 
   return (
@@ -103,7 +147,7 @@ export function SupabaseTestPanel() {
       <div>
         <p className="eyebrow">Supabase Cutover</p>
         <h1>Browser diagnostics</h1>
-        <p>Read-only gate cho React + Vite + TypeScript → Supabase. Không dùng Apps Script và không tạo transaction nghiệp vụ.</p>
+        <p>Gate cho React + Vite + TypeScript → Supabase. Read gate không ghi dữ liệu; write smoke gọi workflow thật nhưng rollback toàn bộ ngay trong PostgreSQL.</p>
       </div>
 
       <div className="card stack-sm">
@@ -122,12 +166,25 @@ export function SupabaseTestPanel() {
 
       <div className="actions-row">
         <button type="button" disabled={!sessionEmail || loading} onClick={() => void runCutoverChecks()}>{loading ? 'Đang kiểm…' : 'Run cutover read gate'}</button>
+        <button type="button" disabled={!sessionEmail || loading} onClick={() => void runWriteSmoke()}>Run rollback write smoke</button>
         <button type="button" disabled={!sessionEmail || loading} onClick={() => void signOut()}>Sign out</button>
       </div>
 
       {checks.length > 0 ? <div className="card stack-sm" aria-live="polite">
         <strong>{failedCount === 0 && checks.every((check) => check.state === 'PASS') ? 'READ GATE PASS' : failedCount > 0 ? 'READ GATE FAIL' : 'CHECKING'}</strong>
         {checks.map((check) => <div key={check.label}><b>{check.state}</b> · {check.label} — {check.detail}</div>)}
+      </div> : null}
+
+      {writeSmoke ? <div className="card stack-sm" aria-live="polite">
+        <strong>{writeSmoke.pass ? 'WRITE GATE PASS' : 'WRITE GATE FAIL'}</strong>
+        <div>{writeSmoke.inspection ? 'PASS' : 'FAIL'} · Inspection STOP_REPAIR → WO + Downtime</div>
+        <div>{writeSmoke.maintenance ? 'PASS' : 'FAIL'} · Maintenance → VERIFIED</div>
+        <div>{writeSmoke.calibration ? 'PASS' : 'FAIL'} · Calibration Log + Master update</div>
+        <div>{writeSmoke.tooling ? 'PASS' : 'FAIL'} · Tooling Master + Plan + Modification workflow</div>
+        <div>{writeSmoke.rollbackCleanup ? 'PASS' : 'FAIL'} · Rollback cleanup — không còn dữ liệu smoke</div>
+        {writeSmoke.productionEquipmentId ? <div>Production sample: {writeSmoke.productionEquipmentId}</div> : null}
+        {writeSmoke.measurementEquipmentId ? <div>Measurement sample: {writeSmoke.measurementEquipmentId}</div> : null}
+        {writeSmoke.error ? <div>Error: {writeSmoke.error}</div> : null}
       </div> : null}
 
       {diagnostics ? <div className="card stack-sm">
