@@ -4,6 +4,7 @@ import type { MaintenanceWorkflowAction } from '../domain/workflow'
 
 const CHANNEL = 'CEV_APPS_SCRIPT_BRIDGE'
 const DEFAULT_TIMEOUT_MS = 15000
+const APPS_SCRIPT_CONTENT_ORIGIN = 'https://script.googleusercontent.com'
 
 type PersistenceTable = (typeof PERSISTENCE_TABLES)[number]
 
@@ -37,6 +38,10 @@ function resolveWebAppUrl(explicitUrl?: string) {
   return parsed
 }
 
+function isAllowedBridgeOrigin(origin: string, launchOrigin: string) {
+  return origin === launchOrigin || origin === APPS_SCRIPT_CONTENT_ORIGIN
+}
+
 function assertTable(table: string): asserts table is PersistenceTable {
   if (!(PERSISTENCE_TABLES as readonly string[]).includes(table)) throw new AppsScriptBridgeError('TABLE_NOT_ALLOWED')
 }
@@ -45,15 +50,17 @@ export function createAppsScriptBridgeClient(options?: { webAppUrl?: string; tim
   const windowRef = options?.windowRef ?? window
   const documentRef = options?.documentRef ?? document
   const bridgeUrl = resolveWebAppUrl(options?.webAppUrl)
-  const bridgeOrigin = bridgeUrl.origin
+  const bridgeLaunchOrigin = bridgeUrl.origin
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS
   let iframe: HTMLIFrameElement | null = null
   let readyPromise: Promise<void> | null = null
+  let bridgeContentOrigin: string | null = null
   let sequence = 0
   const pending = new Map<string, { resolve: (value: unknown) => void; reject: (reason?: unknown) => void; timer: number }>()
 
   const onMessage = (event: MessageEvent) => {
-    if (event.origin !== bridgeOrigin) return
+    if (!isAllowedBridgeOrigin(event.origin, bridgeLaunchOrigin)) return
+    if (bridgeContentOrigin && event.origin !== bridgeContentOrigin) return
     if (iframe?.contentWindow && event.source !== iframe.contentWindow) return
     const message = event.data as BridgeReadyMessage | BridgeResponseMessage | undefined
     if (!message || message.channel !== CHANNEL) return
@@ -79,12 +86,13 @@ export function createAppsScriptBridgeClient(options?: { webAppUrl?: string; tim
       iframe.style.display = 'none'
       const timer = windowRef.setTimeout(() => reject(new AppsScriptBridgeError('BRIDGE_READY_TIMEOUT')), timeoutMs)
       const readyHandler = (event: MessageEvent) => {
-        if (event.origin !== bridgeOrigin || event.source !== iframe?.contentWindow) return
+        if (!isAllowedBridgeOrigin(event.origin, bridgeLaunchOrigin) || event.source !== iframe?.contentWindow) return
         const message = event.data as BridgeReadyMessage | undefined
         if (!message || message.channel !== CHANNEL || message.type !== 'ready') return
         if (message.contractVersion !== GOOGLE_PERSISTENCE_CONFIG.contractVersion) {
           windowRef.clearTimeout(timer); windowRef.removeEventListener('message', readyHandler); reject(new AppsScriptBridgeError('CONTRACT_VERSION_MISMATCH')); return
         }
+        bridgeContentOrigin = event.origin
         windowRef.clearTimeout(timer); windowRef.removeEventListener('message', readyHandler); resolve()
       }
       windowRef.addEventListener('message', readyHandler)
@@ -96,12 +104,13 @@ export function createAppsScriptBridgeClient(options?: { webAppUrl?: string; tim
   const invoke = async <T>(payload: Record<string, unknown>): Promise<T> => {
     await ensureReady()
     if (!iframe?.contentWindow) throw new AppsScriptBridgeError('BRIDGE_WINDOW_UNAVAILABLE')
+    if (!bridgeContentOrigin) throw new AppsScriptBridgeError('BRIDGE_ORIGIN_UNAVAILABLE')
     sequence += 1
     const requestId = `vercel-${Date.now()}-${sequence}`
     return new Promise<T>((resolve, reject) => {
       const timer = windowRef.setTimeout(() => { pending.delete(requestId); reject(new AppsScriptBridgeError('BRIDGE_REQUEST_TIMEOUT')) }, timeoutMs)
       pending.set(requestId, { resolve: resolve as (value: unknown) => void, reject, timer })
-      iframe?.contentWindow?.postMessage({ channel: CHANNEL, type: 'request', requestId, payload }, bridgeOrigin)
+      iframe?.contentWindow?.postMessage({ channel: CHANNEL, type: 'request', requestId, payload }, bridgeContentOrigin)
     })
   }
 
@@ -140,7 +149,7 @@ export function createAppsScriptBridgeClient(options?: { webAppUrl?: string; tim
     },
     destroy() {
       pending.forEach((item) => { windowRef.clearTimeout(item.timer); item.reject(new AppsScriptBridgeError('BRIDGE_DESTROYED')) })
-      pending.clear(); windowRef.removeEventListener('message', onMessage); iframe?.remove(); iframe = null; readyPromise = null
+      pending.clear(); windowRef.removeEventListener('message', onMessage); iframe?.remove(); iframe = null; readyPromise = null; bridgeContentOrigin = null
     },
   }
 }
