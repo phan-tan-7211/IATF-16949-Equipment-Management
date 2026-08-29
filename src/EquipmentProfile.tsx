@@ -72,7 +72,15 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
     audit: history.audit.length,
   }), [history])
 
-  return <div className="equipment-profile-layer" role="dialog" aria-modal="true" aria-labelledby="equipment-profile-title">
+  return <div
+    className="equipment-profile-layer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="equipment-profile-title"
+    onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose()
+    }}
+  >
     <article className="equipment-profile">
       <header className="equipment-profile-header">
         <div>
