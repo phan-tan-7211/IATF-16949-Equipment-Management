@@ -68,14 +68,19 @@ export function A4PrintCenter() {
   useEffect(() => {
     let active = true
     setLoading(true); setError(''); setSelectedId(''); setDetails([])
-    const query = supabase.from(config.table).select('*').order(config.order, { ascending: config.id === 'equipment' })
-    void query.limit(config.id === 'bm06' ? 500 : 250).then(({ data, error: cause }) => {
-      if (!active) return
-      if (cause) setError(cause.message)
-      const next = (data || []) as Row[]
-      setRecords(next)
-      setSelectedId(next.length ? String(next[0][config.idKey] || '') : '')
-    }).finally(() => { if (active) setLoading(false) })
+    const load = async () => {
+      try {
+        const { data, error: cause } = await supabase.from(config.table).select('*').order(config.order, { ascending: config.id === 'equipment' }).limit(config.id === 'bm06' ? 500 : 250)
+        if (!active) return
+        if (cause) setError(cause.message)
+        const next = (data || []) as Row[]
+        setRecords(next)
+        setSelectedId(next.length ? String(next[0][config.idKey] || '') : '')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
     return () => { active = false }
   }, [config])
 
