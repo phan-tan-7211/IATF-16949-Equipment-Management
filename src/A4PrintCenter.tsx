@@ -10,7 +10,7 @@ const DOCS: Array<{ id: DocType; label: string; code: string; table: string; idK
   { id: 'bm03', label: 'Kế hoạch bảo dưỡng máy', code: 'BM-TBSX-03', table: 'maintenance_plan', idKey: 'plan_id', order: 'created_at' },
   { id: 'bm05', label: 'Biên bản bàn giao trang thiết bị', code: 'BM-TBSX-05', table: 'equipment_handover', idKey: 'handover_id', order: 'created_at' },
   { id: 'bm08', label: 'Kết quả bảo dưỡng sửa chữa thiết bị', code: 'BM-TBSX-08', table: 'maintenance_execution', idKey: 'execution_id', order: 'created_at' },
-  { id: 'bm06', label: 'Bảng theo dõi chỉ số dừng máy', code: 'BM-TBSX-06', table: 'downtime_event', idKey: 'downtime_id', order: 'started_at' },
+  { id: 'bm06', label: 'Bảng theo dõi chỉ số dừng máy', code: 'BM-TBSX-06', table: 'downtime_event', idKey: 'downtime_id', order: 'start_time' },
   { id: 'calibration', label: 'Hồ sơ hiệu chuẩn', code: 'CALIBRATION', table: 'calibration_log', idKey: 'calibration_log_id', order: 'created_at' },
 ]
 
@@ -18,10 +18,10 @@ const LABELS: Record<string, string> = {
   equipment_id: 'Mã thiết bị', equipment_type: 'Loại thiết bị', control_number: 'Số quản lý', qr_code: 'QR', equipment_name: 'Tên thiết bị',
   model: 'Model', manufacturer: 'Nhà sản xuất', serial_number: 'Số Serial', department: 'Bộ phận', status: 'Trạng thái', active: 'Đang quản lý',
   plan_id: 'Mã kế hoạch', handover_id: 'Mã bàn giao', work_order_id: 'Work Order', accepted: 'Đã tiếp nhận', equipment_condition: 'Tình trạng thiết bị',
-  execution_id: 'Mã thực hiện', downtime_id: 'Mã dừng máy', started_at: 'Bắt đầu dừng', ended_at: 'Khôi phục', calibration_log_id: 'Mã hiệu chuẩn',
+  execution_id: 'Mã thực hiện', downtime_id: 'Mã dừng máy', start_time: 'Bắt đầu dừng', end_time: 'Khôi phục', calibration_log_id: 'Mã hiệu chuẩn',
   calibration_date: 'Ngày hiệu chuẩn', next_due_date: 'Ngày đến hạn tiếp theo', result: 'Kết quả', actor_email: 'Người ghi nhận', created_at: 'Ngày tạo', updated_at: 'Cập nhật',
   maintenanceType: 'Loại bảo dưỡng', frequency: 'Tần suất', plannedDate: 'Ngày dự kiến', plannedWindow: 'Khung thời gian', responsiblePerson: 'Người thực hiện', note: 'Ghi chú',
-  item: 'Hạng mục', standard: 'Tiêu chuẩn', method: 'Phương pháp', executionDate: 'Ngày thực hiện', inspectionDepartment: 'Bộ phận kiểm tra', mark: 'Kết quả',
+  item: 'Hạng mục', item_text: 'Hạng mục', standard: 'Tiêu chuẩn', standard_text: 'Tiêu chuẩn', method: 'Phương pháp', method_text: 'Phương pháp', executionDate: 'Ngày thực hiện', inspectionDepartment: 'Bộ phận kiểm tra', mark: 'Kết quả', result_text: 'Kết quả',
   repairContent: 'Nội dung sửa chữa', maintenanceContent: 'Nội dung bảo dưỡng', inspector: 'Người kiểm tra', handoverAt: 'Thời gian bàn giao', location: 'Địa điểm',
   handoverPerson: 'Người giao', receiverPerson: 'Người nhận', reason: 'Lý do bàn giao', documentsAccessories: 'Tài liệu / phụ kiện', otherAgreement: 'Thỏa thuận khác',
   cause: 'Nguyên nhân', detail: 'Mô tả', recoveryAction: 'Hành động khôi phục', recorder: 'Người ghi', handler: 'Người xử lý', reporter: 'Người báo cáo',
@@ -43,17 +43,17 @@ function sourceData(row: Row | null) {
 function printableFields(row: Row | null) {
   if (!row) return []
   return Object.entries(row)
-    .filter(([key]) => !['source_data'].includes(key))
+    .filter(([key]) => key !== 'source_data')
     .concat(Object.entries(sourceData(row)))
-    .filter(([key, value]) => value !== null && value !== undefined && value !== '' && typeof value !== 'object')
+    .filter(([, value]) => value !== null && value !== undefined && value !== '' && typeof value !== 'object')
 }
 
 function DetailTable({ rows }: { rows: Row[] }) {
   if (!rows.length) return <p className="a4-empty">Chưa có hạng mục chi tiết.</p>
   const normalized = rows.map((row) => ({ ...row, ...sourceData(row) }))
-  const preferred = ['item', 'standard', 'method', 'mark', 'repairContent', 'maintenanceContent', 'inspector']
-  const columns = preferred.filter((key) => normalized.some((row) => row[key] !== undefined))
-  return <table className="a4-table"><thead><tr><th>STT</th>{columns.map((key) => <th key={key}>{LABELS[key] || key}</th>)}</tr></thead><tbody>{normalized.map((row, index) => <tr key={String(row.item_id || row.result_item_id || index)}><td>{index + 1}</td>{columns.map((key) => <td key={key}>{display(row[key])}</td>)}</tr>)}</tbody></table>
+  const preferred = ['item_text', 'item', 'standard_text', 'standard', 'method_text', 'method', 'result_text', 'mark', 'repairContent', 'maintenanceContent', 'inspector']
+  const columns = preferred.filter((key) => normalized.some((row) => row[key] !== undefined && row[key] !== null && row[key] !== ''))
+  return <table className="a4-table"><thead><tr><th>STT</th>{columns.map((key) => <th key={key}>{LABELS[key] || key}</th>)}</tr></thead><tbody>{normalized.map((row, index) => <tr key={String(row.maintenance_plan_item_id || row.maintenance_result_item_id || index)}><td>{index + 1}</td>{columns.map((key) => <td key={key}>{display(row[key])}</td>)}</tr>)}</tbody></table>
 }
 
 export function A4PrintCenter() {
@@ -87,7 +87,7 @@ export function A4PrintCenter() {
     if (!selected) return () => { active = false }
     const run = async () => {
       if (docType === 'bm03') {
-        const { data, error: cause } = await supabase.from('maintenance_plan_item').select('*').eq('plan_id', selected.plan_id).order('created_at')
+        const { data, error: cause } = await supabase.from('maintenance_plan_item').select('*').eq('plan_id', selected.plan_id).order('sort_order')
         if (cause) throw cause
         if (active) setDetails((data || []) as Row[])
       } else if (docType === 'bm08') {
@@ -118,10 +118,10 @@ export function A4PrintCenter() {
       <h1>{config.label.toUpperCase()}</h1>
       {docType === 'bm06' ? <>
         <div className="a4-meta"><span>Thời điểm in: {new Date().toLocaleString('vi-VN')}</span><span>Số sự kiện: {bm06Rows.length}</span></div>
-        <table className="a4-table"><thead><tr><th>STT</th><th>Thiết bị</th><th>Bắt đầu</th><th>Khôi phục</th><th>Nguyên nhân</th><th>Mô tả / hành động</th></tr></thead><tbody>{bm06Rows.map((row, index) => <tr key={String(row.downtime_id)}><td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{display(row.started_at)}</td><td>{display(row.ended_at)}</td><td>{display(row.cause)}</td><td>{display(row.detail)} / {display(row.recoveryAction)}</td></tr>)}</tbody></table>
+        <table className="a4-table"><thead><tr><th>STT</th><th>Thiết bị</th><th>Bắt đầu</th><th>Khôi phục</th><th>Nguyên nhân</th><th>Mô tả / hành động</th></tr></thead><tbody>{bm06Rows.map((row, index) => <tr key={String(row.downtime_id)}><td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{display(row.start_time)}</td><td>{display(row.end_time)}</td><td>{display(row.cause)}</td><td>{display(row.detail)} / {display(row.recoveryAction)}</td></tr>)}</tbody></table>
       </> : selected ? <>
         <div className="a4-meta"><span>Mã hồ sơ: {display(selected[config.idKey])}</span><span>Thời điểm in: {new Date().toLocaleString('vi-VN')}</span></div>
-        <section className="a4-fields">{printableFields(selected).map(([key, value]) => <div key={key}><span>{LABELS[key] || key}</span><strong>{display(value)}</strong></div>)}</section>
+        <section className="a4-fields">{printableFields(selected).map(([key, value], index) => <div key={`${key}-${index}`}><span>{LABELS[key] || key}</span><strong>{display(value)}</strong></div>)}</section>
         {(docType === 'bm03' || docType === 'bm08') ? <section className="a4-detail"><h2>Chi tiết hạng mục</h2><DetailTable rows={details} /></section> : null}
         <footer className="a4-signatures"><div><span>Người lập / thực hiện</span><b>Ký, ghi rõ họ tên</b></div><div><span>Người kiểm tra / xác nhận</span><b>Ký, ghi rõ họ tên</b></div><div><span>Phê duyệt</span><b>Ký, ghi rõ họ tên</b></div></footer>
       </> : <p className="a4-empty">Chưa có hồ sơ nguồn cho biểu mẫu này.</p>}
