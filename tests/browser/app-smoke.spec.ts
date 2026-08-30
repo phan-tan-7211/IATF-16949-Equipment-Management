@@ -38,21 +38,25 @@ async function openApp(page: Page) {
   await installSupabaseMocks(page)
   await page.goto('/')
   await expect(page.locator('.connection-pill')).toHaveText('SUPABASE LIVE')
-  await expect(page.getByText('ADMIN').first()).toBeVisible()
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-role', 'ADMIN')
+}
+
+async function clickNav(page: Page, label: string) {
+  await page.locator('button:visible', { hasText: label }).first().click()
+  await expect(page.locator('.topbar h1')).toContainText(label)
 }
 
 test('all operational workspaces navigate without browser crash', async ({ page }) => {
   await openApp(page)
   for (const label of ['Quét QR', 'Thiết bị', 'Kiểm tra ngày', 'Bảo trì', 'Jig & Tooling', 'Hiệu chuẩn', 'Hồ sơ A4', 'Audit & Cấu hình']) {
-    await page.getByRole('button', { name: label }).first().click()
-    await expect(page.locator('.topbar h1')).toContainText(label)
+    await clickNav(page, label)
     await expect(page.locator('main')).toBeVisible()
   }
 })
 
 test('A4 renderer exposes source-driven document and print action', async ({ page }) => {
   await openApp(page)
-  await page.getByRole('button', { name: 'Hồ sơ A4' }).first().click()
+  await clickNav(page, 'Hồ sơ A4')
   await expect(page.getByRole('heading', { name: 'Hồ sơ A4 / PDF' })).toBeVisible()
   await expect(page.locator('.a4-document')).toContainText('BM-TBSX-01')
   await expect(page.locator('.a4-document')).toContainText('CEV-PR-001')
@@ -61,7 +65,7 @@ test('A4 renderer exposes source-driven document and print action', async ({ pag
 
 test('ADMIN audit export creates a ZIP download end-to-end', async ({ page }) => {
   await openApp(page)
-  await page.getByRole('button', { name: 'Audit & Cấu hình' }).first().click()
+  await clickNav(page, 'Audit & Cấu hình')
   const exportButton = page.getByRole('button', { name: 'Export Audit Package (.zip)' })
   await expect(exportButton).toBeVisible()
   const downloadPromise = page.waitForEvent('download')
@@ -73,7 +77,7 @@ test('ADMIN audit export creates a ZIP download end-to-end', async ({ page }) =>
 
 test('QR entry remains usable when CI camera is denied', async ({ page }) => {
   await openApp(page)
-  await page.getByRole('button', { name: 'Quét QR' }).first().click()
+  await clickNav(page, 'Quét QR')
   await expect(page.locator('main')).toBeVisible()
   await expect(page.locator('.topbar h1')).toHaveText('Quét QR')
 })
