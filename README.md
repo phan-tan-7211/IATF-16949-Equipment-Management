@@ -1,159 +1,127 @@
 # Hệ thống quản lý thiết bị IATF 16949
 
-Ứng dụng quản lý thiết bị sản xuất, thiết bị đo kiểm, bảo trì, hiệu chuẩn, dụng cụ sản xuất và truy vết lịch sử theo nguyên tắc **một nguồn dữ liệu gốc**.
+Ứng dụng quản lý thiết bị sản xuất, thiết bị đo kiểm, bảo trì, hiệu chuẩn, Jig & Tooling và truy vết lịch sử theo nguyên tắc **một nguồn dữ liệu gốc**.
 
 > **Quy tắc bắt buộc cho dev/AI:** đọc `AGENTS.md` trước khi thay đổi kiến trúc hoặc triển khai feature.
 
-## Nguyên tắc kiến trúc bắt buộc
+## Nguyên tắc dữ liệu
 
 **Một thiết bị = một mã = một hồ sơ gốc = một lịch sử xuyên suốt.**
 
-`Equipment_Master` là danh mục thiết bị gốc duy nhất.
+- `equipment_master` là master thiết bị duy nhất.
+- `PRODUCTION` và `MEASUREMENT` dùng chung Equipment Master.
+- Inspection, Maintenance, Downtime, Handover, Calibration, Movement và Audit tham chiếu cùng `equipment_id`.
+- Không tạo master song song theo phòng ban/nghiệp vụ.
+- Tooling có lifecycle riêng theo `tooling_id`.
 
-Từ một hồ sơ gốc, thiết bị được phân loại thành:
-
-- `PRODUCTION`: thiết bị sản xuất;
-- `MEASUREMENT`: thiết bị đo kiểm / QC.
-
-Các module bảo trì, kiểm tra ngày, downtime, bàn giao và hiệu chuẩn chỉ tham chiếu cùng `equipmentId`. Không tạo mã thiết bị riêng theo từng phòng ban hoặc từng nghiệp vụ.
-
-Xem chi tiết tại:
-
-- `AGENTS.md`
-- `docs/KIEN_TRUC_LUONG_HE_THONG.md`
-- `docs/SOURCE_FIRST_IMPLEMENTATION_PLAN.md`
-- `docs/MASTER_IMPLEMENTATION_PLAN.md`
-
-## Phạm vi hệ thống
-
-- Danh mục và lý lịch thiết bị BM-TBSX-01/02.
-- Kiểm tra thiết bị hằng ngày BM-KTTBHN.
-- Kế hoạch và Work Order bảo trì.
-- Thực hiện, kết quả, lịch sử sửa chữa.
-- Bàn giao thiết bị BM-TBSX-05.
-- Downtime và KPI BM-TBSX-06.
-- Jig, gá và dụng cụ sản xuất BM-TBSX-09/10/11.
-- Quản lý thiết bị đo và hiệu chuẩn.
-- Lịch sử di chuyển thiết bị.
-- Audit Log.
-- Google Drive cho hình ảnh, chứng nhận và tài liệu bằng chứng.
-
-## Kiến trúc production chính thức
+## Kiến trúc runtime hiện tại của nhánh Supabase
 
 ```text
 Người dùng
     ↓
 Vercel Frontend
-React + Vite + TypeScript (`src/`)
+React + Vite + TypeScript
     ↓
-Apps Script Backend (`apps-script/`)
-    ↓
-Google Sheets / Google Drive
+Supabase
+├─ PostgreSQL
+├─ Auth
+├─ RLS
+├─ Storage
+└─ RPC / transactional workflow
 ```
 
-Canonical frontend production origin:
+**Không dùng Apps Script, Google Sheets hoặc Google Drive trong runtime mới.**
+
+Canonical frontend origin:
 
 ```text
 https://iatf-16949-equipment-management.vercel.app
 ```
 
-Deployment hash và git-branch aliases không phải canonical production origin.
+## Phạm vi hệ thống
 
-### 1. Vercel Frontend
+- BM-TBSX-01/02: Equipment Master / Lý lịch thiết bị.
+- BM-KTTBHN: kiểm tra thiết bị hằng ngày.
+- Kế hoạch PM và Maintenance Work Order.
+- BM-TBSX-05: bàn giao thiết bị.
+- Downtime / KPI.
+- BM-TBSX-09/10/11: Jig & Tooling.
+- Calibration Master / Calibration Log / chứng chỉ hiệu chuẩn.
+- Equipment Movement.
+- Audit Log.
 
-- Là **frontend production chính thức** của hệ thống.
-- Tất cả UI/UX người dùng thực tế sử dụng phải được phát triển trong `src/`.
-- Dashboard, Thiết bị, Kiểm tra hằng ngày, Bảo trì, Tooling, Hiệu chuẩn và Admin/Config phải có giao diện React tương ứng.
-- Không được bỏ quên frontend Vercel khi backend đã có chức năng.
+## Backend authority
 
-### 2. Apps Script Backend
+Business mutation quan trọng chạy qua Supabase RPC thay vì frontend tự ghép nhiều thao tác:
 
-Google Apps Script là backend/workflow boundary cho production.
+- Daily Inspection, bao gồm nhánh `STOP_REPAIR` tạo Inspection + Work Order + Downtime và cập nhật trạng thái thiết bị trong cùng transaction.
+- Maintenance workflow và gate BM-05 trước Release.
+- Tooling create / plan / modification workflow.
+- Calibration Log + cập nhật Calibration Master + Audit.
+- Equipment Master update và Audit.
 
-Backend chịu trách nhiệm:
+RLS và role-check phía database là lớp quyền authoritative. Frontend chỉ mirror quyền để ẩn/khóa action không hợp lệ.
 
-- business rule;
-- validation;
-- RBAC/identity;
-- audit;
-- idempotency;
-- transaction guard;
-- đọc/ghi Google Sheets và Google Drive.
+## Role
 
-Không dùng Vercel/serverless hoặc Node API để ghi trực tiếp vào Google Sheets/Drive production nếu chưa có thay đổi kiến trúc được phê duyệt.
+Các role ứng dụng:
 
-### Browser transport
+- `MAINTENANCE`
+- `SUPERVISOR`
+- `QUALITY`
+- `MANAGER`
+- `ADMIN`
 
-Frontend Vercel dùng một **Apps Script postMessage bridge ẩn** để gọi backend trong browser mà vẫn giữ Google session và tránh CORS/redirect của Apps Script Web App.
+`Audit & Cấu hình` chỉ ADMIN. Equipment Master edit hiện ADMIN-only. Các workflow khác bám đúng permission matrix trong `src/auth/AppRoleContext.tsx` và RPC tương ứng.
 
-Bridge này:
+## Storage
 
-- chỉ là transport backend;
-- không phải AppShell;
-- không phải frontend;
-- không có UI cho người dùng;
-- không được phát triển thành giao diện thay thế Vercel.
+Evidence lưu trong private Supabase Storage, gồm các bucket/prefix nghiệp vụ như:
 
-### 3. Google Sheets / Google Drive
+- `equipment-photos`
+- `calibration-certificates`
+- `maintenance-before-after`
+- `tooling-change-attachments`
+- `handover-records`
 
-- Google Sheets: structured persistence.
-- Google Drive: hình ảnh, chứng nhận, manual, tài liệu setup và evidence.
+Database lưu path/metadata, không lưu binary image trong table.
 
-### 4. AppShell
+## Frontend
 
-`apps-script/AppShell*` chỉ là **màn hình test kỹ thuật của backend**.
+Các workspace production:
 
-Mục đích:
+- Tổng quan
+- Thiết bị
+- Kiểm tra ngày
+- Bảo trì
+- Jig & Tooling
+- Hiệu chuẩn
+- Audit & Cấu hình
 
-- smoke test;
-- debug;
-- diagnostic;
-- kiểm trực tiếp workflow Apps Script.
+Workspace được lazy-load theo màn để giảm initial bundle. UI dùng pattern thống nhất: KPI → search/filter → bảng chính → drawer/profile/action.
 
-**AppShell không phải frontend production và không được thay thế frontend Vercel.**
+## Dữ liệu nguồn và IATF
 
-Việc AppShell chạy/render đúng chỉ chứng minh backend test shell hoạt động; không có nghĩa feature đã hoàn thành ở cấp sản phẩm nếu frontend Vercel chưa có UI tương ứng.
+Nguồn nghiệp vụ chuẩn nằm trong `source/` và các tài liệu được người quản trị xác nhận. `source/` là tài liệu nghiệp vụ, **không phải backend legacy** và không được xóa trong cleanup runtime.
 
-## Quy tắc chống architecture drift
+Không tự tạo dữ liệu giao dịch production từ template/ví dụ nếu chưa được phê duyệt.
 
-- Không phát triển feature UI production chỉ trong AppShell.
-- Khi thêm chức năng backend, phải xác định và triển khai frontend Vercel tương ứng nếu người dùng cần thao tác.
-- AppShell chỉ được giữ control tối thiểu phục vụ test backend.
-- Review PR phải kiểm tra cả `src/` và `apps-script/` để tránh bỏ quên frontend.
-- Nếu phải lựa chọn giữa làm UI nhanh trong AppShell và làm đúng trong Vercel frontend, ưu tiên **Vercel frontend**.
-- Hidden Apps Script bridge chỉ là transport; tuyệt đối không xem bridge hoặc AppShell là production UI.
+## Development
 
-## Identity / quyền
-
-Frontend không giữ Google credential và không được tự quyết định danh tính hay quyền người dùng.
-
-Danh tính authoritative phía Apps Script lấy từ:
-
-```text
-Session.getActiveUser().getEmail()
+```bash
+npm install
+npm run dev
+npm test
+npm run build
+npm run lint
 ```
 
-Quyền lấy từ Script Property `RBAC_JSON`.
+Supabase env xem `.env.example`. Không commit service-role key hoặc secret vào client/GitHub.
 
-## Dữ liệu production
+## Tài liệu chính
 
-Nguồn nghiệp vụ chuẩn nằm trong `source/` và các nguồn nghiệp vụ được người quản trị xác nhận.
-
-Không tự tạo dữ liệu giao dịch production từ template hoặc ví dụ nếu chưa được phê duyệt.
-
-Các bảng giao dịch bảo trì / kiểm tra chỉ được ghi khi có giao dịch thực tế hoặc fixture kiểm thử riêng.
-
-## Quản trị Equipment Master
-
-Trong giai đoạn hiện tại, chỉ `ADMIN` được phép thay đổi Equipment Master.
-
-Các thao tác gồm:
-
-- thêm thiết bị;
-- sửa thông tin;
-- ngừng sử dụng;
-- khôi phục;
-- thanh lý;
-- xóa an toàn thiết bị chưa có lịch sử.
-
-Thiết bị đã phát sinh giao dịch không được xóa vật lý. Hệ thống giữ lịch sử và chuyển trạng thái ngừng sử dụng / thanh lý.
+- `AGENTS.md`
+- `docs/MASTER_IMPLEMENTATION_PLAN.md`
+- `docs/SUPABASE_ONLY_ARCHITECTURE.md`
+- `docs/EQUIPMENT_ID_CONVENTION.md`
+- `docs/SOURCE_FIRST_IMPLEMENTATION_PLAN.md`

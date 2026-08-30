@@ -1,23 +1,27 @@
-import type { AppsScriptBridgeClient } from './appsScriptBridgeClient'
+import { supabase } from './supabaseClient'
 
 export type LiveSession = { email: string; role: string; contractVersion: string }
 export type LiveAudit = { auditId: string; timestamp: string; userId: string; action: string; entityType: string; entityId: string; oldValueJson: string; newValueJson: string }
 
-type SessionResponse = { ok: true; email: string; role: string; contractVersion: string }
-type AuditResponse = { ok: true; rows: Array<Record<string, unknown>> }
-
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 
-export async function loadLiveSession(client: Pick<AppsScriptBridgeClient, 'businessAction'>): Promise<LiveSession> {
-  const response = await client.businessAction<SessionResponse>('sessionInfo', {})
-  if (!response?.ok || !response.email || !response.role) throw new Error('SESSION_RESPONSE_INVALID')
-  return { email: response.email, role: response.role, contractVersion: response.contractVersion }
+export async function loadLiveSession(): Promise<LiveSession> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  const user = sessionData.session?.user
+  if (!user) throw new Error('Chưa đăng nhập Supabase')
+  const { data: roleData, error: roleError } = await supabase.from('app_user_role').select('role,email').eq('user_id', user.id).single()
+  if (roleError) throw roleError
+  return { email: text(roleData.email) || user.email || '', role: text(roleData.role), contractVersion: 'G1-frozen-2026-08-28' }
 }
 
-export async function loadLiveAudit(client: Pick<AppsScriptBridgeClient, 'businessAction'>): Promise<LiveAudit[]> {
-  const response = await client.businessAction<AuditResponse>('auditRead', {})
-  if (!response?.ok || !Array.isArray(response.rows)) throw new Error('AUDIT_RESPONSE_INVALID')
-  return response.rows.map((row) => ({
-    auditId: text(row.auditId), timestamp: text(row.timestamp), userId: text(row.userId), action: text(row.action), entityType: text(row.entityType), entityId: text(row.entityId), oldValueJson: text(row.oldValueJson), newValueJson: text(row.newValueJson),
-  })).filter((row) => row.auditId)
+export async function loadLiveAudit(): Promise<LiveAudit[]> {
+  const { data, error } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(200)
+  if (error) throw error
+  return ((data || []) as Array<Record<string, unknown>>).map((row) => {
+    const detail = (row.detail as Record<string, unknown> | null) || {}
+    return {
+      auditId: text(row.audit_id), timestamp: text(row.created_at), userId: text(row.actor_email), action: text(row.action), entityType: text(row.entity_type), entityId: text(row.entity_id), oldValueJson: JSON.stringify(detail.before ?? ''), newValueJson: JSON.stringify(detail.after ?? detail),
+    }
+  }).filter((row) => row.auditId)
 }

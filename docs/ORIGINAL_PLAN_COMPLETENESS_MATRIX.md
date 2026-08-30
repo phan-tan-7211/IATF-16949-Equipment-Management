@@ -1,0 +1,111 @@
+# Original Plan Completeness Matrix
+
+Purpose: prevent feature drift between `SOURCE_FIRST_IMPLEMENTATION_PLAN.md` and the Supabase cutover implementation.
+
+| Original requirement | Current status | Cutover requirement |
+| --- | --- | --- |
+| Equipment list/profile | DONE | browser smoke |
+| QR entry point | IMPLEMENTED / DEVICE TEST | Android + iPhone real-camera smoke |
+| Daily inspection form | DONE | browser smoke |
+| Maintenance Plan | IMPLEMENTED / BROWSER TEST | verify BM03 create/edit + Item/Standard/Method UX |
+| Maintenance Work Order | DONE | browser smoke |
+| Maintenance Execution / Result | IMPLEMENTED / BROWSER TEST | verify BM08 ○/△/× + abnormal-action UX |
+| Equipment Handover | IMPLEMENTED / BROWSER TEST | verify BM05 form + accepted release gate UX |
+| Downtime / KPI | IMPLEMENTED / BROWSER TEST | verify BM06 monthly report + downtime entry UX |
+| Tooling Master / Change | DONE CORE | browser smoke |
+| Calibration Master / Due | DONE CORE | browser smoke |
+| Calibration post-evaluation | IMPLEMENTED / BROWSER TEST | verify pending → evaluated workflow and role UX |
+| Calibration Vendor Quote History | IMPLEMENTED / BROWSER TEST | verify source snapshot + provider/date subtotal UX |
+| Auth / RBAC | DONE CORE | non-ADMIN real-user smoke |
+| Immutable/server audit | DONE CORE | ADMIN browser smoke |
+| A4/PDF renderer | MISSING | required before declaring original plan complete |
+| Export audit package | MISSING | required before declaring original plan complete |
+
+## BM03 implementation contract
+
+BM-TBSX-03 now persists through `rpc_upsert_maintenance_plan()` into `maintenance_plan` + `maintenance_plan_item` atomically and writes Audit in the same transaction.
+
+- Production Equipment only.
+- Maintenance type PM / PdM / CM.
+- Frequency, planned date/window, responsible person and note.
+- Multiple detailed `Item / Standard / Method` rows.
+- Create/edit uses replace-items transaction semantics so header and detail rows cannot drift.
+- Backend rollback smoke verified plan + 2 items + audit and left zero test records.
+
+## BM08 implementation contract
+
+BM-TBSX-08 now persists through `rpc_record_maintenance_result()` into `maintenance_execution` + `maintenance_result_item`, plus Maintenance Log + Audit in one transaction.
+
+- Linked to an IN_PROGRESS/COMPLETED Work Order.
+- Execution date, periodic frequency and inspection department.
+- Item rows are prefilled from active BM03 where available.
+- Result marks: `○` good, `△` warning, `×` repair.
+- `△/×` requires repair or maintenance action content at backend authority.
+- Each row records repair content, maintenance content and inspector.
+- Backend rollback smoke verified Execution + 2 Result Items + Log + Audit and left zero test records.
+
+## BM05 implementation contract
+
+BM-TBSX-05 now persists through `rpc_record_equipment_handover()` into `equipment_handover` + Audit in one transaction.
+
+- Supports a standalone equipment handover or a handover tied to a Work Order.
+- A Work Order-linked handover is accepted only after the Work Order is `VERIFIED`.
+- Captures handover time/location, chair department, meeting content and participants.
+- Captures handover/receiver person, title and department.
+- Captures handover reason and condition (`NORMAL`, `MINOR_ISSUE`, `NOT_OPERATIONAL`).
+- Captures attached documents/accessories, both-party comments and other agreements.
+- Receiver acceptance is recorded explicitly; only `accepted=true` satisfies the existing RELEASE gate.
+- Backend rollback smoke verified VERIFIED → accepted BM05 → RELEASED and left zero test records.
+
+## BM06 implementation contract
+
+BM-TBSX-06 now uses `downtime_event` as the event source and `rpc_upsert_downtime_event_bm06()` for controlled event creation/completion.
+
+- Production Equipment only.
+- Start and restart timestamps.
+- Standardized causes: mechanical, electrical, waiting material, unplanned maintenance, setup/changeover, no operator, material shortage, process error, other.
+- Detail, recovery action, affected department, recorder, handler and reporter are preserved in `source_data`.
+- Existing STOP_REPAIR-created downtime can be completed/enriched instead of duplicated.
+- Monthly report follows the source formulas in minutes: downtime rate, MTBF and MTTR.
+- Monthly equipment table marks days with downtime and shows downtime minutes/failure count.
+- Cause Pareto is derived from the same downtime events.
+- Backend rollback smoke verified create + close/update + Audit and left zero test records.
+
+## Calibration parity contract
+
+Post-evaluation is restored without adding a 21st G1 table:
+
+- `rpc_evaluate_calibration()` updates the existing Calibration Log source snapshot and writes Audit.
+- Results are `PASS`, `LIMITED_USE`, `FAIL`.
+- `LIMITED_USE`/`FAIL` require an evaluation note.
+- One Calibration Log can be evaluated only once.
+- Allowed roles: QUALITY, MANAGER, ADMIN.
+- Backend rollback smoke verified evaluation + Audit + duplicate-evaluation guard.
+
+Vendor quote history follows the frozen domain schema:
+
+- Calibration ID, provider, amount VND, source date and source document.
+- Stored in `calibration_vendor_quote` as historical source snapshot, not live price master data.
+- UI groups snapshots by provider/source date and shows item count/subtotal without inventing missing source values.
+- Backend rollback smoke verified quote + Audit and left zero test records.
+
+## QR implementation contract
+
+QR is a first-class mobile entry point, not a post-cutover extra.
+
+- One tap from mobile bottom navigation.
+- Rear camera preferred.
+- Continuous scan, no shutter button.
+- Up to 25 scan attempts/second, bounded by camera/browser frame rate.
+- Native `BarcodeDetector` used by scanner engine when available.
+- Worker fallback for browsers without native detection (notably iPhone/Safari).
+- Center scan region is downscaled by scanner engine for faster decoding.
+- Equipment IDs are validated against active `equipment_master` index before opening.
+- Supports raw canonical ID (`CEV-PR-001`) and QR URLs containing `equipment=CEV-PR-001`.
+- Successful scan stops camera, vibrates briefly, and opens Equipment 360 profile without full-page reload.
+- Flash toggle shown when the rear camera/browser supports it.
+- Manual Equipment ID entry remains as permission/camera fallback.
+
+## Rule
+
+No future statement that the original plan is "complete" may be made while this matrix contains `MISSING`, `PARTIAL REVIEW`, `BROWSER TEST`, or `DEVICE TEST` items.

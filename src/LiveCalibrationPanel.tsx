@@ -1,94 +1,76 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createAppsScriptBridgeClient } from './data/appsScriptBridgeClient'
-import { loadLiveCalibration, type CalibrationLinkState, type LiveCalibration } from './data/liveCalibration'
+import type { FormEvent } from 'react'
+import './Calibration.css'
+import { canRecordCalibration, useAppRole } from './auth/AppRoleContext'
+import { loadCalibrationLogs, loadLiveCalibration, recordCalibration, type CalibrationLinkState, type LiveCalibration, type LiveCalibrationLog } from './data/liveCalibration'
 import { getCalibrationDueStatus } from './domain/calibration'
 
-const linkLabel: Record<CalibrationLinkState, string> = {
-  LINKED: 'Đã liên kết',
-  UNLINKED: 'Chưa liên kết',
-  ORPHAN: 'Mã gốc không tồn tại',
-  INVALID_TYPE: 'Sai loại thiết bị',
-}
+const linkLabel: Record<CalibrationLinkState, string> = { LINKED: 'Đã liên kết', UNLINKED: 'Chưa liên kết', ORPHAN: 'Mã gốc không tồn tại', INVALID_TYPE: 'Sai loại thiết bị' }
+type DueFilter = 'ALL' | 'OVERDUE' | 'DUE_SOON' | 'VALID' | 'NO_PLAN'
+function dueLabel(value: string) { return ({ OVERDUE: 'Quá hạn', DUE_SOON: 'Sắp đến hạn', VALID: 'Còn hạn', NO_PLAN: 'Chưa có hạn' } as Record<string,string>)[value] || value }
 
 export function LiveCalibrationPanel() {
+  const role = useAppRole()
+  const canRecord = canRecordCalibration(role)
   const [rows, setRows] = useState<LiveCalibration[]>([])
+  const [logs, setLogs] = useState<LiveCalibrationLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [query, setQuery] = useState('')
   const [linkFilter, setLinkFilter] = useState<'ALL' | CalibrationLinkState>('ALL')
+  const [dueFilter, setDueFilter] = useState<DueFilter>('ALL')
+  const [selectedId, setSelectedId] = useState('')
+  const [recordMode, setRecordMode] = useState(false)
+  const [calibrationDate, setCalibrationDate] = useState(new Date().toISOString().slice(0,10))
+  const [nextDueDate, setNextDueDate] = useState('')
+  const [result, setResult] = useState<'PASS'|'FAIL'|'LIMITED_USE'>('PASS')
+  const [provider, setProvider] = useState('')
+  const [note, setNote] = useState('')
+  const [certificate, setCertificate] = useState<File | undefined>()
+  const today = new Date().toISOString().slice(0, 10)
 
+  const reload = async () => { setRows(await loadLiveCalibration()); setError('') }
+  useEffect(() => { let active=true; loadLiveCalibration().then((r)=>{if(active){setRows(r);setError('')}}).catch((c:unknown)=>{if(active)setError(c instanceof Error?c.message:'Không thể tải Calibration Master')}).finally(()=>{if(active)setLoading(false)}); return()=>{active=false} }, [])
   useEffect(() => {
-    const client = createAppsScriptBridgeClient()
-    let active = true
+    if (!selectedId) { setLogs([]); return }
+    const selected = rows.find((row)=>row.calibrationEquipmentId===selectedId)
+    if (!selected?.equipmentId) return
+    void loadCalibrationLogs(selected.equipmentId).then(setLogs).catch(()=>setLogs([]))
+  }, [selectedId, rows])
+  useEffect(() => { if(!selectedId)return; const h=(e:KeyboardEvent)=>{if(e.key==='Escape'){setRecordMode(false);setSelectedId('')}}; window.addEventListener('keydown',h); return()=>window.removeEventListener('keydown',h) }, [selectedId])
 
-    loadLiveCalibration(client)
-      .then((result) => {
-        if (!active) return
-        setRows(result)
-        setError('')
-      })
-      .catch((cause: unknown) => {
-        if (!active) return
-        setError(cause instanceof Error ? cause.message : 'Không thể tải Calibration Master')
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+  const linked=rows.filter((r)=>r.linkState==='LINKED').length, reconciliation=rows.length-linked
+  const overdue=rows.filter((r)=>getCalibrationDueStatus(r.nextDueDate,today)==='OVERDUE').length
+  const dueSoon=rows.filter((r)=>getCalibrationDueStatus(r.nextDueDate,today)==='DUE_SOON').length
+  const normalizedQuery=query.trim().toLocaleLowerCase()
+  const filteredRows=useMemo(()=>rows.filter((row)=>{ if(linkFilter!=='ALL'&&row.linkState!==linkFilter)return false; const due=getCalibrationDueStatus(row.nextDueDate,today); if(dueFilter!=='ALL'&&due!==dueFilter)return false; if(!normalizedQuery)return true; return [row.controlNumber,row.equipmentId,row.calibrationEquipmentId,row.instrumentName,row.localName,row.model,row.serialNumber,row.manufacturer,row.department].filter(Boolean).join(' ').toLocaleLowerCase().includes(normalizedQuery)}),[rows,linkFilter,dueFilter,normalizedQuery,today])
+  const selected=selectedId?rows.find((r)=>r.calibrationEquipmentId===selectedId)||null:null
+  const selectedDue=selected?getCalibrationDueStatus(selected.nextDueDate,today):'NO_PLAN'
 
-    return () => {
-      active = false
-      client.destroy()
-    }
-  }, [])
+  const submitRecord=async(e:FormEvent)=>{
+    e.preventDefault(); if(!selected?.equipmentId)return
+    if(!canRecord){setError(`Role ${role} không có quyền ghi Calibration Log.`);return}
+    setSaving(true); setError(''); setMessage('')
+    try { await recordCalibration({equipmentId:selected.equipmentId,calibrationDate,nextDueDate,result,provider,note,certificate}); setMessage(`Đã ghi hiệu chuẩn ${selected.equipmentId}`); setRecordMode(false); setProvider('');setNote('');setCertificate(undefined); await reload(); setLogs(await loadCalibrationLogs(selected.equipmentId)) }
+    catch(c:unknown){setError(c instanceof Error?c.message:'Không thể ghi hiệu chuẩn')} finally{setSaving(false)}
+  }
 
-  const linked = rows.filter((row) => row.linkState === 'LINKED').length
-  const reconciliation = rows.length - linked
-  const filteredRows = useMemo(
-    () => linkFilter === 'ALL' ? rows : rows.filter((row) => row.linkState === linkFilter),
-    [rows, linkFilter],
-  )
-
-  return <div className="stack">
-    <section className="metric-grid" aria-label="Tổng quan Calibration Master live">
-      <article><span>Tổng hồ sơ</span><strong>{rows.length}</strong><small>Calibration_Master live</small></article>
-      <article><span>Đã liên kết mã gốc</span><strong>{linked}</strong><small>MEASUREMENT canonical</small></article>
-      <article><span>Cần reconciliation</span><strong>{reconciliation}</strong><small>UNLINKED / ORPHAN / INVALID_TYPE</small></article>
-      <article><span>Nguồn dữ liệu</span><strong>LIVE</strong><small>Apps Script → Google Sheets</small></article>
+  return <div className="calibration-page">
+    <section className="calibration-summary" aria-label="Tổng quan hiệu chuẩn"><article><span>Tổng thiết bị đo</span><strong>{rows.length}</strong><small>Calibration Master</small></article><article><span>Quá hạn</span><strong>{overdue}</strong><small>Cần xử lý ngay</small></article><article><span>Sắp đến hạn</span><strong>{dueSoon}</strong><small>Cần lên kế hoạch</small></article><article><span>Cần reconciliation</span><strong>{reconciliation}</strong><small>{linked} đã liên kết canonical</small></article></section>
+    <section className="calibration-surface" aria-labelledby="calibration-title">
+      <header className="calibration-header"><div><p className="eyebrow">CEV-BM-STCL-03</p><h2 id="calibration-title">Calibration Control</h2><p>{filteredRows.length} / {rows.length} thiết bị · dữ liệu Supabase</p></div><button type="button" onClick={()=>void reload()}>Làm mới</button></header>
+      <div className="calibration-toolbar" role="search"><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Tìm control no., mã máy, model, serial, tên thiết bị…"/><select value={dueFilter} onChange={(e)=>setDueFilter(e.target.value as DueFilter)}><option value="ALL">Tất cả hạn</option><option value="OVERDUE">Quá hạn</option><option value="DUE_SOON">Sắp đến hạn</option><option value="VALID">Còn hạn</option><option value="NO_PLAN">Chưa có hạn</option></select><select value={linkFilter} onChange={(e)=>setLinkFilter(e.target.value as typeof linkFilter)}><option value="ALL">Tất cả liên kết</option><option value="LINKED">Đã liên kết</option><option value="UNLINKED">Chưa liên kết</option><option value="ORPHAN">Orphan</option><option value="INVALID_TYPE">Sai loại</option></select></div>
+      {message?<div className="calibration-state success">{message}</div>:null}{loading?<div className="calibration-state">Đang tải Calibration Master…</div>:null}{error?<div className="calibration-state error">{error}</div>:null}
+      {!loading&&!error?<div className="calibration-table-scroll"><table className="calibration-table"><thead><tr><th>Control No.</th><th>Thiết bị</th><th>Bộ phận</th><th>Model / Serial</th><th>Lần gần nhất</th><th>Hạn tiếp theo</th><th>Tình trạng</th><th>Liên kết</th><th /></tr></thead><tbody>{filteredRows.map((item)=>{const due=getCalibrationDueStatus(item.nextDueDate,today);return <tr key={item.calibrationEquipmentId}><td><button className="calibration-link" onClick={()=>setSelectedId(item.calibrationEquipmentId)}>{item.controlNumber||item.equipmentId||'Chưa cấp'}</button><small>{item.equipmentId||item.calibrationEquipmentId}</small></td><td><b>{item.instrumentName||item.localName||'—'}</b><small>{item.category||item.localName||'—'}</small></td><td>{item.department||'—'}</td><td>{item.model||'—'}<small>{item.serialNumber||'—'}</small></td><td>{item.lastCalibrationDate||'—'}</td><td>{item.nextDueDate||'—'}</td><td><span className={`calibration-due due-${due.toLowerCase()}`}>{dueLabel(due)}</span></td><td><span className={`calibration-link-state link-${item.linkState.toLowerCase()}`}>{linkLabel[item.linkState]}</span></td><td><button className="calibration-row-action" onClick={()=>setSelectedId(item.calibrationEquipmentId)}>Xem</button></td></tr>})}</tbody></table></div>:null}
     </section>
 
-    <section className="content-card" aria-labelledby="live-calibration-title">
-      <div className="section-heading">
-        <div><p className="eyebrow">CEV-BM-STCL-03 · Production data</p><h2 id="live-calibration-title">Calibration Master</h2></div>
-        <div>
-          <label className="sr-only" htmlFor="calibration-link-filter">Lọc trạng thái liên kết</label>
-          <select id="calibration-link-filter" value={linkFilter} onChange={(event) => setLinkFilter(event.target.value as typeof linkFilter)}>
-            <option value="ALL">Tất cả</option>
-            <option value="LINKED">Đã liên kết</option>
-            <option value="UNLINKED">Chưa liên kết</option>
-            <option value="ORPHAN">Orphan</option>
-            <option value="INVALID_TYPE">Sai loại</option>
-          </select>
-        </div>
-      </div>
-
-      {loading ? <p className="muted" role="status">Đang tải Calibration Master từ backend…</p> : null}
-      {error ? <div className="record-card" role="alert"><b>Không kết nối được backend</b><p>{error}</p><small>Kiểm tra Apps Script bridge và allowed frontend origins.</small></div> : null}
-
-      {!loading && !error ? <div className="table-wrap"><table>
-        <caption className="sr-only">Danh sách thiết bị hiệu chuẩn hiện hành từ Google Sheets</caption>
-        <thead><tr><th scope="col">Control No.</th><th scope="col">Thiết bị</th><th scope="col">Bộ phận</th><th scope="col">Model / Serial</th><th scope="col">Hiệu chuẩn</th><th scope="col">Hạn tiếp theo</th><th scope="col">Liên kết</th></tr></thead>
-        <tbody>{filteredRows.map((item) => {
-          const due = getCalibrationDueStatus(item.nextDueDate, new Date().toISOString().slice(0, 10))
-          return <tr key={item.calibrationEquipmentId}>
-            <td><b>{item.controlNumber || item.equipmentId || 'Chưa cấp'}</b><small>{item.calibrationEquipmentId}</small></td>
-            <td>{item.instrumentName || item.localName || '—'}<small>{item.category || item.localName || '—'}</small></td>
-            <td>{item.department || '—'}</td>
-            <td>{item.model || '—'}<small>{item.serialNumber || '—'}</small></td>
-            <td>{item.lastCalibrationDate || '—'}<small>{item.specification || item.accuracy || '—'}</small></td>
-            <td>{item.nextDueDate || '—'}<small>{due}</small></td>
-            <td><span className={`badge ${item.linkState === 'LINKED' ? 'running' : 'maintenance'}`}>{linkLabel[item.linkState]}</span></td>
-          </tr>
-        })}</tbody>
-      </table></div> : null}
-    </section>
+    {selected?<div className="calibration-layer" onMouseDown={(e)=>{if(e.target===e.currentTarget){setRecordMode(false);setSelectedId('')}}}><aside className="calibration-drawer" role="dialog" aria-modal="true"><header><div><p className="eyebrow">Calibration Profile</p><h2>{selected.controlNumber||selected.equipmentId||selected.calibrationEquipmentId}</h2><p>{selected.instrumentName||selected.localName||'Thiết bị đo'}</p></div><button onClick={()=>{setRecordMode(false);setSelectedId('')}}>×</button></header>
+      <div className="calibration-alert-row"><span className={`calibration-due due-${selectedDue.toLowerCase()}`}>{dueLabel(selectedDue)}</span><span className={`calibration-link-state link-${selected.linkState.toLowerCase()}`}>{linkLabel[selected.linkState]}</span>{selected.linkState==='LINKED'&&canRecord?<button className="calibration-record-button" onClick={()=>setRecordMode((v)=>!v)}>{recordMode?'Đóng form':'+ Ghi hiệu chuẩn'}</button>:selected.linkState==='LINKED'?<span className="calibration-readonly">Chỉ xem · {role}</span>:null}</div>
+      {recordMode&&canRecord?<form className="calibration-record-form" onSubmit={submitRecord}><label><span>Ngày hiệu chuẩn</span><input type="date" value={calibrationDate} onChange={(e)=>setCalibrationDate(e.target.value)} required/></label><label><span>Hạn tiếp theo</span><input type="date" value={nextDueDate} onChange={(e)=>setNextDueDate(e.target.value)} required/></label><label><span>Kết quả</span><select value={result} onChange={(e)=>setResult(e.target.value as typeof result)}><option>PASS</option><option>LIMITED_USE</option><option>FAIL</option></select></label><label><span>Đơn vị hiệu chuẩn</span><input value={provider} onChange={(e)=>setProvider(e.target.value)}/></label><label><span>Chứng chỉ</span><input type="file" accept="application/pdf,image/*" onChange={(e)=>setCertificate(e.target.files?.[0])}/></label><label><span>Ghi chú</span><textarea value={note} onChange={(e)=>setNote(e.target.value)}/></label><button className="calibration-record-button primary" disabled={saving}>{saving?'Đang lưu…':'Lưu Calibration Log'}</button></form>:null}
+      <div className="calibration-detail-grid"><div><span>Equipment ID</span><strong>{selected.equipmentId||'—'}</strong></div><div><span>Calibration ID</span><strong>{selected.calibrationEquipmentId}</strong></div><div><span>Model</span><strong>{selected.model||'—'}</strong></div><div><span>Serial</span><strong>{selected.serialNumber||'—'}</strong></div><div><span>Hiệu chuẩn gần nhất</span><strong>{selected.lastCalibrationDate||'—'}</strong></div><div><span>Hạn tiếp theo</span><strong>{selected.nextDueDate||'—'}</strong></div></div>
+      <section className="calibration-detail-section"><span>Lịch sử hiệu chuẩn</span>{logs.length?<div className="calibration-log-list">{logs.map((log)=><article key={log.calibrationLogId}><div><b>{log.calibrationDate}</b><span>{log.result}</span></div><small>Next: {log.nextDueDate} · {log.provider||'—'} · {log.actorEmail||'—'}</small>{log.note?<p>{log.note}</p>:null}{log.certificateUrl?<a href={log.certificateUrl} target="_blank" rel="noreferrer">Mở chứng chỉ</a>:null}</article>)}</div>:<p>Chưa có Calibration Log.</p>}</section>
+      </aside></div>:null}
   </div>
 }
