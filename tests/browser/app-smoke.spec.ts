@@ -59,10 +59,16 @@ test('A4 renderer exposes source-driven document and print action', async ({ pag
   await expect(page.getByRole('button', { name: 'In / Xuất PDF A4' })).toBeEnabled()
 })
 
-test('ADMIN audit screen exposes package export', async ({ page }) => {
+test('ADMIN audit export creates a ZIP download end-to-end', async ({ page }) => {
   await openApp(page)
   await page.getByRole('button', { name: 'Audit & Cấu hình' }).first().click()
-  await expect(page.getByRole('button', { name: 'Export Audit Package (.zip)' })).toBeVisible()
+  const exportButton = page.getByRole('button', { name: 'Export Audit Package (.zip)' })
+  await expect(exportButton).toBeVisible()
+  const downloadPromise = page.waitForEvent('download')
+  await exportButton.click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^CEV-IATF-Audit-Package-.*\.zip$/)
+  await expect(page.getByRole('status')).toContainText('Đã tạo CEV-IATF-Audit-Package-')
 })
 
 test('QR entry remains usable when CI camera is denied', async ({ page }) => {
