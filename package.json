@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "vitest run",
+    "test": "vitest run --exclude 'tests/browser/**'",
     "test:browser": "playwright test",
     "lint": "oxlint",
     "preview": "vite preview"
