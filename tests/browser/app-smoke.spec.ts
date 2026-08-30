@@ -42,7 +42,12 @@ async function openApp(page: Page) {
 }
 
 async function clickNav(page: Page, label: string) {
-  await page.locator('button:visible', { hasText: label }).first().click()
+  const viewport = page.viewportSize()
+  const mobile = Boolean(viewport && viewport.width <= 760)
+  const nav = mobile ? page.locator('.bottom-nav') : page.locator('.sidebar nav')
+  const button = nav.getByRole('button', { name: label, exact: true })
+  await expect(button).toBeVisible()
+  await button.click()
   await expect(page.locator('.topbar h1')).toContainText(label)
 }
 
