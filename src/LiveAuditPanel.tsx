@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './Audit.css'
+import { AuditExportControl } from './AuditExportControl'
 import { loadLiveAudit, loadLiveSession, type LiveAudit, type LiveSession } from './data/liveAudit'
 
 export function LiveAuditPanel() {
@@ -60,7 +61,7 @@ export function LiveAuditPanel() {
     </section>
 
     <section className="audit-surface">
-      <header className="audit-header"><div><p className="eyebrow">Security / Traceability</p><h2>Audit & Configuration</h2><p>Supabase Auth + RLS · Audit Log ADMIN-only</p></div><button type="button" onClick={() => void reload()}>Làm mới</button></header>
+      <header className="audit-header"><div><p className="eyebrow">Security / Traceability</p><h2>Audit & Configuration</h2><p>Supabase Auth + RLS · Audit Log ADMIN-only</p></div><div className="audit-header-actions"><button type="button" onClick={() => void reload()}>Làm mới</button>{session?.role === 'ADMIN' ? <AuditExportControl /> : null}</div></header>
       {loading ? <div className="audit-state">Đang xác thực phiên làm việc…</div> : null}
       {error ? <div className="audit-state error">{error}</div> : null}
       {!loading && session?.role !== 'ADMIN' ? <div className="audit-denied"><b>Audit Log bị giới hạn</b><p>Role hiện tại là {session?.role || 'UNKNOWN'}. Chỉ ADMIN được đọc Audit Log theo RLS.</p></div> : null}
