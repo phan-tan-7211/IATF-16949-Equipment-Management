@@ -37,7 +37,7 @@ async function installSupabaseMocks(page: Page) {
 async function openApp(page: Page) {
   await installSupabaseMocks(page)
   await page.goto('/')
-  await expect(page.getByText('SUPABASE LIVE')).toBeVisible()
+  await expect(page.locator('.connection-pill')).toHaveText('SUPABASE LIVE')
   await expect(page.getByText('ADMIN').first()).toBeVisible()
 }
 
@@ -68,7 +68,7 @@ test('ADMIN audit export creates a ZIP download end-to-end', async ({ page }) =>
   await exportButton.click()
   const download = await downloadPromise
   expect(download.suggestedFilename()).toMatch(/^CEV-IATF-Audit-Package-.*\.zip$/)
-  await expect(page.getByRole('status')).toContainText('Đã tạo CEV-IATF-Audit-Package-')
+  await expect(page.locator('.audit-export-control small[role="status"]')).toContainText('Đã tạo CEV-IATF-Audit-Package-')
 })
 
 test('QR entry remains usable when CI camera is denied', async ({ page }) => {
