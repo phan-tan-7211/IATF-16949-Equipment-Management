@@ -47,6 +47,33 @@ async function clickNav(page: Page, label: string) {
   const nav = mobile ? page.locator('.bottom-nav') : page.locator('.sidebar nav')
   const button = nav.getByRole('button', { name: label, exact: true })
   await expect(button).toBeVisible()
+  if (mobile) {
+    const hit = await button.evaluate((element) => {
+      element.scrollIntoView({ block: 'nearest', inline: 'center' })
+      const rect = element.getBoundingClientRect()
+      const x = rect.left + rect.width / 2
+      const y = rect.top + rect.height / 2
+      const target = document.elementFromPoint(x, y)
+      const navElement = element.closest('.bottom-nav')
+      const navRect = navElement?.getBoundingClientRect()
+      const style = navElement ? getComputedStyle(navElement) : null
+      const targetPath: string[] = []
+      let node: Element | null = target
+      while (node && targetPath.length < 6) {
+        targetPath.push(`${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ''}${node.className && typeof node.className === 'string' ? `.${node.className.trim().replace(/\s+/g, '.')}` : ''}`)
+        node = node.parentElement
+      }
+      return {
+        viewport: { width: innerWidth, height: innerHeight, visualWidth: visualViewport?.width ?? null, visualHeight: visualViewport?.height ?? null, scale: visualViewport?.scale ?? null },
+        button: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height, x, y },
+        nav: navRect ? { left: navRect.left, top: navRect.top, right: navRect.right, bottom: navRect.bottom, width: navRect.width, height: navRect.height, zIndex: style?.zIndex, position: style?.position, pointerEvents: style?.pointerEvents } : null,
+        hit: targetPath,
+        targetInsideButton: Boolean(target && element.contains(target)),
+      }
+    })
+    console.log(`[mobile-nav-hit] ${label}: ${JSON.stringify(hit)}`)
+    expect(hit.targetInsideButton, `Mobile nav hit-test failed: ${JSON.stringify(hit)}`).toBe(true)
+  }
   await button.click()
   await expect(page.locator('.topbar h1')).toContainText(label)
 }
