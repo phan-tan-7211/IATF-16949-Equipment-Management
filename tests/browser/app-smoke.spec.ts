@@ -34,9 +34,41 @@ async function installSupabaseMocks(page: Page) {
   })
 }
 
+async function normalizeEmulatedMobileViewport(page: Page) {
+  const viewport = page.viewportSize()
+  if (!viewport || viewport.width > 760) return
+  let actual = await page.evaluate(() => ({
+    innerWidth,
+    innerHeight,
+    visualWidth: visualViewport?.width ?? innerWidth,
+    visualHeight: visualViewport?.height ?? innerHeight,
+    meta: document.querySelector('meta[name="viewport"]')?.getAttribute('content') ?? '',
+    dpr: devicePixelRatio,
+    userAgent: navigator.userAgent,
+  }))
+  if (Math.abs(actual.innerWidth - viewport.width) > 2 || Math.abs(actual.innerHeight - viewport.height) > 2) {
+    await page.setViewportSize(viewport)
+    await page.waitForTimeout(50)
+    actual = await page.evaluate(() => ({
+      innerWidth,
+      innerHeight,
+      visualWidth: visualViewport?.width ?? innerWidth,
+      visualHeight: visualViewport?.height ?? innerHeight,
+      meta: document.querySelector('meta[name="viewport"]')?.getAttribute('content') ?? '',
+      dpr: devicePixelRatio,
+      userAgent: navigator.userAgent,
+    }))
+  }
+  console.log(`[mobile-viewport] configured=${JSON.stringify(viewport)} actual=${JSON.stringify(actual)}`)
+  expect(actual.meta).toContain('width=device-width')
+  expect(actual.innerWidth, `Emulated mobile layout width drifted: ${JSON.stringify(actual)}`).toBeLessThanOrEqual(viewport.width + 2)
+  expect(actual.innerHeight, `Emulated mobile layout height drifted: ${JSON.stringify(actual)}`).toBeLessThanOrEqual(viewport.height + 2)
+}
+
 async function openApp(page: Page) {
   await installSupabaseMocks(page)
   await page.goto('/')
+  await normalizeEmulatedMobileViewport(page)
   await expect(page.locator('.connection-pill')).toHaveText('SUPABASE LIVE')
   await expect(page.locator('.app-shell')).toHaveAttribute('data-role', 'ADMIN')
 }
