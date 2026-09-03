@@ -9,10 +9,10 @@ type Props = {
 }
 
 type ScanFeedback = {
-  kind: 'success' | 'warning'
+  kind: 'warning'
   title: string
   detail: string
-  equipmentId?: string
+  rawValue: string
 }
 
 function vibrate(pattern: number | number[]) {
@@ -30,7 +30,6 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
   const startingRef = useRef(false)
   const acceptedRef = useRef(false)
   const feedbackTimerRef = useRef<number | null>(null)
-  const navigationTimerRef = useRef<number | null>(null)
   const lastRejectedRef = useRef({ value: '', at: 0 })
   const [index, setIndex] = useState<QrEquipmentIndexItem[]>([])
   const [indexLoading, setIndexLoading] = useState(true)
@@ -75,7 +74,6 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
   useEffect(() => () => {
     stopCamera()
     if (feedbackTimerRef.current !== null) window.clearTimeout(feedbackTimerRef.current)
-    if (navigationTimerRef.current !== null) window.clearTimeout(navigationTimerRef.current)
   }, [stopCamera])
 
   function clearFeedback() {
@@ -90,7 +88,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
     lastRejectedRef.current = { value, at: now }
     setMessage(messageText)
     clearFeedback()
-    setFeedback({ kind: 'warning', title: 'Đã đọc QR · chưa mở được hồ sơ', detail: messageText })
+    setFeedback({ kind: 'warning', title: 'Đã đọc QR · chưa mở được hồ sơ', detail: messageText, rawValue: value })
     vibrate(80)
     feedbackTimerRef.current = window.setTimeout(() => {
       setFeedback(null)
@@ -108,7 +106,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
 
     const equipment = equipmentById.get(equipmentId)
     if (!equipment) {
-      rejectValue(equipmentId, `${equipmentId} không có trong danh sách thiết bị.`)
+      rejectValue(rawValue, `${equipmentId} không có trong danh sách thiết bị.`)
       return false
     }
 
@@ -117,13 +115,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
     stopCamera()
     clearFeedback()
     setCameraState('IDLE')
-    setMessage(`Đã nhận ${equipmentId} · ${equipment.equipmentName}`)
-    setFeedback({ kind: 'success', title: 'Đã nhận mã thiết bị', detail: equipment.equipmentName, equipmentId })
-    vibrate([90, 50, 90])
-    navigationTimerRef.current = window.setTimeout(() => {
-      navigationTimerRef.current = null
-      onOpenEquipment(equipmentId)
-    }, 1000)
+    onOpenEquipment(equipmentId)
     return true
   }
 
@@ -216,8 +208,8 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
           className="qr-camera-toggle"
           type="button"
           onClick={toggleCamera}
-          disabled={indexLoading || cameraState === 'STARTING' || feedback?.kind === 'success'}
-          aria-label={feedback?.kind === 'success' ? 'Đã nhận mã thiết bị' : cameraState === 'SCANNING' ? 'Chạm để tắt camera' : 'Chạm để bật camera'}
+          disabled={indexLoading || cameraState === 'STARTING'}
+          aria-label={cameraState === 'SCANNING' ? 'Chạm để tắt camera' : 'Chạm để bật camera'}
           aria-pressed={cameraState === 'SCANNING'}
           aria-busy={cameraState === 'STARTING'}
         >
@@ -232,12 +224,12 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
           </span>
         </button>
         {cameraState === 'SCANNING' && !feedback ? <div className="qr-live-guidance">Đặt QR vào giữa khung để quét</div> : null}
-        {feedback ? <div className={`qr-scan-feedback ${feedback.kind}`} role={feedback.kind === 'success' ? 'status' : 'alert'} aria-atomic="true">
-          <span className="qr-feedback-symbol" aria-hidden="true">{feedback.kind === 'success' ? '✓' : '!'}</span>
+        {feedback ? <div className={`qr-scan-feedback ${feedback.kind}`} role="alert" aria-atomic="true">
+          <span className="qr-feedback-symbol" aria-hidden="true">!</span>
           <strong>{feedback.title}</strong>
-          {feedback.equipmentId ? <b className="qr-feedback-code">{feedback.equipmentId}</b> : null}
+          <span className="qr-feedback-raw">{feedback.rawValue}</span>
           <span className="qr-feedback-detail">{feedback.detail}</span>
-          <small>{feedback.kind === 'success' ? 'Đang mở hồ sơ…' : 'Camera vẫn đang quét.'}</small>
+          <small>{cameraState === 'SCANNING' ? 'Camera vẫn đang quét.' : 'Nhập mã khác hoặc bật camera để quét.'}</small>
         </div> : null}
       </div>
 
@@ -253,7 +245,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
         <input id="qr-equipment-search" role="combobox" aria-autocomplete="list"
           aria-expanded={suggestionsOpen} aria-controls="qr-equipment-options"
           aria-activedescendant={suggestionsOpen && activeOption >= 0 && suggestions[activeOption] ? `qr-option-${activeOption}` : undefined}
-          value={manualCode} disabled={indexLoading || feedback?.kind === 'success'}
+          value={manualCode} disabled={indexLoading}
           onFocus={() => setSuggestionsOpen(true)} onBlur={() => setSuggestionsOpen(false)}
           onChange={(event) => { setManualCode(event.target.value); setActiveOption(-1); setSuggestionsOpen(true) }}
           onKeyDown={(event) => {
@@ -267,7 +259,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
               submitManualCode(suggestionsOpen && activeOption >= 0 ? suggestions[activeOption]?.equipmentId : undefined)
             }
           }} placeholder="Tìm mã hoặc tên thiết bị…" autoCapitalize="off" autoComplete="off" />
-        <button type="button" onClick={() => submitManualCode()} disabled={!manualCode.trim() || indexLoading || feedback?.kind === 'success'}>Mở</button>
+        <button type="button" onClick={() => submitManualCode()} disabled={!manualCode.trim() || indexLoading}>Mở</button>
       </div>
       {suggestionsOpen ? <div className="qr-suggestions" id="qr-equipment-options" role="listbox" aria-label="Thiết bị gợi ý">
         {suggestions.length ? suggestions.map((item, position) => <div

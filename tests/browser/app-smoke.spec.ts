@@ -295,8 +295,7 @@ test('QR fits the viewport and suggests equipment by name before opening', async
   await expect(option).toBeVisible()
   await testInfo.attach('QR search', {body: await page.screenshot(), contentType: 'image/png'})
   await option.click()
-  await expect(page.locator('.qr-scan-feedback.success')).toContainText('CEV-PR-001')
-  await expect(page.locator('.qr-scan-feedback.success')).toContainText('Smoke Equipment')
+  await expect(page.locator('.qr-scan-feedback.success')).toHaveCount(0)
   await expect(page.locator('.topbar h1')).toHaveText('CEV-PR-001')
 })
 
