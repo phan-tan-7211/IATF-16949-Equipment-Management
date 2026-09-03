@@ -14,9 +14,9 @@ const SOURCE_ROWS: Record<string, Record<string, unknown>[]> = {
 const USER_ID = '00000000-0000-4000-8000-000000000001'
 const jwt = `eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.${Buffer.from(JSON.stringify({ sub: USER_ID, aud: 'authenticated', exp: 4102444800, email: 'smoke@example.com', role: 'authenticated' })).toString('base64url')}.`
 
-async function installSupabaseMocks(page: Page) {
-  await page.addInitScript(({ token, userId }) => {
-    localStorage.setItem('sb-supabase-not-configured-auth-token', JSON.stringify({
+async function installSupabaseMocks(page: Page, signedIn = true) {
+  await page.addInitScript(({ token, userId, signedIn }) => {
+    if (signedIn) localStorage.setItem('sb-supabase-not-configured-auth-token', JSON.stringify({
       access_token: token,
       refresh_token: 'smoke-refresh',
       token_type: 'bearer',
@@ -29,7 +29,7 @@ async function installSupabaseMocks(page: Page) {
       value: { getUserMedia: async () => { throw new DOMException('Camera unavailable in CI', 'NotAllowedError') }, enumerateDevices: async () => [{ kind: 'videoinput', deviceId: 'denied-camera', label: 'CI camera' }] },
     })
     Object.defineProperty(navigator, 'vibrate', { configurable: true, value: () => true })
-  }, { token: jwt, userId: USER_ID })
+  }, { token: jwt, userId: USER_ID, signedIn })
 
   await page.route('https://supabase-not-configured.invalid/**', async (route) => {
     const url = new URL(route.request().url())
@@ -214,4 +214,24 @@ test('A4 detail failure prevents incomplete printing', async ({ page }) => {
  await page.getByLabel('Biểu mẫu', { exact: true }).selectOption('bm03')
  await expect(page.locator('.print-error')).toContainText('detail unavailable')
  await expect(page.getByRole('button', { name: 'In / Xuất PDF A4' })).toBeDisabled()
+})
+
+
+test('signed-out login resolves ADMIN, preserves QR target and logout removes data', async ({ page }) => {
+  await installSupabaseMocks(page, false)
+  await page.goto('/?phase3=equipment&equipment=CEV-PR-001')
+  await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible()
+  await expect(page.locator('.app-shell')).toHaveCount(0)
+  await page.getByLabel('Email', { exact: true }).fill('smoke@example.com')
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('browser-fixture-password')
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-role', 'ADMIN')
+  await expect(page.locator('.topbar h1')).toHaveText('CEV-PR-001')
+  await page.reload()
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-role', 'ADMIN')
+  await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible()
+  await expect(page.locator('.app-shell')).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByLabel('Mật khẩu', { exact: true })).toBeVisible()
 })
