@@ -115,6 +115,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
     stopCamera()
     clearFeedback()
     setCameraState('IDLE')
+    vibrate(80)
     onOpenEquipment(equipmentId)
     return true
   }
