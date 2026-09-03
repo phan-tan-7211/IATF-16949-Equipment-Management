@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
+import { preparePasswordCallback } from '../auth/passwordRecoveryRoute'
+
+// Preserve recovery/invite intent before Supabase consumes the URL fragment.
+if (typeof window !== 'undefined') preparePasswordCallback()
 
 const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim()
 const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
@@ -25,3 +29,4 @@ export const supabase = createClient(
     },
   },
 )
+
