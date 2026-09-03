@@ -343,5 +343,5 @@ test('equipment profile contains tall and wide photos without clipping', async (
   }
   const profile = page.locator('.equipment-profile')
   await profile.evaluate(el => { el.scrollTop = el.scrollHeight })
-  await expect(page.getByRole('button', { name: /^Tổng quan$/ })).toBeInViewport()
+  await expect(profile.getByRole('button', { name: /^Tổng quan$/ })).toBeInViewport()
 })
