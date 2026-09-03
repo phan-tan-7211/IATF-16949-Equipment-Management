@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './EquipmentProfile.css'
 import type { LiveEquipment } from './data/liveEquipment'
-import { loadEquipmentHistory, type EquipmentHistory } from './data/supabaseEquipment'
+import { getEquipmentPhotoPreview, uploadEquipmentPhoto, loadEquipmentHistory, type EquipmentHistory } from './data/supabaseEquipment'
+
+import { canManageEquipmentPhoto, useAppRole } from './auth/AppRoleContext'
 
 type Props = {
   equipment: LiveEquipment
@@ -43,6 +45,35 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
   const [history, setHistory] = useState<EquipmentHistory>(EMPTY_HISTORY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const canUploadPhoto = canManageEquipmentPhoto(useAppRole())
+  const [photoChoices, setPhotoChoices] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+  const [uploadedPhoto, setUploadedPhoto] = useState({ id: '', url: '' })
+  const photoUploadLock = useRef(false)
+  const cameraInput = useRef<HTMLInputElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const displayedPhoto = uploadedPhoto.id === equipment.equipmentId ? uploadedPhoto.url : photoUrl
+
+  async function addPhoto(file?: File) {
+    if (!file || !canUploadPhoto || photoUploadLock.current) return
+    photoUploadLock.current = true
+    setPhotoBusy(true)
+    setPhotoError('')
+    try {
+      await uploadEquipmentPhoto(equipment.equipmentId, file)
+      const photo = await getEquipmentPhotoPreview(equipment.equipmentId)
+      if (!photo.signedUrl) throw new Error('Chưa tải được ảnh vừa lưu. Vui lòng mở lại hồ sơ.')
+      setUploadedPhoto({ id: equipment.equipmentId, url: photo.signedUrl })
+      setPhotoChoices(false)
+    } catch (cause) {
+      setPhotoError(cause instanceof Error ? cause.message : 'Không tải được ảnh. Vui lòng thử lại.')
+    } finally {
+      photoUploadLock.current = false
+      setPhotoBusy(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -96,9 +127,26 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
 
       <section className="equipment-profile-hero">
         <div className="equipment-profile-image-wrap">
-          {photoUrl
-            ? <img src={photoUrl} alt={`Ảnh lớn ${equipment.equipmentName}`} />
-            : <div className="equipment-profile-no-image">Chưa có ảnh thiết bị</div>}
+          {displayedPhoto
+            ? <img src={displayedPhoto} alt={`Ảnh lớn ${equipment.equipmentName}`} />
+            : <div className="equipment-profile-no-image">
+              {canUploadPhoto ? <>
+                <button className="equipment-profile-add-photo" type="button" disabled={photoBusy}
+                  aria-expanded={photoChoices} onClick={() => setPhotoChoices(true)}>
+                  <strong>{photoBusy ? 'Đang lưu ảnh…' : 'Chưa có ảnh thiết bị'}</strong>
+                  {!photoBusy && <span>Chạm để chụp hoặc tải ảnh lên</span>}
+                </button>
+                {photoChoices && !photoBusy && <div className="equipment-profile-photo-actions">
+                  <button type="button" onClick={() => cameraInput.current?.click()}>Chụp ảnh</button>
+                  <button type="button" onClick={() => fileInput.current?.click()}>Tải ảnh lên</button>
+                </div>}
+                <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden
+                  aria-label="Chụp ảnh thiết bị" onChange={event => { void addPhoto(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
+                <input ref={fileInput} type="file" accept="image/*" hidden
+                  aria-label="Tải ảnh thiết bị" onChange={event => { void addPhoto(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
+                {photoError && <div className="equipment-profile-photo-error" role="alert">{photoError}</div>}
+              </> : 'Chưa có ảnh thiết bị'}
+            </div>}
         </div>
         <div className="equipment-profile-identity">
           <span className={`equipment-profile-status status-${equipment.status.toLowerCase()}`}>{equipment.status}</span>
