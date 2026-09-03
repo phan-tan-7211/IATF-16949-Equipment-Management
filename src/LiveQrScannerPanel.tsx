@@ -34,6 +34,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
   const lastRejectedRef = useRef({ value: '', at: 0 })
   const [index, setIndex] = useState<QrEquipmentIndexItem[]>([])
   const [indexLoading, setIndexLoading] = useState(true)
+  const [indexError, setIndexError] = useState('')
   const [cameraState, setCameraState] = useState<'IDLE' | 'STARTING' | 'SCANNING' | 'ERROR'>('IDLE')
   const [message, setMessage] = useState('Đưa QR thiết bị vào khung để quét.')
   const [manualCode, setManualCode] = useState('')
@@ -56,7 +57,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
     let active = true
     void loadQrEquipmentIndex()
       .then((rows) => { if (active) setIndex(rows) })
-      .catch((cause) => { if (active) setMessage(cause instanceof Error ? cause.message : 'Không tải được danh sách thiết bị') })
+      .catch((cause) => { if (active) setIndexError(cause instanceof Error ? cause.message : 'Không tải được danh sách thiết bị') })
       .finally(() => { if (active) setIndexLoading(false) })
     return () => { active = false }
   }, [])
@@ -94,7 +95,7 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
     feedbackTimerRef.current = window.setTimeout(() => {
       setFeedback(null)
       feedbackTimerRef.current = null
-    }, 2400)
+    }, 1600)
   }
 
   function acceptValue(rawValue: string) {
@@ -230,19 +231,20 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
             {cameraState !== 'SCANNING' ? <span>Chạm ở bất kỳ đâu trong khung này</span> : null}
           </span>
         </button>
+        {cameraState === 'SCANNING' && !feedback ? <div className="qr-live-guidance">Đặt QR vào giữa khung để quét</div> : null}
         {feedback ? <div className={`qr-scan-feedback ${feedback.kind}`} role={feedback.kind === 'success' ? 'status' : 'alert'} aria-atomic="true">
           <span className="qr-feedback-symbol" aria-hidden="true">{feedback.kind === 'success' ? '✓' : '!'}</span>
           <strong>{feedback.title}</strong>
           {feedback.equipmentId ? <b className="qr-feedback-code">{feedback.equipmentId}</b> : null}
           <span className="qr-feedback-detail">{feedback.detail}</span>
-          <small>{feedback.kind === 'success' ? 'Đang mở hồ sơ…' : 'Đưa QR thiết bị khác vào khung để quét tiếp.'}</small>
+          <small>{feedback.kind === 'success' ? 'Đang mở hồ sơ…' : 'Camera vẫn đang quét.'}</small>
         </div> : null}
       </div>
 
-      <div className="qr-controls">
+      {cameraState === 'ERROR' || indexError || (cameraState === 'SCANNING' && hasFlash) ? <div className="qr-controls">
         {cameraState === 'SCANNING' && hasFlash ? <button className="qr-flash" type="button" onClick={() => void toggleFlash()}>{flashOn ? 'Tắt đèn' : 'Bật đèn'}</button> : null}
-        <div className="qr-message" role={feedback ? undefined : 'status'}>{message}</div>
-      </div>
+        {cameraState === 'ERROR' || indexError ? <div className="qr-message" role="status">{indexError || message}</div> : null}
+      </div> : null}
     </section>
 
     <section className="qr-manual-card">
