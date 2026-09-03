@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
 import './Equipment.css'
 import { EquipmentProfile } from './EquipmentProfile'
 import { type LiveEquipment } from './data/liveEquipment'
+import { checkEquipmentDeletion, deleteUnusedEquipment } from './data/equipmentDeletion'
 import {
   getEquipmentPhotoPreview,
   getEquipmentPhotoPreviews,
@@ -70,6 +71,7 @@ export function LiveEquipmentPanel() {
   const [message, setMessage] = useState('')
   const [uploadingId, setUploadingId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
 
@@ -176,6 +178,44 @@ export function LiveEquipmentPanel() {
       setMessage(cause instanceof Error ? cause.message : 'SAVE_FAILED')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!editing || deleting || saving) return
+    const equipmentId = editing.oldEquipmentId.trim().toUpperCase()
+    setDeleting(true)
+    setMessage('')
+    try {
+      const check = await checkEquipmentDeletion(equipmentId)
+      if (!check.exists) {
+        setMessage(`${equipmentId} không còn tồn tại.`)
+        setEditing(null)
+        await reloadEquipment()
+        return
+      }
+      if (!check.canDelete) {
+        const detail = check.blockers.map((item) => `${item.label}: ${item.count}`).join(' · ')
+        setMessage(`Không thể xóa ${equipmentId} vì đã có dữ liệu liên quan. ${detail}`)
+        return
+      }
+      const confirmed = window.confirm(`Xóa ${equipmentId} - ${editing.equipmentName}?\n\nThiết bị chưa có dữ liệu nghiệp vụ liên quan nên có thể xóa. Hệ thống cũng sẽ xóa toàn bộ ảnh của mã này. Hành động không thể hoàn tác.`)
+      if (!confirmed) return
+
+      const result = await deleteUnusedEquipment(equipmentId)
+      setRows((current) => current.filter((row) => row.equipmentId !== equipmentId))
+      setPhotos((current) => {
+        const next = { ...current }
+        delete next[equipmentId]
+        return next
+      })
+      setProfileId('')
+      setEditing(null)
+      setMessage(`Đã xóa ${equipmentId}${Number(result.removedPhotos || 0) > 0 ? ` và ${result.removedPhotos} ảnh` : ''}.`)
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'EQUIPMENT_DELETE_FAILED')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -380,8 +420,10 @@ export function LiveEquipmentPanel() {
         </div>
 
         <footer>
-          <button className="equipment-cancel" type="button" onClick={() => setEditing(null)}>Hủy</button>
-          <button className="equipment-primary" type="button" onClick={() => void handleSave()} disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
+          <button className="equipment-delete" type="button" onClick={() => void handleDelete()} disabled={saving || deleting}>{deleting ? 'Đang kiểm tra…' : 'Xóa thiết bị'}</button>
+          <span className="equipment-footer-spacer" />
+          <button className="equipment-cancel" type="button" onClick={() => setEditing(null)} disabled={deleting}>Hủy</button>
+          <button className="equipment-primary" type="button" onClick={() => void handleSave()} disabled={saving || deleting}>{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
         </footer>
       </aside>
     </div> : null}
