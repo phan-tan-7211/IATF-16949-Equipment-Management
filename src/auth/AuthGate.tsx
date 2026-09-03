@@ -2,8 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '../data/supabaseClient'
 import { loadLiveSession, type LiveSession } from '../data/liveAudit'
 import './AuthGate.css'
+import { PasswordRecovery } from './PasswordRecovery'
+import { clearPasswordReset, markPasswordReset, wantsPasswordReset } from './passwordRecoveryRoute'
 
-type State = { status: 'loading' | 'signedOut' | 'denied' | 'ready'; session?: LiveSession }
+type State = { status: 'loading' | 'signedOut' | 'denied' | 'ready' | 'recovery'; session?: LiveSession }
 const roles = ['ADMIN', 'MAINTENANCE', 'SUPERVISOR', 'QUALITY', 'MANAGER']
 
 export function AuthGate({ children }: { children: (session: LiveSession, signOut: () => Promise<void>) => ReactNode }) {
@@ -24,6 +26,7 @@ export function AuthGate({ children }: { children: (session: LiveSession, signOu
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
         if (!current()) return
+        if (wantsPasswordReset()) { setState({ status: 'recovery' }); return }
         if (!data.session) { setState({ status: 'signedOut' }); return }
         try {
           const session = await loadLiveSession()
@@ -44,7 +47,9 @@ export function AuthGate({ children }: { children: (session: LiveSession, signOu
         }
       }
     }
-    function refresh() {
+    function refresh(event?: string) {
+      if (event === 'PASSWORD_RECOVERY') markPasswordReset()
+      if (wantsPasswordReset()) { ++revision; setState({ status: 'recovery' }); return }
       const version = ++revision
       setState({ status: 'loading' })
       // Supabase requests must run outside the auth callback's lock.
@@ -84,6 +89,8 @@ export function AuthGate({ children }: { children: (session: LiveSession, signOu
     finally { setBusy(false) }
   }
 
+  if (state.status === 'recovery') return <PasswordRecovery onClose={() => { clearPasswordReset(); setError(''); setState({ status: 'loading' }); setRetry(value => value + 1) }}/>
+
   if (state.status === 'ready' && state.session) return <>{error && <p className="auth-notice" role="alert">{error}</p>}{children(state.session, signOut)}</>
   return <main className="auth-page"><section className="auth-card" aria-label="Đăng nhập CEV Equipment"><p className="eyebrow">CEV Equipment · IATF 16949</p><h1>Đăng nhập</h1>
     {state.status === 'loading' ? <p role="status">Đang xác nhận phiên đăng nhập…</p> : <>
@@ -93,7 +100,7 @@ export function AuthGate({ children }: { children: (session: LiveSession, signOu
         <label>Email<input type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} disabled={busy}/></label>
         <label>Mật khẩu<input type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} disabled={busy}/></label>
         <button type="submit" disabled={busy}>{busy ? 'Đang đăng nhập…' : 'Đăng nhập'}</button>
-        <p className="auth-help">Quên mật khẩu hoặc chưa có tài khoản? Liên hệ quản trị viên.</p>
+        <button type="button" className="auth-secondary" disabled={busy} onClick={() => { setError(''); setState({ status: 'recovery' }) }}>Quên / chưa có mật khẩu?</button>
       </form>}
     </>}
   </section></main>

@@ -235,3 +235,39 @@ test('signed-out login resolves ADMIN, preserves QR target and logout removes da
   await page.reload()
   await expect(page.getByLabel('Mật khẩu', { exact: true })).toBeVisible()
 })
+
+test('recovery email callback opens password form before role checks and saves', async ({ page }) => {
+  await installSupabaseMocks(page, false)
+  let roleReads = 0
+  let passwordWrites = 0
+  page.on('request', request => {
+    if (request.url().includes('/rest/v1/app_user_role')) roleReads++
+    if (request.url().includes('/auth/v1/user') && request.method() === 'PUT') passwordWrites++
+  })
+  await page.goto(`/#access_token=${jwt}&refresh_token=smoke-refresh&expires_in=3600&token_type=bearer&type=recovery`)
+  await expect(page.getByRole('heading', { name: 'Đặt mật khẩu mới' })).toBeVisible()
+  await page.getByLabel('Mật khẩu mới', { exact: true }).fill('Fixture-password-123')
+  await page.getByLabel('Nhập lại mật khẩu mới', { exact: true }).fill('Mismatched-password-123')
+  await page.getByRole('button', { name: 'Lưu mật khẩu mới' }).click()
+  await expect(page.getByRole('alert')).toContainText('chưa trùng nhau')
+  expect(passwordWrites).toBe(0)
+  expect(roleReads).toBe(0)
+  await page.getByLabel('Nhập lại mật khẩu mới', { exact: true }).fill('Fixture-password-123')
+  await page.getByRole('button', { name: 'Lưu mật khẩu mới' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Đã lưu mật khẩu mới' })).toBeVisible()
+  expect(passwordWrites).toBe(1)
+  await page.getByRole('button', { name: 'Tiếp tục vào ứng dụng' }).click()
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-role', 'ADMIN')
+})
+
+test('expired recovery offers a fresh email pointing back to the application', async ({ page }) => {
+  await installSupabaseMocks(page, false)
+  await page.goto('/#error=access_denied&error_code=otp_expired&error_description=Expired')
+  await expect(page.getByRole('alert')).toContainText('Link không hợp lệ')
+  await expect(page.getByLabel('Mật khẩu mới', { exact: true })).toHaveCount(0)
+  await page.getByLabel('Email', { exact: true }).fill('smoke@example.com')
+  const request = page.waitForRequest(request => request.url().includes('/auth/v1/recover'))
+  await page.getByRole('button', { name: 'Gửi link đặt mật khẩu' }).click()
+  expect(new URL((await request).url()).searchParams.get('redirect_to')).toBe('http://127.0.0.1:4173/')
+  await expect(page.getByRole('status').filter({ hasText: 'Nếu email có tài khoản' })).toBeVisible()
+})
