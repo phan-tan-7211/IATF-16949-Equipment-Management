@@ -94,6 +94,20 @@ function normalizePart(row: Record<string, unknown>): LiveSparePart {
   }
 }
 
+function normalizeUsage(row: Record<string, unknown>): SpareUsage {
+  return {
+    usageId: text(row.usage_id),
+    partId: text(row.part_id),
+    equipmentId: text(row.equipment_id),
+    quantity: num(row.quantity),
+    usedAt: text(row.used_at),
+    workOrderId: text(row.work_order_id),
+    reason: text(row.reason),
+    performedBy: text(row.performed_by),
+    actorEmail: text(row.actor_email),
+  }
+}
+
 export async function loadSpareParts() {
   const { data, error } = await supabase.from('spare_part_overview').select('*').order('part_id')
   if (error) throw error
@@ -110,17 +124,13 @@ export async function saveSparePart(input: SaveSparePartInput) {
 export async function loadSpareUsage(partId: string) {
   const { data, error } = await supabase.from('spare_part_usage').select('*').eq('part_id', partId).order('used_at', { ascending: false }).limit(50)
   if (error) throw error
-  return ((data || []) as Array<Record<string, unknown>>).map((row): SpareUsage => ({
-    usageId: text(row.usage_id),
-    partId: text(row.part_id),
-    equipmentId: text(row.equipment_id),
-    quantity: num(row.quantity),
-    usedAt: text(row.used_at),
-    workOrderId: text(row.work_order_id),
-    reason: text(row.reason),
-    performedBy: text(row.performed_by),
-    actorEmail: text(row.actor_email),
-  }))
+  return ((data || []) as Array<Record<string, unknown>>).map(normalizeUsage)
+}
+
+export async function loadWorkOrderSpareUsage(workOrderId: string) {
+  const { data, error } = await supabase.from('spare_part_usage').select('*').eq('work_order_id', workOrderId).order('used_at', { ascending: false }).limit(50)
+  if (error) throw error
+  return ((data || []) as Array<Record<string, unknown>>).map(normalizeUsage)
 }
 
 export async function recordSpareUsage(input: { partId: string; equipmentId: string; quantity: number; reason?: string; performedBy?: string; workOrderId?: string }) {

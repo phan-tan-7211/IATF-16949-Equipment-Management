@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './Maintenance.css'
 import { canCreateMaintenance, canTransitionMaintenance, useAppRole } from './auth/AppRoleContext'
+import { MaintenanceSpareFlow } from './MaintenanceSpareFlow'
 import { createManualWorkOrder, loadLiveMaintenance, transitionLiveMaintenance, type LiveHandover, type LiveMaintenancePlan, type LiveMaintenanceWorkOrder, type MaintenanceEquipmentOption } from './data/liveMaintenance'
 import type { MaintenanceWorkflowAction, MaintenanceWorkflowStatus } from './domain/workflow'
 
@@ -179,6 +180,7 @@ export function LiveMaintenancePanel() {
         </div>
         <section className="maintenance-detail-section"><span>Lý do / hiện tượng</span><p>{selected.reason || '—'}</p></section>
         {selected.approvedBy ? <section className="maintenance-detail-section"><span>Phê duyệt</span><p>{selected.approvedBy} · {dateTime(selected.approvedAt)}</p></section> : null}
+        <MaintenanceSpareFlow equipmentId={selected.equipmentId} workOrderId={selected.workOrderId} />
         <div className="maintenance-workflow"><span>OPEN</span><b>→</b><span>APPROVE</span><b>→</b><span>REPAIR</span><b>→</b><span>VERIFY</span><b>→</b><span>RELEASE</span></div>
         <footer>{selectedNext ? <>
           {selected.status === 'VERIFIED' && !selectedHandover ? <p className="maintenance-release-lock">Cần BM-05 accepted trước khi Release.</p> : null}
