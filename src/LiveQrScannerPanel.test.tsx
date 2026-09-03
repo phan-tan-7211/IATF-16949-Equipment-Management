@@ -129,6 +129,8 @@ describe('visible scan acknowledgement inside the camera frame', () => {
 
   it('opens immediately without a success message and only once', async () => {
     const { decode, onOpenEquipment } = await scanning()
+    const vibration = vi.fn()
+    vi.stubGlobal('navigator', { vibrate: vibration })
     vi.useFakeTimers()
     act(() => decode({ data: 'CEV-PR-001' }))
     expect(onOpenEquipment).toHaveBeenCalledExactlyOnceWith('CEV-PR-001')
@@ -138,6 +140,7 @@ describe('visible scan acknowledgement inside the camera frame', () => {
     act(() => decode({ data: 'CEV-PR-001' }))
     act(() => vi.advanceTimersByTime(2000))
     expect(onOpenEquipment).toHaveBeenCalledTimes(1)
+    expect(vibration).toHaveBeenCalledExactlyOnceWith(80)
   })
 
   it('warns in-frame for invalid and unknown codes while scanning continues', async () => {
