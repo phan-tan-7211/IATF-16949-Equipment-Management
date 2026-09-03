@@ -135,13 +135,21 @@ test('all operational workspaces navigate without browser crash', async ({ page 
   }
 })
 
-test('A4 renderer exposes source-driven document and print action', async ({ page }) => {
+test('A4 renderer exposes source-driven document and print action', async ({ page }, testInfo) => {
   await openApp(page)
   await clickNav(page, 'Hồ sơ A4')
   await expect(page.getByRole('heading', { name: 'Hồ sơ A4 / PDF' })).toBeVisible()
   await expect(page.locator('.a4-document')).toContainText('BM-TBSX-01')
   await expect(page.locator('.a4-document')).toContainText('CEV-PR-001')
   await expect(page.getByRole('button', { name: 'In / Xuất PDF A4' })).toBeEnabled()
+  if (testInfo.project.name === 'desktop-chromium') {
+    const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true })
+    const box = /\/MediaBox\s*\[0 0 ([\d.]+) ([\d.]+)\]/.exec(pdf.toString('latin1'))
+    expect(box).not.toBeNull()
+    expect(Number(box![1])).toBeCloseTo(595, 0)
+    expect(Number(box![2])).toBeCloseTo(842, 0)
+    await testInfo.attach('A4-equipment.pdf', { body: pdf, contentType: 'application/pdf' })
+  }
 })
 
 test('ADMIN audit export creates a ZIP download end-to-end', async ({ page }, testInfo) => {
