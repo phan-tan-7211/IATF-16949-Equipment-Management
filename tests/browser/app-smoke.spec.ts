@@ -348,6 +348,8 @@ test('equipment profile contains tall and wide photos without clipping', async (
 
 test('equipment dialogs scroll internally and release the background on close', async ({ page }) => {
   await openApp(page)
+  const dismissNotice = page.getByRole('button', { name: 'Đóng thông báo' })
+  if (await dismissNotice.isVisible()) await dismissNotice.click()
   await page.setViewportSize({ width: page.viewportSize()!.width, height: 500 })
   await clickNav(page, 'Thiết bị')
   await page.getByRole('button', { name: 'CEV-PR-001', exact: true }).click()

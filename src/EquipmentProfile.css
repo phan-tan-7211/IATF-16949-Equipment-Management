@@ -10,3 +10,6 @@
 .equipment-profile-photo-error{color:#fecaca;font-size:.85rem;overflow-wrap:anywhere}
 
 .equipment-profile-layer{overflow:hidden;overscroll-behavior:none}.equipment-profile{min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+
+body:has(.equipment-profile-layer)>.bottom-nav,body:has(.equipment-drawer-backdrop)>.bottom-nav{visibility:hidden;pointer-events:none}
+body:has(.equipment-profile-layer) .pwa-banner,body:has(.equipment-drawer-backdrop) .pwa-banner{visibility:hidden;pointer-events:none}
