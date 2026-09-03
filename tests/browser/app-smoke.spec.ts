@@ -361,6 +361,7 @@ test('equipment dialogs scroll internally and release the background on close', 
   await expect(profile).toHaveCSS('overscroll-behavior', 'contain')
   await page.getByRole('button', { name: 'Đóng hồ sơ' }).click()
   await expect(page.locator('body')).not.toHaveCSS('position', 'fixed')
+  if (await dismissNotice.isVisible()) await dismissNotice.click()
   await page.getByRole('button', { name: 'Sửa', exact: true }).click()
   const drawer = page.locator('.equipment-drawer')
   await expect(drawer).toBeVisible()
