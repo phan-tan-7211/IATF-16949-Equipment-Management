@@ -3,6 +3,8 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./data/supabaseClient', () => ({ supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'test-user' } } } }), onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })), signOut: vi.fn().mockResolvedValue({ error: null }) } } }))
+
 vi.mock('./PwaStatus', () => ({ PwaStatus: () => null }))
 vi.mock('./data/liveAudit', () => ({
   loadLiveSession: vi.fn().mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN', contractVersion: 'G1-frozen-2026-08-28' }),
