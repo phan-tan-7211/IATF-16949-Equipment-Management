@@ -1,5 +1,11 @@
+#root:has(.qr-page) {height:100dvh;display:flex;flex-direction:column}
+.app-shell:has(.qr-page) {flex:1;min-height:0}
+#root:has(.qr-page)>.pwa-banner {position:static;inset:auto;flex-shrink:0;margin:0 0 0 236px;border-radius:0;box-shadow:none}
+#root:has(.qr-page)>.pwa-banner span {flex:1;min-width:0}
+#root:has(.qr-page)>.pwa-banner button {flex-shrink:0}
+@media(max-width:900px) {#root:has(.qr-page)>.pwa-banner {margin:0}}
 /* QR owns the available workspace height; other workspaces keep their layout. */
-.app-body:has(.qr-page) {height:100dvh;min-height:0;display:flex;flex-direction:column}
+.app-body:has(.qr-page) {height:100%;min-height:0;display:flex;flex-direction:column}
 .app-body:has(.qr-page) .topbar {flex-shrink:0}
 .main-content:has(.qr-page) {flex:1;min-height:0;width:100%;padding:12px 20px;display:flex}
 .qr-page {flex:1;min-width:0;min-height:0;width:100%;grid-template-rows:minmax(0,1fr) auto;gap:8px}
