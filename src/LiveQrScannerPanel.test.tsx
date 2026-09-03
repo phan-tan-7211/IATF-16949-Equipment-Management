@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('./data/qrIndex', () => ({
   loadQrEquipmentIndex: mocks.index,
-  parseEquipmentIdFromQr: (value: string) => value,
+  parseEquipmentIdFromQr: (value: string) => value.match(/CEV-(?:PR|ME)-\d{3}/)?.[0] || '',
 }))
 vi.mock('qr-scanner', () => ({ default: class {
   static hasCamera = mocks.hasCamera
@@ -31,9 +31,9 @@ beforeEach(() => {
   mocks.hasFlash.mockResolvedValue(false)
   mocks.turnFlashOn.mockResolvedValue(undefined)
 })
-afterEach(cleanup)
-async function mountReady() {
-  const view = render(<LiveQrScannerPanel onOpenEquipment={vi.fn()} />)
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
+async function mountReady(onOpenEquipment = vi.fn()) {
+  const view = render(<LiveQrScannerPanel onOpenEquipment={onOpenEquipment} />)
   const toggle = screen.getByRole('button', { name: 'Chạm để bật camera' })
   await waitFor(() => expect(toggle).toBeEnabled())
   return { ...view, toggle }
@@ -112,5 +112,72 @@ describe('tap the QR frame to control the camera', () => {
     unmount()
     await act(async () => resolve(true))
     expect(mocks.construct).not.toHaveBeenCalled()
+  })
+})
+
+describe('visible scan acknowledgement inside the camera frame', () => {
+  const equipment = { equipmentId: 'CEV-PR-001', equipmentName: 'Máy test QR', equipmentType: 'PRODUCTION', status: 'ACTIVE' }
+
+  async function scanning(onOpenEquipment = vi.fn()) {
+    mocks.index.mockResolvedValue([equipment])
+    const view = await mountReady(onOpenEquipment)
+    fireEvent.click(view.toggle)
+    await screen.findByRole('button', { name: 'Chạm để tắt camera' })
+    const decode = mocks.construct.mock.calls[0][1] as (result: { data: string }) => void
+    return { ...view, decode, onOpenEquipment }
+  }
+
+  it('shows success, equipment ID and name in-frame before opening exactly once', async () => {
+    const { decode, onOpenEquipment } = await scanning()
+    vi.useFakeTimers()
+    act(() => decode({ data: 'CEV-PR-001' }))
+    const confirmation = screen.getByRole('status')
+    expect(confirmation.closest('.qr-camera')).not.toBeNull()
+    expect(confirmation).toHaveClass('success')
+    expect(confirmation).toHaveTextContent('Đã nhận mã thiết bị')
+    expect(confirmation).toHaveTextContent('CEV-PR-001')
+    expect(confirmation).toHaveTextContent('Máy test QR')
+    expect(screen.getByRole('button', { name: 'Đã nhận mã thiết bị' })).toBeDisabled()
+    expect(mocks.stop).toHaveBeenCalledOnce()
+    act(() => decode({ data: 'CEV-PR-001' }))
+    act(() => vi.advanceTimersByTime(999))
+    expect(onOpenEquipment).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(1))
+    expect(onOpenEquipment).toHaveBeenCalledExactlyOnceWith('CEV-PR-001')
+  })
+
+  it('warns in-frame for invalid and unknown codes while scanning continues', async () => {
+    const { decode, onOpenEquipment } = await scanning()
+    vi.useFakeTimers()
+    act(() => decode({ data: 'not-a-device' }))
+    expect(screen.getByRole('alert').closest('.qr-camera')).not.toBeNull()
+    expect(screen.getByRole('alert')).toHaveTextContent('QR không chứa mã thiết bị CEV hợp lệ')
+    act(() => decode({ data: 'CEV-PR-999' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('CEV-PR-999 không có trong Equipment Master')
+    expect(mocks.stop).not.toHaveBeenCalled()
+    expect(onOpenEquipment).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(2400))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    act(() => decode({ data: 'CEV-PR-001' }))
+    expect(screen.getByRole('status')).toHaveClass('success')
+  })
+
+  it('cancels delayed navigation when the user leaves the QR screen', async () => {
+    const { decode, onOpenEquipment, unmount } = await scanning()
+    vi.useFakeTimers()
+    act(() => decode({ data: 'CEV-PR-001' }))
+    unmount()
+    act(() => vi.advanceTimersByTime(2000))
+    expect(onOpenEquipment).not.toHaveBeenCalled()
+  })
+
+  it('still confirms and opens a record when vibration is unavailable', async () => {
+    const { decode, onOpenEquipment } = await scanning()
+    vi.stubGlobal('navigator', { vibrate: () => { throw new Error('unsupported') } })
+    vi.useFakeTimers()
+    act(() => decode({ data: 'CEV-PR-001' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Đã nhận mã thiết bị')
+    act(() => vi.advanceTimersByTime(1000))
+    expect(onOpenEquipment).toHaveBeenCalledExactlyOnceWith('CEV-PR-001')
   })
 })
