@@ -185,7 +185,7 @@ test('QR entry remains usable when CI camera is denied', async ({ page }) => {
   await openApp(page)
   await clickNav(page, 'Quét QR')
   await expect(page.locator('main')).toBeVisible()
-  await page.getByRole('button', { name: 'Mở camera & quét ngay' }).click()
+  await page.getByRole('button', { name: 'Chạm để bật camera' }).click()
   await expect(page.locator('.qr-message')).toContainText('Không mở được camera')
   await page.getByPlaceholder('CEV-PR-001').fill('CEV-PR-001')
   await page.getByRole('button', { name: 'Mở', exact: true }).click()

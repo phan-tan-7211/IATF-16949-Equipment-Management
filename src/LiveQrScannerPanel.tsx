@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import QrScanner from 'qr-scanner'
 import './QrScanner.css'
 import { loadQrEquipmentIndex, parseEquipmentIdFromQr, type QrEquipmentIndexItem } from './data/qrIndex'
@@ -10,6 +10,8 @@ type Props = {
 export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const scannerRef = useRef<QrScanner | null>(null)
+  const cameraAttemptRef = useRef(0)
+  const startingRef = useRef(false)
   const lastRejectedRef = useRef({ value: '', at: 0 })
   const [index, setIndex] = useState<QrEquipmentIndexItem[]>([])
   const [indexLoading, setIndexLoading] = useState(true)
@@ -31,15 +33,17 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
     return () => { active = false }
   }, [])
 
-  function stopCamera() {
+  const stopCamera = useCallback(() => {
+    cameraAttemptRef.current += 1
+    startingRef.current = false
     scannerRef.current?.stop()
     scannerRef.current?.destroy()
     scannerRef.current = null
     setHasFlash(false)
     setFlashOn(false)
-  }
+  }, [])
 
-  useEffect(() => () => stopCamera(), [])
+  useEffect(() => () => stopCamera(), [stopCamera])
 
   function rejectValue(value: string, messageText: string) {
     const now = Date.now()
@@ -72,17 +76,21 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
   }
 
   async function startCamera() {
+    if (startingRef.current) return
     if (indexLoading) {
       setMessage('Đang tải Equipment QR index…')
       return
     }
 
     stopCamera()
+    const attempt = cameraAttemptRef.current
+    startingRef.current = true
     setCameraState('STARTING')
     setMessage('Đang mở camera sau…')
 
     try {
       if (!await QrScanner.hasCamera()) throw new Error('Thiết bị không có camera khả dụng')
+      if (attempt !== cameraAttemptRef.current) return
       const video = videoRef.current
       if (!video) throw new Error('QR_VIDEO_UNAVAILABLE')
 
@@ -100,14 +108,29 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
       )
       scannerRef.current = scanner
       await scanner.start()
+      if (attempt !== cameraAttemptRef.current) return
+      startingRef.current = false
       setCameraState('SCANNING')
       setMessage('Đang quét siêu tốc · không cần bấm chụp.')
       const flashAvailable = await scanner.hasFlash().catch(() => false)
+      if (attempt !== cameraAttemptRef.current) return
       setHasFlash(flashAvailable)
     } catch (cause) {
+      if (attempt !== cameraAttemptRef.current) return
       stopCamera()
       setCameraState('ERROR')
       setMessage(cause instanceof Error ? `Không mở được camera: ${cause.message}` : 'Không mở được camera.')
+    }
+  }
+
+  function toggleCamera() {
+    if (indexLoading || startingRef.current) return
+    if (cameraState === 'SCANNING') {
+      stopCamera()
+      setCameraState('IDLE')
+      setMessage('Đã dừng camera. Chạm vào khung để quét tiếp.')
+    } else {
+      void startCamera()
     }
   }
 
@@ -143,19 +166,29 @@ export function LiveQrScannerPanel({ onOpenEquipment }: Props) {
       <div className={`qr-camera ${cameraState.toLowerCase()}`}>
         <video ref={videoRef} playsInline muted aria-label="Camera quét QR" />
         <div className="qr-scan-frame" aria-hidden="true"><span /><span /><span /><span /></div>
-        {cameraState !== 'SCANNING' ? <div className="qr-camera-overlay">
-          <strong>{cameraState === 'STARTING' ? 'Đang mở camera…' : 'QR'}</strong>
-          <span>Đặt mã vào giữa khung</span>
-        </div> : null}
+        <button
+          className="qr-camera-toggle"
+          type="button"
+          onClick={toggleCamera}
+          disabled={indexLoading || cameraState === 'STARTING'}
+          aria-label={cameraState === 'SCANNING' ? 'Chạm để tắt camera' : 'Chạm để bật camera'}
+          aria-pressed={cameraState === 'SCANNING'}
+          aria-busy={cameraState === 'STARTING'}
+        >
+          <span className="qr-camera-prompt">
+            <svg className="qr-camera-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              {cameraState === 'SCANNING'
+                ? <rect x="6" y="6" width="12" height="12" rx="2" />
+                : <><path d="M8 5l2-2h4l2 2h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><circle cx="12" cy="12" r="4" /></>}
+            </svg>
+            <strong>{indexLoading ? 'Đang tải thiết bị…' : cameraState === 'STARTING' ? 'Đang mở camera…' : cameraState === 'SCANNING' ? 'Chạm để tắt camera' : 'Chạm để bật camera'}</strong>
+            {cameraState !== 'SCANNING' ? <span>Chạm ở bất kỳ đâu trong khung này</span> : null}
+          </span>
+        </button>
       </div>
 
       <div className="qr-controls">
-        {cameraState === 'SCANNING'
-          ? <div className="qr-live-actions">
-              <button className="qr-stop" type="button" onClick={() => { stopCamera(); setCameraState('IDLE'); setMessage('Đã dừng camera.') }}>Dừng</button>
-              {hasFlash ? <button className="qr-flash" type="button" onClick={() => void toggleFlash()}>{flashOn ? 'Tắt đèn' : 'Bật đèn'}</button> : null}
-            </div>
-          : <button className="qr-primary" type="button" onClick={() => void startCamera()} disabled={indexLoading}>Mở camera & quét ngay</button>}
+        {cameraState === 'SCANNING' && hasFlash ? <button className="qr-flash" type="button" onClick={() => void toggleFlash()}>{flashOn ? 'Tắt đèn' : 'Bật đèn'}</button> : null}
         <div className="qr-message" role="status">{message}</div>
         {lastValue ? <small>Lần đọc gần nhất: {lastValue}</small> : null}
       </div>
