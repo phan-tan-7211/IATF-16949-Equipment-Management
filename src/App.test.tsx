@@ -33,7 +33,7 @@ describe('Vercel + Supabase app shell', () => {
   it('renders the live dashboard by default', async () => {
     render(<App />)
     expect(await screen.findByRole('heading', { name: 'Dashboard live' })).toBeInTheDocument()
-    expect(screen.getByText('SUPABASE LIVE')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tài khoản' })).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByText(/React \+ Vite \+ TypeScript/)).toBeInTheDocument()
     expect((await screen.findAllByText('ADMIN')).length).toBeGreaterThan(0)
   })
