@@ -1,0 +1,8 @@
+.account-menu {position:relative;flex-shrink:0}
+.account-trigger {display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--color-border);border-radius:50%;background:var(--color-surface);color:var(--color-text);cursor:pointer}
+.account-trigger svg {width:22px;height:22px}
+.account-details {position:absolute;right:0;top:calc(100% + 8px);z-index:10;display:grid;gap:10px;width:min(290px,calc(100vw - 24px));padding:16px;border:1px solid var(--color-border);border-radius:14px;background:var(--color-surface);box-shadow:var(--shadow-card)}
+.account-details strong {overflow-wrap:anywhere;font-size:.9rem}
+.account-details span {color:var(--color-text-muted);font-size:.8rem}
+.account-details .signout-button {margin:0;min-height:44px;background:var(--color-surface-subtle);color:var(--color-text);border:1px solid var(--color-border);border-radius:10px;cursor:pointer}
+@media print {.account-menu {display:none}}
