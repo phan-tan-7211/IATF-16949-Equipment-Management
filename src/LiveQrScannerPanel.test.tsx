@@ -127,23 +127,17 @@ describe('visible scan acknowledgement inside the camera frame', () => {
     return { ...view, decode, onOpenEquipment }
   }
 
-  it('shows success, equipment ID and name in-frame before opening exactly once', async () => {
+  it('opens immediately without a success message and only once', async () => {
     const { decode, onOpenEquipment } = await scanning()
     vi.useFakeTimers()
     act(() => decode({ data: 'CEV-PR-001' }))
-    const confirmation = screen.getByRole('status')
-    expect(confirmation.closest('.qr-camera')).not.toBeNull()
-    expect(confirmation).toHaveClass('success')
-    expect(confirmation).toHaveTextContent('Đã nhận mã thiết bị')
-    expect(confirmation).toHaveTextContent('CEV-PR-001')
-    expect(confirmation).toHaveTextContent('Máy test QR')
-    expect(screen.getByRole('button', { name: 'Đã nhận mã thiết bị' })).toBeDisabled()
+    expect(onOpenEquipment).toHaveBeenCalledExactlyOnceWith('CEV-PR-001')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText('Đang mở hồ sơ…')).not.toBeInTheDocument()
     expect(mocks.stop).toHaveBeenCalledOnce()
     act(() => decode({ data: 'CEV-PR-001' }))
-    act(() => vi.advanceTimersByTime(999))
-    expect(onOpenEquipment).not.toHaveBeenCalled()
-    act(() => vi.advanceTimersByTime(1))
-    expect(onOpenEquipment).toHaveBeenCalledExactlyOnceWith('CEV-PR-001')
+    act(() => vi.advanceTimersByTime(2000))
+    expect(onOpenEquipment).toHaveBeenCalledTimes(1)
   })
 
   it('warns in-frame for invalid and unknown codes while scanning continues', async () => {
@@ -152,34 +146,24 @@ describe('visible scan acknowledgement inside the camera frame', () => {
     act(() => decode({ data: 'not-a-device' }))
     expect(screen.getByRole('alert').closest('.qr-camera')).not.toBeNull()
     expect(screen.queryByText('Đặt QR vào giữa khung để quét')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('not-a-device')
     expect(screen.getByRole('alert')).toHaveTextContent('QR không chứa mã thiết bị CEV hợp lệ')
-    act(() => decode({ data: 'CEV-PR-999' }))
+    act(() => decode({ data: 'https://example.com/equipment/CEV-PR-999?source=qr' }))
     expect(screen.getByRole('alert')).toHaveTextContent('CEV-PR-999 không có trong danh sách thiết bị')
+    expect(screen.getByRole('alert')).toHaveTextContent('https://example.com/equipment/CEV-PR-999?source=qr')
     expect(mocks.stop).not.toHaveBeenCalled()
     expect(onOpenEquipment).not.toHaveBeenCalled()
     act(() => vi.advanceTimersByTime(1600))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByText('Đặt QR vào giữa khung để quét').closest('.qr-camera')).not.toBeNull()
     act(() => decode({ data: 'CEV-PR-001' }))
-    expect(screen.getByRole('status')).toHaveClass('success')
-  })
-
-  it('cancels delayed navigation when the user leaves the QR screen', async () => {
-    const { decode, onOpenEquipment, unmount } = await scanning()
-    vi.useFakeTimers()
-    act(() => decode({ data: 'CEV-PR-001' }))
-    unmount()
-    act(() => vi.advanceTimersByTime(2000))
-    expect(onOpenEquipment).not.toHaveBeenCalled()
-  })
-
-  it('still confirms and opens a record when vibration is unavailable', async () => {
-    const { decode, onOpenEquipment } = await scanning()
-    vi.stubGlobal('navigator', { vibrate: () => { throw new Error('unsupported') } })
-    vi.useFakeTimers()
-    act(() => decode({ data: 'CEV-PR-001' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Đã nhận mã thiết bị')
-    act(() => vi.advanceTimersByTime(1000))
     expect(onOpenEquipment).toHaveBeenCalledExactlyOnceWith('CEV-PR-001')
+  })
+
+  it('ignores stale camera results after leaving the QR screen', async () => {
+    const { decode, onOpenEquipment, unmount } = await scanning()
+    unmount()
+    act(() => decode({ data: 'CEV-PR-001' }))
+    expect(onOpenEquipment).not.toHaveBeenCalled()
   })
 })
