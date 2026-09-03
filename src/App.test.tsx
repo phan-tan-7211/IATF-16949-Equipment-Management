@@ -16,6 +16,13 @@ vi.mock('./LiveToolingPanel', () => ({ LiveToolingPanel: () => <h2>Tooling live<
 vi.mock('./LiveCalibrationPanel', () => ({ LiveCalibrationPanel: () => <h2>Calibration live</h2> }))
 vi.mock('./LiveAuditPanel', () => ({ LiveAuditPanel: () => <h2>Audit live</h2> }))
 
+vi.mock('./LiveMaintenancePlanPanel', () => ({ LiveMaintenancePlanPanel: () => null }))
+vi.mock('./LiveMaintenanceResultPanel', () => ({ LiveMaintenanceResultPanel: () => null }))
+vi.mock('./LiveHandoverPanel', () => ({ LiveHandoverPanel: () => null }))
+vi.mock('./LiveDowntimePanel', () => ({ LiveDowntimePanel: () => null }))
+vi.mock('./LiveCalibrationEvaluationPanel', () => ({ LiveCalibrationEvaluationPanel: () => null }))
+vi.mock('./LiveCalibrationQuotePanel', () => ({ LiveCalibrationQuotePanel: () => null }))
+
 afterEach(() => cleanup())
 
 import App from './App'
@@ -52,3 +59,4 @@ describe('Vercel + Supabase app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Audit live' })).toBeInTheDocument()
   })
 })
+

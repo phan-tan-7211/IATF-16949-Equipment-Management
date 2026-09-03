@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { fetchSourceRows } from './sourceRows'
 import { createStoredZip, sha256Hex, type ZipEntry } from '../utils/zipStore'
 
 export const AUDIT_TABLES = [
@@ -15,21 +16,7 @@ export const EVIDENCE_BUCKETS = [
   'official-pdf-snapshots',
 ] as const
 
-type JsonRow = Record<string, unknown>
 type EvidenceFile = { bucket: string; path: string; id: string | null; createdAt: string | null; updatedAt: string | null; size: number | null; mimeType: string | null }
-
-async function fetchAllRows(table: string) {
-  const result: JsonRow[] = []
-  const batchSize = 1000
-  for (let from = 0; ; from += batchSize) {
-    const { data, error } = await supabase.from(table).select('*').range(from, from + batchSize - 1)
-    if (error) throw new Error(`${table}: ${error.message}`)
-    const page = (data || []) as JsonRow[]
-    result.push(...page)
-    if (page.length < batchSize) break
-  }
-  return result
-}
 
 async function listBucketRecursive(bucket: string, prefix = '', depth = 0): Promise<EvidenceFile[]> {
   if (depth > 10) throw new Error(`${bucket}: storage tree exceeds safe depth`)
@@ -85,9 +72,9 @@ export async function buildAuditPackage(): Promise<AuditPackageResult> {
   const entries: ZipEntry[] = []
   const tableCounts: Record<string, number> = {}
   for (const table of AUDIT_TABLES) {
-    const rows = await fetchAllRows(table)
+    const rows = await fetchSourceRows(table)
     tableCounts[table] = rows.length
-    entries.push({ name: `data/${table}.json`, data: stableJson(rows) })
+    entries.push({ name: `database/${table}.json`, data: stableJson(rows) })
   }
 
   const evidence: EvidenceFile[] = []
@@ -97,18 +84,22 @@ export async function buildAuditPackage(): Promise<AuditPackageResult> {
     bucketCounts[bucket] = files.length
     evidence.push(...files)
   }
-  entries.push({ name: 'evidence/storage-manifest.json', data: stableJson(evidence) })
+  entries.push({ name: 'storage/evidence-manifest.json', data: stableJson(evidence) })
 
   const manifest = {
     packageVersion: 'CEV-IATF-AUDIT-PACKAGE-1',
     contractVersion: 'G1-frozen-2026-08-28',
     exportedAt: exportedAt.toISOString(),
+    completedAt: new Date().toISOString(),
+    consistency: 'sequential-read-not-transactional',
     exportedBy: session.user.email || session.user.id,
     backend: 'Supabase PostgreSQL + Auth/RLS + Storage',
     tableCounts,
     bucketCounts,
     notes: [
-      'Structured records are source snapshots at export time.',
+      'Sequential source reads between exportedAt and completedAt; concurrent writes can affect cross-table consistency.',
+      'After extraction run: sha256sum -c checksums.sha256 (Linux), or shasum -a 256 -c checksums.sha256 (macOS).',
+      'Checksums detect corruption; they are not a digital signature or proof of authenticity.',
       'Evidence manifest contains private Storage object paths and metadata; binary evidence remains governed by Storage RLS.',
       'checksums.sha256 covers every file inside this ZIP except itself.',
     ],
@@ -136,3 +127,4 @@ export function downloadBlob(blob: Blob, filename: string) {
   anchor.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
