@@ -83,7 +83,7 @@ async function openApp(page: Page) {
   await installSupabaseMocks(page)
   await page.goto('/')
   await normalizeEmulatedMobileViewport(page)
-  await expect(page.locator('.connection-pill')).toHaveText('SUPABASE LIVE')
+  await expect(page.getByRole('button', { name: 'Tài khoản', exact: true })).toBeVisible()
   await expect(page.locator('.app-shell')).toHaveAttribute('data-role', 'ADMIN')
 }
 
