@@ -8,3 +8,5 @@
 .equipment-profile-photo-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .equipment-profile-photo-actions button{min-height:44px;padding:10px 16px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#111827;font:inherit;cursor:pointer}
 .equipment-profile-photo-error{color:#fecaca;font-size:.85rem;overflow-wrap:anywhere}
+
+.equipment-profile-layer{overflow:hidden;overscroll-behavior:none}.equipment-profile{min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}

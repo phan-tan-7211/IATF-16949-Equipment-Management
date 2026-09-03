@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './EquipmentProfile.css'
+import { useDialogScrollLock } from './useDialogScrollLock'
 import type { LiveEquipment } from './data/liveEquipment'
 import { getEquipmentPhotoPreview, uploadEquipmentPhoto, loadEquipmentHistory, type EquipmentHistory } from './data/supabaseEquipment'
 
@@ -41,6 +42,7 @@ function dateTimeText(value: unknown) {
 }
 
 export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props) {
+  useDialogScrollLock()
   const [tab, setTab] = useState<Tab>('overview')
   const [history, setHistory] = useState<EquipmentHistory>(EMPTY_HISTORY)
   const [loading, setLoading] = useState(true)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
 import './Equipment.css'
+import { useDialogScrollLock } from './useDialogScrollLock'
 import { EquipmentProfile } from './EquipmentProfile'
 import { type LiveEquipment } from './data/liveEquipment'
 import {
@@ -65,6 +66,7 @@ export function LiveEquipmentPanel() {
   const [photos, setPhotos] = useState<Record<string, PhotoInfo>>({})
   const [editing, setEditing] = useState<EquipmentEditInput | null>(null)
   const [profileId, setProfileId] = useState('')
+  useDialogScrollLock(Boolean(editing))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')

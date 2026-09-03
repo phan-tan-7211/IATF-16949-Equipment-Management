@@ -14,7 +14,7 @@ const equipment = { equipmentId: 'CEV-ME-061', equipmentName: 'Máy LCR', status
 function mount(role: AppRole = 'MAINTENANCE') {
   render(<AppRoleProvider role={role}><EquipmentProfile equipment={equipment} photoUrl="" onClose={vi.fn()} onEdit={vi.fn()} /></AppRoleProvider>)
 }
-beforeEach(() => { vi.resetAllMocks(); mocks.upload.mockResolvedValue('CEV-ME-061/photo.webp'); mocks.preview.mockResolvedValue({ signedUrl: 'https://example.com/photo.webp' }) })
+beforeEach(() => { vi.resetAllMocks(); vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); mocks.upload.mockResolvedValue('CEV-ME-061/photo.webp'); mocks.preview.mockResolvedValue({ signedUrl: 'https://example.com/photo.webp' }) })
 afterEach(cleanup)
 it('offers rear camera and file selection and shows the saved photo for the current equipment', async () => {
   mount()
