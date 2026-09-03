@@ -311,3 +311,37 @@ test('account details close with Escape and remain keyboard accessible', async (
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', {name: 'Đăng xuất', exact: true})).toBeFocused()
 })
+
+test('equipment profile contains tall and wide photos without clipping', async ({ page }, testInfo) => {
+  await openApp(page)
+  await page.route('**/storage/v1/**', async route => {
+    const path = new URL(route.request().url()).pathname
+    if (path.includes('/object/list/')) return route.fulfill({ json: [{ name: 'photo.jpg', id: 'photo-1' }] })
+    if (path.includes('/object/sign/')) return route.fulfill({ json: { signedURL: '/object/public/fixture.svg' } })
+    return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="1600"><rect width="400" height="1600" fill="orange"/></svg>' })
+  })
+  await clickNav(page, 'Quét QR')
+  await page.getByRole('combobox').fill('CEV-PR-001')
+  await page.getByRole('button', { name: 'Mở', exact: true }).click()
+  const photo = page.locator('.equipment-profile-image-wrap img')
+  await expect(photo).toBeVisible()
+  for (const [width, height] of [[400, 1600], [1600, 400], [800, 800]]) {
+    await photo.evaluate((img, size) => {
+      (img as HTMLImageElement).src = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${size[0]}" height="${size[1]}"><rect width="100%" height="100%" fill="orange"/><rect x="2" y="2" width="${size[0]-4}" height="${size[1]-4}" fill="none" stroke="black" stroke-width="4"/></svg>`)
+    }, [width, height])
+    await expect.poll(() => photo.evaluate(img => (img as HTMLImageElement).naturalWidth)).toBe(width)
+    const bounds = await photo.evaluate(img => {
+      const image = img.getBoundingClientRect(), frame = img.parentElement!.getBoundingClientRect()
+      return { inside: image.left >= frame.left && image.right <= frame.right && image.top >= frame.top && image.bottom <= frame.bottom,
+        fit: getComputedStyle(img).objectFit, width: image.width, height: image.height }
+    })
+    expect(bounds.inside).toBe(true)
+    expect(bounds.fit).toBe('contain')
+    expect(bounds.width).toBeGreaterThan(0)
+    expect(bounds.height).toBeGreaterThan(0)
+    await testInfo.attach(`profile-${width}x${height}`, { body: await page.screenshot(), contentType: 'image/png' })
+  }
+  const profile = page.locator('.equipment-profile')
+  await profile.evaluate(el => { el.scrollTop = el.scrollHeight })
+  await expect(page.getByRole('button', { name: /^Tổng quan$/ })).toBeInViewport()
+})
