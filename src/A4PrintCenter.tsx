@@ -116,8 +116,8 @@ export function A4PrintCenter() {
     <section className="print-toolbar no-print">
       <div><p className="eyebrow">Audit-ready / Source-first</p><h2>Hồ sơ A4 / PDF</h2><p>Dùng chính dữ liệu Supabase đã nhập. In: Ctrl+P → Save as PDF.</p></div>
       <div className="print-controls">
-        <label>Biểu mẫu<select value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
-        {docType !== 'bm06' ? <label>Hồ sơ<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
+        <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
+        {docType !== 'bm06' ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
         <button type="button" disabled={loading || Boolean(error) || (docType === 'bm06' ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={() => window.print()}>In / Xuất PDF A4</button>
       </div>
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
