@@ -1,4 +1,5 @@
 import type { LiveEquipment } from './liveEquipment'
+import { isClientCacheFresh, readClientCache, writeClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 
 function requireSupabase() {
@@ -45,8 +46,19 @@ export type EquipmentHistory = {
 }
 
 type EquipmentCachePatch = Partial<LiveEquipment> & { equipmentId: string; department?: string }
-let equipmentCache: LiveEquipment[] | null = null
+const EQUIPMENT_CACHE_KEY = 'cev:data:equipment-master'
+const EQUIPMENT_CACHE_VERSION = 1
+const EQUIPMENT_CACHE_FRESH_MS = 30_000
+const restoredEquipmentCache = readClientCache<LiveEquipment[]>(EQUIPMENT_CACHE_KEY, EQUIPMENT_CACHE_VERSION)
+let equipmentCache: LiveEquipment[] | null = restoredEquipmentCache?.data || null
+let equipmentCacheSavedAt = restoredEquipmentCache?.savedAt || 0
 let consumeEquipmentCacheOnce = false
+
+function persistEquipmentCache() {
+  if (!equipmentCache) return
+  const saved = writeClientCache(EQUIPMENT_CACHE_KEY, EQUIPMENT_CACHE_VERSION, equipmentCache)
+  equipmentCacheSavedAt = saved.savedAt
+}
 
 export function patchEquipmentCacheAfterWrite(patch: EquipmentCachePatch) {
   if (!equipmentCache) return
@@ -58,6 +70,7 @@ export function patchEquipmentCacheAfterWrite(patch: EquipmentCachePatch) {
     usingDepartment: patch.department ?? patch.usingDepartment ?? row.usingDepartment,
     updatedAt: new Date().toISOString(),
   } : row)
+  persistEquipmentCache()
   consumeEquipmentCacheOnce = true
 }
 
@@ -77,17 +90,31 @@ export function patchEquipmentCacheAfterBulk(equipmentIds: string[], patch: Reco
       updatedAt: new Date().toISOString(),
     }
   })
+  persistEquipmentCache()
   consumeEquipmentCacheOnce = true
 }
 
-export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
+export function removeEquipmentFromCache(equipmentId: string) {
+  if (!equipmentCache) return
+  const id = equipmentId.trim().toUpperCase()
+  equipmentCache = equipmentCache.filter((row) => row.equipmentId !== id)
+  persistEquipmentCache()
+  consumeEquipmentCacheOnce = true
+}
+
+export async function loadSupabaseEquipment(options: { force?: boolean } = {}): Promise<LiveEquipment[]> {
   if (consumeEquipmentCacheOnce && equipmentCache) {
     consumeEquipmentCacheOnce = false
     return equipmentCache
   }
+  if (!options.force && equipmentCache && isClientCacheFresh(equipmentCacheSavedAt, EQUIPMENT_CACHE_FRESH_MS)) return equipmentCache
+
   const client = requireSupabase()
   const { data, error } = await client.from('equipment_master').select('equipment_id,equipment_type,equipment_name,manufacturer,model,serial_number,department,status,active,qr_code,updated_at,source_data').order('equipment_id')
-  if (error) throw new Error(`SUPABASE_EQUIPMENT_READ_FAILED: ${error.message}`)
+  if (error) {
+    if (equipmentCache) return equipmentCache
+    throw new Error(`SUPABASE_EQUIPMENT_READ_FAILED: ${error.message}`)
+  }
   equipmentCache = (data || []).map((row) => {
     const source = row.source_data
     const criticalityFacts = sourceObject(source, 'criticalityFacts')
@@ -127,6 +154,7 @@ export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
       updatedAt: String(row.updated_at || ''),
     }
   })
+  persistEquipmentCache()
   return equipmentCache
 }
 
