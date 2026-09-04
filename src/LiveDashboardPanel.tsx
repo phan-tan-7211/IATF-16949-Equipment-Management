@@ -25,13 +25,19 @@ const kindLabel: Record<LiveDashboardAction['kind'], string> = {
   DOWNTIME_OPEN: 'DOWNTIME',
 }
 
+type DashboardTarget = 'qr' | 'maintenance' | 'equipment' | 'inspection'
+
+type Props = {
+  onNavigate?: (view: DashboardTarget) => void
+}
+
 function dateText(value: string) {
   if (!value) return '—'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('vi-VN')
 }
 
-export function LiveDashboardPanel() {
+export function LiveDashboardPanel({ onNavigate }: Props) {
   const [summary, setSummary] = useState<LiveDashboardSummary>(EMPTY)
   const [actions, setActions] = useState<LiveDashboardAction[]>([])
   const [loading, setLoading] = useState(true)
@@ -65,6 +71,13 @@ export function LiveDashboardPanel() {
         <p>Ưu tiên bất thường cần xử lý trước, sau đó mới đến KPI tổng hợp.</p>
       </div>
       <div className="dashboard-live"><span />SUPABASE LIVE</div>
+    </section>
+
+    <section className="dashboard-mobile-actions" aria-label="Thao tác nhanh">
+      <button type="button" className="primary" onClick={() => onNavigate?.('qr')}><span aria-hidden="true">▣</span><strong>Quét QR</strong><small>Mở thiết bị ngay</small></button>
+      <button type="button" onClick={() => onNavigate?.('maintenance')}><span aria-hidden="true">⚒</span><strong>Work</strong><small>WO & PM</small></button>
+      <button type="button" onClick={() => onNavigate?.('equipment')}><span aria-hidden="true">▤</span><strong>Thiết bị</strong><small>Master & hồ sơ</small></button>
+      <button type="button" onClick={() => onNavigate?.('inspection')}><span aria-hidden="true">✓</span><strong>Kiểm tra</strong><small>Daily / inspection</small></button>
     </section>
 
     {loading ? <section className="dashboard-state" role="status">Đang tải dữ liệu thiết bị…</section> : null}
