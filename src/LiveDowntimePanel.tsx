@@ -7,9 +7,10 @@ import { loadDowntimeMonthlyReport, upsertDowntimeEvent, type DowntimeCauseCateg
 
 const CAUSES: Array<{ value: DowntimeCauseCategory; label: string }> = [
   { value: 'MECHANICAL', label: 'Hỏng cơ khí' }, { value: 'ELECTRICAL', label: 'Hỏng điện' }, { value: 'WAITING_MATERIAL', label: 'Chờ vật tư' },
-  { value: 'UNPLANNED_MAINTENANCE', label: 'Bảo dưỡng đột xuất' }, { value: 'SETUP_CHANGEOVER', label: 'Set-up / thay khuôn' }, { value: 'NO_OPERATOR', label: 'Không có NV vận hành' },
+  { value: 'UNPLANNED_MAINTENANCE', label: 'Bảo dưỡng đột xuất' }, { value: 'SETUP_CHANGEOVER', label: 'Chuẩn bị / thay khuôn' }, { value: 'NO_OPERATOR', label: 'Không có nhân viên vận hành' },
   { value: 'MATERIAL_SHORTAGE', label: 'Thiếu nguyên liệu' }, { value: 'PROCESS_ERROR', label: 'Lỗi quy trình' }, { value: 'OTHER', label: 'Khác' },
 ]
+const roleLabel:Record<string,string>={MAINTENANCE:'Bảo trì',SUPERVISOR:'Giám sát',QUALITY:'Chất lượng',MANAGER:'Quản lý',ADMIN:'Quản trị hệ thống',UNKNOWN:'Chưa xác định'}
 
 function currentMonth() { return new Date().toISOString().slice(0, 7) }
 function localNow() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16) }
@@ -17,54 +18,26 @@ function formatMinutes(value: number) { return Math.round(value).toLocaleString(
 function emptyInput(equipmentId = ''): DowntimeInput { return { equipmentId, startedAt: localNow(), endedAt: '', causeCategory: 'MECHANICAL', detail: '', actionTaken: '', affectedDepartment: '', recordedBy: '', handledBy: '', reportedBy: '' } }
 
 export function LiveDowntimePanel() {
-  const role = useAppRole()
-  const canWrite = canCreateMaintenance(role)
-  const [month, setMonth] = useState(currentMonth())
-  const [report, setReport] = useState<DowntimeMonthlyReport | null>(null)
-  const [equipment, setEquipment] = useState<MaintenanceEquipmentOption[]>([])
-  const [draft, setDraft] = useState<DowntimeInput | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const role = useAppRole(); const canWrite = canCreateMaintenance(role)
+  const [month, setMonth] = useState(currentMonth()); const [report, setReport] = useState<DowntimeMonthlyReport | null>(null); const [equipment, setEquipment] = useState<MaintenanceEquipmentOption[]>([]); const [draft, setDraft] = useState<DowntimeInput | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [message, setMessage] = useState('')
 
-  const refresh = async (targetMonth = month) => {
-    const [nextReport, maintenance] = await Promise.all([loadDowntimeMonthlyReport(targetMonth), loadLiveMaintenance()])
-    setReport(nextReport); setEquipment(maintenance.equipment); setError('')
-  }
+  const refresh = async (targetMonth = month) => { const [nextReport, maintenance] = await Promise.all([loadDowntimeMonthlyReport(targetMonth), loadLiveMaintenance()]); setReport(nextReport); setEquipment(maintenance.equipment); setError('') }
   useEffect(() => { void refresh(month).catch((cause) => setError(cause instanceof Error ? cause.message : 'Không thể tải BM06')) }, [month])
-
   const causeLabel = useMemo(() => new Map(CAUSES.map((item) => [item.value, item.label])), [])
-  const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (!draft || !canWrite) return
-    setBusy(true); setError(''); setMessage('')
-    try {
-      const result = await upsertDowntimeEvent(draft)
-      setMessage(`Đã lưu downtime ${result.downtimeId}`); setDraft(null); await refresh()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể lưu BM06') }
-    finally { setBusy(false) }
-  }
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!draft || !canWrite) return; setBusy(true); setError(''); setMessage(''); try { const result = await upsertDowntimeEvent(draft); setMessage(`Đã lưu sự kiện dừng máy ${result.downtimeId}`); setDraft(null); await refresh() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể lưu BM06') } finally { setBusy(false) } }
 
   return <section className="maintenance-surface downtime-panel" aria-labelledby="bm06-title">
-    <header className="maintenance-header">
-      <div><p className="eyebrow">BM-TBSX-06 · KPI SOP3</p><h3 id="bm06-title">Chỉ số dừng máy · MTBF / MTTR</h3><p>Đơn vị phút · KPI tỷ lệ dừng máy mục tiêu ≤8%.</p></div>
-      <div className="downtime-actions"><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />{canWrite ? <button className="maintenance-primary" type="button" onClick={() => setDraft(emptyInput(equipment[0]?.equipmentId || ''))}>+ Ghi downtime</button> : null}</div>
-    </header>
+    <header className="maintenance-header"><div><p className="eyebrow">BM-TBSX-06 · Chỉ số SOP3</p><h3 id="bm06-title">Chỉ số dừng máy · MTBF / MTTR</h3><p>Đơn vị phút · tỷ lệ dừng máy mục tiêu ≤8%.</p></div><div className="downtime-actions"><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />{canWrite ? <button className="maintenance-primary" type="button" onClick={() => setDraft(emptyInput(equipment[0]?.equipmentId || ''))}>+ Ghi dừng máy</button> : <span className="maintenance-readonly">Chỉ xem · {roleLabel[role]||role}</span>}</div></header>
     {message ? <div className="maintenance-feedback" role="status">{message}</div> : null}{error ? <div className="maintenance-feedback error" role="alert">{error}</div> : null}
-
-    {report ? <>
-      <div className="downtime-kpis">
-        <article><span>Tổng downtime</span><strong>{formatMinutes(report.downtimeMinutes)}</strong><small>phút</small></article>
-        <article><span>Số lần hỏng</span><strong>{report.failureCount}</strong><small>sự kiện</small></article>
-        <article className={report.downtimeRate <= 8 ? 'good' : 'bad'}><span>Downtime rate</span><strong>{report.downtimeRate.toFixed(2)}%</strong><small>Mục tiêu ≤8%</small></article>
-        <article><span>MTBF</span><strong>{formatMinutes(report.mtbfMinutes)}</strong><small>phút / lần hỏng</small></article>
-        <article><span>MTTR</span><strong>{formatMinutes(report.mttrMinutes)}</strong><small>phút / lần hỏng</small></article>
-      </div>
-      <p className="downtime-formula">Nền tính tháng: {report.trackedDays} ngày × 24 × 60 phút cho mỗi thiết bị sản xuất. MTBF = (thời gian nền − downtime) ÷ số lần hỏng; MTTR = downtime ÷ số lần hỏng.</p>
-
-      <div className="downtime-grid">
-        <div><h4>Thiết bị dừng máy</h4>{report.byEquipment.length ? <div className="maintenance-table-scroll"><table className="maintenance-table downtime-table"><thead><tr><th>Thiết bị</th><th>Ngày dừng</th><th>Downtime</th><th>Lần hỏng</th><th>Rate</th><th>MTBF</th><th>MTTR</th></tr></thead><tbody>{report.byEquipment.map((row) => <tr key={row.equipmentId}><td><b>{row.equipmentId}</b><small>{row.equipmentName} · {row.area || '—'}</small></td><td>{row.days.join(', ')}</td><td>{formatMinutes(row.downtimeMinutes)}</td><td>{row.failureCount}</td><td>{row.downtimeRate.toFixed(2)}%</td><td>{formatMinutes(row.mtbfMinutes)}</td><td>{formatMinutes(row.mttrMinutes)}</td></tr>)}</tbody></table></div> : <div className="maintenance-state">Tháng này chưa có downtime.</div>}</div>
-        <div><h4>Pareto nguyên nhân</h4>{report.byCause.length ? <ol className="downtime-causes">{report.byCause.map((row) => <li key={row.cause}><div><b>{causeLabel.get(row.cause as DowntimeCauseCategory) || row.cause}</b><span>{row.count} lần</span></div><strong>{formatMinutes(row.minutes)} phút</strong></li>)}</ol> : <div className="maintenance-state">Chưa có nguyên nhân.</div>}</div>
-      </div>
+    {report ? <><div className="downtime-kpis">
+      <article><span>Tổng thời gian dừng</span><strong>{formatMinutes(report.downtimeMinutes)}</strong><small>phút</small></article>
+      <article><span>Số lần hỏng</span><strong>{report.failureCount}</strong><small>sự kiện</small></article>
+      <article className={report.downtimeRate <= 8 ? 'good' : 'bad'}><span>Tỷ lệ dừng máy</span><strong>{report.downtimeRate.toFixed(2)}%</strong><small>Mục tiêu ≤8%</small></article>
+      <article><span>MTBF</span><strong>{formatMinutes(report.mtbfMinutes)}</strong><small>phút / lần hỏng</small></article>
+      <article><span>MTTR</span><strong>{formatMinutes(report.mttrMinutes)}</strong><small>phút / lần hỏng</small></article>
+    </div><p className="downtime-formula">Nền tính tháng: {report.trackedDays} ngày × 24 × 60 phút cho mỗi thiết bị sản xuất. MTBF = (thời gian nền − thời gian dừng) ÷ số lần hỏng; MTTR = thời gian dừng ÷ số lần hỏng.</p>
+      <div className="downtime-grid"><div><h4>Thiết bị dừng máy</h4>{report.byEquipment.length ? <div className="maintenance-table-scroll"><table className="maintenance-table downtime-table"><thead><tr><th>Thiết bị</th><th>Ngày dừng</th><th>Thời gian dừng</th><th>Lần hỏng</th><th>Tỷ lệ</th><th>MTBF</th><th>MTTR</th></tr></thead><tbody>{report.byEquipment.map((row) => <tr key={row.equipmentId}><td><b>{row.equipmentId}</b><small>{row.equipmentName} · {row.area || '—'}</small></td><td>{row.days.join(', ')}</td><td>{formatMinutes(row.downtimeMinutes)}</td><td>{row.failureCount}</td><td>{row.downtimeRate.toFixed(2)}%</td><td>{formatMinutes(row.mtbfMinutes)}</td><td>{formatMinutes(row.mttrMinutes)}</td></tr>)}</tbody></table></div> : <div className="maintenance-state">Tháng này chưa có sự kiện dừng máy.</div>}</div>
+      <div><h4>Nguyên nhân dừng máy</h4>{report.byCause.length ? <ol className="downtime-causes">{report.byCause.map((row) => <li key={row.cause}><div><b>{causeLabel.get(row.cause as DowntimeCauseCategory) || row.cause}</b><span>{row.count} lần</span></div><strong>{formatMinutes(row.minutes)} phút</strong></li>)}</ol> : <div className="maintenance-state">Chưa có nguyên nhân.</div>}</div></div>
     </> : <div className="maintenance-state">Đang tính BM06…</div>}
 
     {draft && canWrite ? <div className="maintenance-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDraft(null) }}><aside className="maintenance-drawer" role="dialog" aria-modal="true" aria-labelledby="bm06-form-title"><header><div><p className="eyebrow">CEV-BM-TBSX-06</p><h2 id="bm06-form-title">Ghi nhận dừng máy</h2></div><button type="button" onClick={() => setDraft(null)}>×</button></header><form className="maintenance-create-form" onSubmit={submit}>
