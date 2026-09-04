@@ -12,8 +12,8 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
   function setField<K extends keyof EquipmentMasterEditInput>(key: K, nextValue: EquipmentMasterEditInput[K]) {
     onChange({ ...value, [key]: nextValue })
   }
-  function textField(key: keyof EquipmentMasterEditInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false) {
-    return <label className={wide ? 'equipment-edit-wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete value={String(value[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setField(key, nextValue as never)} onBlur={() => setField(key, canonicalizeMasterValue(String(value[key] || ''), suggestions[suggestionKey]) as never)} /> : <input value={String(value[key] || '')} onChange={(event) => setField(key, event.target.value as never)} />}</label>
+  function textField(key: keyof EquipmentMasterEditInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false, required = false) {
+    return <label className={wide ? 'equipment-edit-wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete required={required} value={String(value[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setField(key, nextValue as never)} onBlur={() => setField(key, canonicalizeMasterValue(String(value[key] || ''), suggestions[suggestionKey]) as never)} /> : <input required={required} value={String(value[key] || '')} onChange={(event) => setField(key, event.target.value as never)} />}</label>
   }
 
   return <div className="equipment-edit-grid">
@@ -26,6 +26,8 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
     {textField('serialNumber','Số sê-ri')}
     {textField('department','Bộ phận sử dụng','department')}
     {textField('managingDepartment','Bộ phận quản lý','managingDepartment')}
+    {textField('managementResponsiblePrimary','Người phụ trách quản lý · Chính *','managementResponsiblePrimary',false,true)}
+    {textField('managementResponsibleSecondary','Người phụ trách quản lý · Phụ','managementResponsibleSecondary')}
     {textField('currentArea','Khu vực','currentArea')}
     {textField('currentLine','Dây chuyền','currentLine')}
     {textField('origin','Xuất xứ','origin')}
