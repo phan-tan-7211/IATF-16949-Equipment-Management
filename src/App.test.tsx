@@ -51,14 +51,17 @@ describe('Vercel + Supabase app shell', () => {
     }
   })
 
-  it('exposes every workspace from mobile navigation for admin', async () => {
+  it('keeps primary mobile actions compact and exposes remaining workspaces from More', async () => {
     render(<App />)
     expect((await screen.findAllByText('ADMIN')).length).toBeGreaterThan(0)
     const mobileNav = screen.getByLabelText('Điều hướng mobile')
-    const expectedItems = ['Tổng quan', 'Thiết bị', 'Kiểm tra ngày', 'Bảo trì', 'Jig & Tooling', 'Hiệu chuẩn', 'Audit & Cấu hình']
-    expectedItems.forEach((label) => expect(within(mobileNav).getByRole('button', { name: label })).toBeInTheDocument())
-    fireEvent.click(within(mobileNav).getByRole('button', { name: 'Audit & Cấu hình' }))
+    ;['Home', 'Work', 'Scan', 'Equipment', 'More'].forEach((label) => expect(within(mobileNav).getByRole('button', { name: label })).toBeInTheDocument())
+
+    fireEvent.click(within(mobileNav).getByRole('button', { name: 'More' }))
+    const more = screen.getByRole('dialog', { name: 'Các chức năng khác' })
+    ;['Kiểm tra ngày', 'Phụ tùng', 'Jig & Tooling', 'Hiệu chuẩn', 'Hồ sơ A4', 'Audit & Cấu hình'].forEach((label) => expect(within(more).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument())
+
+    fireEvent.click(within(more).getByRole('button', { name: /Audit & Cấu hình/ }))
     expect(await screen.findByRole('heading', { name: 'Audit live' })).toBeInTheDocument()
   })
 })
-
