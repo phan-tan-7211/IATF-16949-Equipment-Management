@@ -16,6 +16,7 @@ import { installMaintenanceWarmup } from './data/maintenanceWarmup'
 import { installInspectionWarmup } from './data/inspectionWarmup'
 import { installCalibrationWarmup } from './data/calibrationWarmup'
 import { installToolingWarmup } from './data/toolingWarmup'
+import { installDashboardWarmup } from './data/dashboardWarmup'
 import { installNavigationPrefetch } from './data/navigationPrefetch'
 
 const SupabaseTestPanel = lazy(() => import('./SupabaseTestPanel').then((module) => ({ default: module.SupabaseTestPanel })))
@@ -28,6 +29,7 @@ if (phase3Preview !== 'supabase-test') {
   installInspectionWarmup()
   installCalibrationWarmup()
   installToolingWarmup()
+  installDashboardWarmup()
   installNavigationPrefetch()
 }
 
