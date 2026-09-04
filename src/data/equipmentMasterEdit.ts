@@ -20,6 +20,7 @@ export async function updateEquipmentDetails(input: EquipmentMasterEditInput): P
   if (!criticality) throw new Error('Vui lòng trả lời đủ 5 câu để hệ thống tự xác định cấp độ thiết bị.')
   if (!input.equipmentId.trim()) throw new Error('EQUIPMENT_ID_REQUIRED')
   if (!input.equipmentName.trim()) throw new Error('EQUIPMENT_NAME_REQUIRED')
+  if (!input.managementResponsiblePrimary.trim()) throw new Error('Vui lòng nhập người phụ trách quản lý chính.')
 
   const { equipmentId, equipmentType: _equipmentType, ...payload } = input
   const { data, error } = await supabase.rpc('rpc_update_equipment_details', {
@@ -43,6 +44,8 @@ export async function updateEquipmentDetails(input: EquipmentMasterEditInput): P
     currentArea: input.currentArea.trim(),
     currentLine: input.currentLine.trim(),
     managingDepartment: input.managingDepartment.trim(),
+    managementResponsiblePrimary: input.managementResponsiblePrimary.trim(),
+    managementResponsibleSecondary: input.managementResponsibleSecondary.trim(),
     department: input.department.trim(),
     technicalSpecification: input.technicalSpecification.trim(),
     description: input.description.trim(),
