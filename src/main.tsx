@@ -4,6 +4,7 @@ import './index.css'
 import './EquipmentDelete.css'
 import './EquipmentDrawerScroll.css'
 import './EquipmentUnified.css'
+import './DesktopWorkspace.css'
 import App from './App'
 import { AppErrorBoundary } from './AppErrorBoundary'
 
