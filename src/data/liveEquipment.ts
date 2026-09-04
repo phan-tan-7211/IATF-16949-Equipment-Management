@@ -14,6 +14,15 @@ export type LiveEquipment = {
   managingDepartment: string
   usingDepartment: string
   technicalSpecification: string
+  description: string
+  accuracy: string
+  origin: string
+  manufactureDate: string
+  inServiceDate: string
+  warrantyUntil: string
+  warrantyContact: string
+  note: string
+  relatedDocuments: string
   status: string
   criticality: string
   criticalityFacts?: EquipmentCriticalityFacts
@@ -57,6 +66,15 @@ export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipme
     managingDepartment: text(row.managingDepartment) || sourceText(source, 'managingDepartment'),
     usingDepartment: text(row.department ?? row.usingDepartment) || sourceText(source, 'usingDepartment'),
     technicalSpecification: text(row.technicalSpecification) || sourceText(source, 'technicalSpecification'),
+    description: sourceText(source, 'description'),
+    accuracy: sourceText(source, 'accuracy'),
+    origin: sourceText(source, 'origin') || sourceText(source, 'countryOfOrigin'),
+    manufactureDate: sourceText(source, 'manufactureDate'),
+    inServiceDate: sourceText(source, 'inServiceDate'),
+    warrantyUntil: sourceText(source, 'warrantyUntil'),
+    warrantyContact: sourceText(source, 'warrantyContact'),
+    note: sourceText(source, 'note'),
+    relatedDocuments: sourceText(source, 'relatedDocuments'),
     status: text(row.status) || 'RUNNING',
     criticality: text(row.criticality) || sourceText(source, 'criticality'),
     criticalityFacts: {
