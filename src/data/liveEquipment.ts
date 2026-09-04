@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import type { EquipmentCriticalityFacts } from './autoRegistration'
 
 export type LiveEquipment = {
   equipmentId: string
@@ -15,6 +16,7 @@ export type LiveEquipment = {
   technicalSpecification: string
   status: string
   criticality: string
+  criticalityFacts: EquipmentCriticalityFacts
   qrCode: string
   active: boolean
   updatedAt: string
@@ -26,12 +28,22 @@ function sourceText(source: unknown, key: string) {
   if (!source || typeof source !== 'object') return ''
   return text((source as Record<string, unknown>)[key])
 }
+function sourceObject(source: unknown, key: string) {
+  if (!source || typeof source !== 'object') return {} as Record<string, unknown>
+  const value = (source as Record<string, unknown>)[key]
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {}
+}
+function sourceBoolean(source: Record<string, unknown>, key: string) {
+  const value = source[key]
+  return typeof value === 'boolean' ? value : undefined
+}
 
 export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipment | null {
   const equipmentId = text(row.equipment_id ?? row.equipmentId)
   const equipmentType = text(row.equipment_type ?? row.equipmentType).toUpperCase()
   if (!equipmentId || !['PRODUCTION', 'MEASUREMENT'].includes(equipmentType)) return null
   const source = row.source_data ?? row.sourceData
+  const criticalityFacts = sourceObject(source, 'criticalityFacts')
   return {
     equipmentId,
     equipmentName: text(row.equipment_name ?? row.equipmentName) || equipmentId,
@@ -47,6 +59,13 @@ export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipme
     technicalSpecification: text(row.technicalSpecification) || sourceText(source, 'technicalSpecification'),
     status: text(row.status) || 'RUNNING',
     criticality: text(row.criticality) || sourceText(source, 'criticality'),
+    criticalityFacts: {
+      controlsProductQuality: sourceBoolean(criticalityFacts, 'controlsProductQuality'),
+      specialCharacteristicImpact: sourceBoolean(criticalityFacts, 'specialCharacteristicImpact'),
+      stopsProduction: sourceBoolean(criticalityFacts, 'stopsProduction'),
+      hasBackup: sourceBoolean(criticalityFacts, 'hasBackup'),
+      capacityImpact: sourceBoolean(criticalityFacts, 'capacityImpact'),
+    },
     qrCode: text(row.qr_code ?? row.qrCode) || equipmentId,
     active: row.active === undefined ? true : bool(row.active),
     updatedAt: text(row.updated_at ?? row.updatedAt),
