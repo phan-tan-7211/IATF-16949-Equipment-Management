@@ -21,7 +21,7 @@ export function invalidateSourceRows(table: string, filter?: { column: string; v
     sourceRowsInFlight.delete(cacheKey(table, filter))
     return
   }
-  for (const key of [...sourceRowsInFlight.keys()]) if (key === `${table}|*` || key.startsWith(`${table}|`)) sourceRowsInFlight.delete(key)
+  for (const key of sourceRowsInFlight.keys()) if (key === `${table}|*` || key.startsWith(`${table}|`)) sourceRowsInFlight.delete(key)
 }
 
 // Keyset pagination respects the server row cap and uses the canonical table PK.
