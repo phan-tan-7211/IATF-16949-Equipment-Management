@@ -11,6 +11,39 @@ Business writes use authorized RPC/RLS boundaries. Never expose service-role cre
 A4/PDF renders existing Supabase records; do not introduce separate form data storage.
 Audit ZIP export requires ADMIN. Record export limitations and checksum verification instructions.
 
+## Mandatory performance architecture
+
+Performance behavior is a permanent project rule, not a one-off optimization. Every new or modified data-driven module must follow `docs/PERFORMANCE_ARCHITECTURE.md` unless there is a documented technical reason not to.
+
+Required rules:
+
+1. Prefer instant navigation from existing client state. Do not remount the whole workspace when switching views, refreshing auth tokens, refocusing the browser, or revisiting a module.
+2. Use layered client data: memory cache first, persistent local snapshot second, Supabase as source of truth.
+3. Use stale-while-revalidate: render valid cached data immediately, then refresh stale data in the background.
+4. Never refetch an entire module after a normal create/update/delete if the mutation result can patch the affected record(s) locally.
+5. Normal mutations must be optimistic where safe: update UI/cache immediately, confirm with server, and rollback only the affected record on failure.
+6. Cache entries must be versioned, timestamped, bounded, and explicitly invalidated when required. Never add unbounded caches.
+7. Reuse valid signed image URLs and lazy-load images near visibility. Do not request signed URLs for every image on every module visit.
+8. Browser focus/visibility changes must not cause app remount or login/loading flashes. Revalidate only data that is stale, with deduplication/throttling.
+9. Supabase auth token refresh must be decoupled from UI readiness. `TOKEN_REFRESHED` is not a reason to unmount the application.
+10. Prefetch code/data only when there is a useful user-intent signal such as hover, focus, or likely next navigation; avoid blind bulk prefetching.
+11. Large histories, audit logs, work orders, and tables must use pagination/windowing/virtualization when row volume makes full rendering wasteful.
+12. Before adding a new fetch path, check whether an existing shared repository/cache can serve it. Do not let each screen invent a separate fetching strategy for the same entity.
+13. Manual refresh may force a server read; background warmup must be throttled and deduplicated.
+14. Performance regressions count as release regressions. A feature is not complete if it reintroduces whole-module reloads, duplicate network requests, auth remounts, or avoidable spinners on revisits.
+
+Target client flow:
+
+`Supabase → data repository → memory cache → persistent snapshot → React UI`
+
+Opening a module:
+
+`RAM cache → show immediately` → else `local snapshot → show immediately` → background Supabase revalidate → patch only differences.
+
+Mutation:
+
+`user action → optimistic UI/cache patch → Supabase RPC/write → confirm` or `rollback affected record + show error`.
+
 ## Mandatory UI/UX gate
 
 For every UI, responsive, mobile, navigation, form, drawer, modal, profile, work-order, inspection, spare, QR, or dashboard change:
