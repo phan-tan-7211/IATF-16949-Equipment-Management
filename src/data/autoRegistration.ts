@@ -52,6 +52,7 @@ export function deriveEquipmentCriticality(facts: EquipmentCriticalityFacts): Eq
 export async function createEquipmentAuto(input: EquipmentRegistrationInput): Promise<EquipmentRegistrationResult> {
   const criticality = deriveEquipmentCriticality(input)
   if (!criticality) throw new Error('Vui lòng trả lời đủ 5 câu để hệ thống tự xác định mức độ quan trọng của thiết bị.')
+  if (!input.managementResponsiblePrimary?.trim()) throw new Error('Vui lòng nhập người phụ trách quản lý chính.')
 
   const { data, error } = await supabase.rpc('rpc_create_equipment_auto', { p_input: input })
   if (error) throw error
