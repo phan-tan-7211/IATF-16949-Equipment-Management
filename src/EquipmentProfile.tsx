@@ -3,11 +3,14 @@ import './EquipmentProfile.css'
 import type { LiveEquipment } from './data/liveEquipment'
 import { loadEquipmentHistory, type EquipmentHistory } from './data/supabaseEquipment'
 
+type EquipmentProfileTarget = 'qr' | 'maintenance' | 'inspection' | 'spare'
+
 type Props = {
   equipment: LiveEquipment
   photoUrl: string
   onClose: () => void
   onEdit: () => void
+  onNavigate?: (view: EquipmentProfileTarget) => void
 }
 
 type Tab = 'overview' | 'calibration' | 'maintenance' | 'inspection' | 'downtime' | 'movement' | 'audit'
@@ -38,7 +41,7 @@ function dateTimeText(value: unknown) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('vi-VN')
 }
 
-export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props) {
+export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit, onNavigate }: Props) {
   const [tab, setTab] = useState<Tab>('overview')
   const [history, setHistory] = useState<EquipmentHistory>(EMPTY_HISTORY)
   const [loading, setLoading] = useState(true)
@@ -72,6 +75,10 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
     audit: history.audit.length,
   }), [history])
 
+  function navigate(view: EquipmentProfileTarget) {
+    onNavigate?.(view)
+  }
+
   return <div
     className="equipment-profile-layer"
     role="dialog"
@@ -86,7 +93,7 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
         <div>
           <button className="equipment-profile-back" type="button" onClick={onClose}>← Danh sách thiết bị</button>
           <p className="eyebrow">Hồ sơ thiết bị</p>
-          <h2 id="equipment-profile-title">{equipment.equipmentId} · {equipment.equipmentName}</h2>
+          <h2 id="equipment-profile-title"><span>{equipment.equipmentId}</span><span className="equipment-profile-title-name">{equipment.equipmentName}</span></h2>
         </div>
         <div className="equipment-profile-header-actions">
           <button type="button" onClick={onEdit}>Sửa thiết bị</button>
@@ -115,6 +122,13 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
             <div><dt>QR / Equipment ID</dt><dd>{equipment.qrCode}</dd></div>
           </dl>
         </div>
+      </section>
+
+      <section className="equipment-profile-mobile-actions" aria-label="Thao tác nhanh thiết bị">
+        <button type="button" onClick={() => navigate('maintenance')}><span aria-hidden="true">⚒</span><strong>Bảo trì</strong><small>WO / PM</small></button>
+        <button type="button" onClick={() => navigate('inspection')}><span aria-hidden="true">✓</span><strong>Kiểm tra</strong><small>Daily / inspection</small></button>
+        <button type="button" onClick={() => navigate('spare')}><span aria-hidden="true">◇</span><strong>Phụ tùng</strong><small>Part & stock</small></button>
+        <button type="button" onClick={() => navigate('qr')}><span aria-hidden="true">▣</span><strong>Quét QR</strong><small>Mở máy khác</small></button>
       </section>
 
       <nav className="equipment-profile-tabs" aria-label="Nội dung hồ sơ thiết bị">
@@ -220,6 +234,6 @@ function HistoryTable({ rows, columns, empty }: {
   if (rows.length === 0) return <div className="equipment-profile-empty">{empty}</div>
   return <div className="equipment-profile-table-wrap"><table className="equipment-profile-table">
     <thead><tr>{columns.map(([label]) => <th key={label}>{label}</th>)}</tr></thead>
-    <tbody>{rows.map((row, index) => <tr key={String(row.id || row.created_at || index)}>{columns.map(([label, render]) => <td key={label}>{render(row)}</td>)}</tr>)}</tbody>
+    <tbody>{rows.map((row, index) => <tr key={String(row.id || row.created_at || index)}>{columns.map(([label, render]) => <td key={label} data-label={label}>{render(row)}</td>)}</tr>)}</tbody>
   </table></div>
 }
