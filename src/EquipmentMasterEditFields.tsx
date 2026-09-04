@@ -27,6 +27,7 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
       if (!current) return
       onChange({
         ...value,
+        distributor: value.distributor || current.distributor || '',
         managementResponsiblePrimary: value.managementResponsiblePrimary || current.managementResponsiblePrimary || '',
         managementResponsibleSecondary: value.managementResponsibleSecondary || current.managementResponsibleSecondary || '',
       })
@@ -53,6 +54,7 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
     {textField('equipmentName','Tên thiết bị','equipmentName',true)}
     {textField('equipmentCategory','Nhóm thiết bị','equipmentCategory')}
     {textField('manufacturer','Hãng / nhà sản xuất','manufacturer')}
+    {textField('distributor','Nhà phân phối','distributor')}
     {textField('model','Mẫu máy','model')}
     {textField('serialNumber','Số sê-ri')}
     {textField('department','Bộ phận sử dụng','department')}
