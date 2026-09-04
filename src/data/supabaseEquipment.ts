@@ -44,11 +44,51 @@ export type EquipmentHistory = {
   audit: Array<Record<string, unknown>>
 }
 
+type EquipmentCachePatch = Partial<LiveEquipment> & { equipmentId: string; department?: string }
+let equipmentCache: LiveEquipment[] | null = null
+let consumeEquipmentCacheOnce = false
+
+export function patchEquipmentCacheAfterWrite(patch: EquipmentCachePatch) {
+  if (!equipmentCache) return
+  const equipmentId = patch.equipmentId.trim().toUpperCase()
+  equipmentCache = equipmentCache.map((row) => row.equipmentId === equipmentId ? {
+    ...row,
+    ...patch,
+    equipmentId,
+    usingDepartment: patch.department ?? patch.usingDepartment ?? row.usingDepartment,
+    updatedAt: new Date().toISOString(),
+  } : row)
+  consumeEquipmentCacheOnce = true
+}
+
+export function patchEquipmentCacheAfterBulk(equipmentIds: string[], patch: Record<string, unknown>) {
+  if (!equipmentCache) return
+  const ids = new Set(equipmentIds.map((id) => id.trim().toUpperCase()).filter(Boolean))
+  equipmentCache = equipmentCache.map((row) => {
+    if (!ids.has(row.equipmentId)) return row
+    return {
+      ...row,
+      usingDepartment: typeof patch.department === 'string' ? patch.department : row.usingDepartment,
+      managingDepartment: typeof patch.managingDepartment === 'string' ? patch.managingDepartment : row.managingDepartment,
+      currentArea: typeof patch.currentArea === 'string' ? patch.currentArea : row.currentArea,
+      currentLine: typeof patch.currentLine === 'string' ? patch.currentLine : row.currentLine,
+      equipmentCategory: typeof patch.equipmentCategory === 'string' ? patch.equipmentCategory : row.equipmentCategory,
+      status: typeof patch.status === 'string' ? patch.status : row.status,
+      updatedAt: new Date().toISOString(),
+    }
+  })
+  consumeEquipmentCacheOnce = true
+}
+
 export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
+  if (consumeEquipmentCacheOnce && equipmentCache) {
+    consumeEquipmentCacheOnce = false
+    return equipmentCache
+  }
   const client = requireSupabase()
   const { data, error } = await client.from('equipment_master').select('equipment_id,equipment_type,equipment_name,manufacturer,model,serial_number,department,status,active,qr_code,updated_at,source_data').order('equipment_id')
   if (error) throw new Error(`SUPABASE_EQUIPMENT_READ_FAILED: ${error.message}`)
-  return (data || []).map((row) => {
+  equipmentCache = (data || []).map((row) => {
     const source = row.source_data
     const criticalityFacts = sourceObject(source, 'criticalityFacts')
     return {
@@ -87,6 +127,7 @@ export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
       updatedAt: String(row.updated_at || ''),
     }
   })
+  return equipmentCache
 }
 
 export async function loadEquipmentHistory(equipmentId: string): Promise<EquipmentHistory> {
