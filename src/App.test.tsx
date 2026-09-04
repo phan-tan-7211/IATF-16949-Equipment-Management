@@ -12,6 +12,7 @@ vi.mock('./data/liveAudit', () => ({
 }))
 vi.mock('./LiveDashboardPanel', () => ({ LiveDashboardPanel: () => <h2>Tổng quan trực tiếp</h2> }))
 vi.mock('./LiveEquipmentPanel', () => ({ LiveEquipmentPanel: () => <h2>Thiết bị trực tiếp</h2> }))
+vi.mock('./LiveEquipmentInventoryPanel', () => ({ LiveEquipmentInventoryPanel: () => <h2>Kiểm kê thiết bị trực tiếp</h2> }))
 vi.mock('./LiveInspectionPanel', () => ({ LiveInspectionPanel: () => <h2>Kiểm tra trực tiếp</h2> }))
 vi.mock('./LiveMaintenancePanel', () => ({ LiveMaintenancePanel: () => <h2>Bảo trì trực tiếp</h2> }))
 vi.mock('./LiveToolingPanel', () => ({ LiveToolingPanel: () => <h2>Jig gá trực tiếp</h2> }))
@@ -48,7 +49,7 @@ describe('khung ứng dụng Vercel + Supabase', () => {
     await screen.findByRole('heading', { name: 'Tổng quan trực tiếp' })
     const desktopNav = screen.getByLabelText('Điều hướng trên máy tính')
     const cases = [
-      ['Thiết bị', 'Thiết bị trực tiếp'], ['Kiểm tra ngày', 'Kiểm tra trực tiếp'], ['Bảo trì', 'Bảo trì trực tiếp'], ['Jig, gá & dụng cụ', 'Jig gá trực tiếp'], ['Hiệu chuẩn', 'Hiệu chuẩn trực tiếp'], ['Nhật ký & cấu hình', 'Nhật ký trực tiếp'], ['Tổng quan', 'Tổng quan trực tiếp'],
+      ['Thiết bị', 'Thiết bị trực tiếp'], ['Kiểm kê thiết bị', 'Kiểm kê thiết bị trực tiếp'], ['Kiểm tra ngày', 'Kiểm tra trực tiếp'], ['Bảo trì', 'Bảo trì trực tiếp'], ['Jig, gá & dụng cụ', 'Jig gá trực tiếp'], ['Hiệu chuẩn', 'Hiệu chuẩn trực tiếp'], ['Nhật ký & cấu hình', 'Nhật ký trực tiếp'], ['Tổng quan', 'Tổng quan trực tiếp'],
     ] as const
     for (const [navLabel, heading] of cases) {
       fireEvent.click(within(desktopNav).getByRole('button', { name: navLabel }))
@@ -64,10 +65,10 @@ describe('khung ứng dụng Vercel + Supabase', () => {
 
     fireEvent.click(within(mobileNav).getByRole('button', { name: 'Thêm' }))
     const more = screen.getByRole('dialog', { name: 'Các chức năng khác' })
-    ;['Kiểm tra ngày', 'Phụ tùng', 'Jig, gá & dụng cụ', 'Hiệu chuẩn', 'Hồ sơ A4', 'Nhật ký & cấu hình'].forEach((label) => expect(within(more).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument())
+    ;['Kiểm kê thiết bị', 'Kiểm tra ngày', 'Phụ tùng', 'Jig, gá & dụng cụ', 'Hiệu chuẩn', 'Hồ sơ A4', 'Nhật ký & cấu hình'].forEach((label) => expect(within(more).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument())
 
-    fireEvent.click(within(more).getByRole('button', { name: /Nhật ký & cấu hình/ }))
-    expect(await screen.findByRole('heading', { name: 'Nhật ký trực tiếp' })).toBeInTheDocument()
+    fireEvent.click(within(more).getByRole('button', { name: /Kiểm kê thiết bị/ }))
+    expect(await screen.findByRole('heading', { name: 'Kiểm kê thiết bị trực tiếp' })).toBeInTheDocument()
   })
 
   it('giữ ngữ cảnh thiết bị và quay về đúng hồ sơ ban đầu', async () => {

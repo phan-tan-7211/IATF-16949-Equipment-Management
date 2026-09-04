@@ -2,17 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import './A4PrintCenter.css'
 import './A4Bm02.css'
 import { EquipmentQr } from './components/EquipmentQr'
+import { EquipmentLabelPrintWorkspace } from './components/EquipmentLabelPrintWorkspace'
 import { fetchSourceRows } from './data/sourceRows'
 import { getEquipmentPhotoPreview } from './data/supabaseEquipment'
 import { loadEquipmentA4Relations, type EquipmentA4Relations } from './data/equipmentA4Data'
 
 type Row = Record<string, unknown>
-type DocType = 'equipment' | 'bm02' | 'bm03' | 'bm05' | 'bm08' | 'bm06' | 'calibration'
+type DocType = 'equipment' | 'label' | 'bm02' | 'bm03' | 'bm05' | 'bm08' | 'bm06' | 'calibration'
 
 const EMPTY_RELATIONS: EquipmentA4Relations = { spares: [], history: [], calibration: null }
 
 const DOCS: Array<{ id: DocType; label: string; code: string; table: string; idKey: string; order: string }> = [
   { id: 'equipment', label: 'Lý lịch thiết bị', code: 'CEV-BM-TBSX-01', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
+  { id: 'label', label: 'Tem quản lý thiết bị', code: 'TEM QUẢN LÝ', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
   { id: 'bm02', label: 'Danh mục quản lý thiết bị sản xuất', code: 'CEV-BM-TBSX-02', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
   { id: 'bm03', label: 'Kế hoạch bảo dưỡng máy', code: 'CEV-BM-TBSX-03', table: 'maintenance_plan', idKey: 'plan_id', order: 'created_at' },
   { id: 'bm05', label: 'Biên bản bàn giao trang thiết bị', code: 'CEV-BM-TBSX-05', table: 'equipment_handover', idKey: 'handover_id', order: 'created_at' },
@@ -307,6 +309,10 @@ export function A4PrintCenter() {
   useEffect(() => {
     let active = true
     setDetails([])
+    if (docType === 'label') {
+      setDetailsFor('label:bulk')
+      return () => { active = false }
+    }
     if (docType === 'bm02' || docType === 'bm06') {
       setDetailsFor(`${docType}:all`)
       return () => { active = false }
@@ -347,30 +353,31 @@ export function A4PrintCenter() {
 
   return <div className="print-center">
     <section className="print-toolbar no-print">
-      <div><h2>Hồ sơ A4 / PDF</h2><p>Chọn biểu mẫu và hồ sơ cần in.</p></div>
+      <div><h2>Hồ sơ / Tem quản lý</h2><p>{docType === 'label' ? 'Chọn nhiều thiết bị, chọn khổ tem và in hàng loạt.' : 'Chọn biểu mẫu và hồ sơ cần in.'}</p></div>
       <div className="print-controls">
         <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
-        {!aggregateDoc ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
-        <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (aggregateDoc ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button>
+        {docType !== 'label' && !aggregateDoc ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
+        {docType !== 'label' ? <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (aggregateDoc ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button> : null}
       </div>
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
     </section>
 
-    <article className={`a4-document${docType === 'bm02' || docType === 'bm06' ? ' landscape' : ''}${docType === 'bm02' ? ' bm02-sheet' : ''}${docType === 'equipment' ? ' equipment-sheet' : ''}`}>
-      <header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b></div><div><strong>{config.code}</strong></div></header>
-      <h1>{config.label.toUpperCase()}</h1>
-      {docType === 'bm02' ? <EquipmentManagementListA4 rows={records}/>
-      : docType === 'bm06' ? <>
-        <div className="a4-meta"><span>Số sự kiện: {bm06Rows.length}</span></div>
-        <table className="a4-table"><thead><tr><th>STT</th><th>Thiết bị</th><th>Bắt đầu</th><th>Khôi phục</th><th>Nguyên nhân</th><th>Mô tả / hành động</th></tr></thead><tbody>{bm06Rows.map((row, index) => <tr key={String(row.downtime_id)}><td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{dateTimeDisplay(row.started_at)}</td><td>{dateTimeDisplay(row.ended_at)}</td><td>{display(row.causeCategory || row.cause)}</td><td>{display(row.detail)} / {display(row.actionTaken || row.recoveryAction)}</td></tr>)}</tbody></table>
-      </> : selected ? <>
-        {docType !== 'equipment' ? <div className="a4-meta"><span>Mã hồ sơ: {display(selected[config.idKey])}</span></div> : null}
-        {docType === 'equipment'
-          ? <EquipmentA4 row={selected} photoUrl={equipmentPhotoUrl} relations={equipmentRelations} />
-          : <section className="a4-fields">{printableFields(selected).map(([key, value], index) => <div key={`${key}-${index}`}><span>{LABELS[key]}</span><strong>{key.includes('date') || key.endsWith('_at') || key.endsWith('At') ? dateDisplay(value) : display(value)}</strong></div>)}</section>}
-        {(docType === 'bm03' || docType === 'bm08') ? <section className="a4-detail"><h2>Chi tiết hạng mục</h2>{docType === 'bm08' ? <p>○ Tốt · △ Cảnh báo · × Sửa chữa</p> : null}<DetailTable rows={details} /></section> : null}
-        {docType !== 'equipment' ? <footer className="a4-signatures"><div><span>Người lập / thực hiện</span><b>Ký, ghi rõ họ tên</b></div><div><span>Người kiểm tra / xác nhận</span><b>Ký, ghi rõ họ tên</b></div><div><span>Phê duyệt</span><b>Ký, ghi rõ họ tên</b></div></footer> : null}
-      </> : <p className="a4-empty">Chưa có hồ sơ cho biểu mẫu này.</p>}
-    </article>
+    {docType === 'label'
+      ? <EquipmentLabelPrintWorkspace records={records}/>
+      : <article className={`a4-document${docType === 'bm02' || docType === 'bm06' ? ' landscape' : ''}${docType === 'bm02' ? ' bm02-sheet' : ''}${docType === 'equipment' ? ' equipment-sheet' : ''}`}>
+        <header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b></div><div><strong>{config.code}</strong></div></header><h1>{config.label.toUpperCase()}</h1>
+        {docType === 'bm02' ? <EquipmentManagementListA4 rows={records}/>
+        : docType === 'bm06' ? <>
+          <div className="a4-meta"><span>Số sự kiện: {bm06Rows.length}</span></div>
+          <table className="a4-table"><thead><tr><th>STT</th><th>Thiết bị</th><th>Bắt đầu</th><th>Khôi phục</th><th>Nguyên nhân</th><th>Mô tả / hành động</th></tr></thead><tbody>{bm06Rows.map((row, index) => <tr key={String(row.downtime_id)}><td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{dateTimeDisplay(row.started_at)}</td><td>{dateTimeDisplay(row.ended_at)}</td><td>{display(row.causeCategory || row.cause)}</td><td>{display(row.detail)} / {display(row.actionTaken || row.recoveryAction)}</td></tr>)}</tbody></table>
+        </> : selected ? <>
+          {docType !== 'equipment' ? <div className="a4-meta"><span>Mã hồ sơ: {display(selected[config.idKey])}</span></div> : null}
+          {docType === 'equipment'
+            ? <EquipmentA4 row={selected} photoUrl={equipmentPhotoUrl} relations={equipmentRelations} />
+            : <section className="a4-fields">{printableFields(selected).map(([key, value], index) => <div key={`${key}-${index}`}><span>{LABELS[key]}</span><strong>{key.includes('date') || key.endsWith('_at') || key.endsWith('At') ? dateDisplay(value) : display(value)}</strong></div>)}</section>}
+          {(docType === 'bm03' || docType === 'bm08') ? <section className="a4-detail"><h2>Chi tiết hạng mục</h2>{docType === 'bm08' ? <p>○ Tốt · △ Cảnh báo · × Sửa chữa</p> : null}<DetailTable rows={details} /></section> : null}
+          {docType !== 'equipment' ? <footer className="a4-signatures"><div><span>Người lập / thực hiện</span><b>Ký, ghi rõ họ tên</b></div><div><span>Người kiểm tra / xác nhận</span><b>Ký, ghi rõ họ tên</b></div><div><span>Phê duyệt</span><b>Ký, ghi rõ họ tên</b></div></footer> : null}
+        </> : <p className="a4-empty">Chưa có hồ sơ cho biểu mẫu này.</p>}
+      </article>}
   </div>
 }

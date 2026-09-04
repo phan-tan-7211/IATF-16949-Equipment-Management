@@ -7,6 +7,10 @@ const prefetchers: Record<string, Prefetcher> = {
   dashboard: () => import('../LiveDashboardPanel'),
   qr: () => import('../LiveQrScannerPanel'),
   equipment: () => Promise.all([import('../LiveEquipmentRegistrationPanel'), import('../LiveEquipmentPanel'), import('../QrEquipmentResult')]),
+  inventory: async () => {
+    const [, data] = await Promise.all([import('../LiveEquipmentInventoryPanel'), import('./liveEquipmentInventory')])
+    await data.warmEquipmentInventory()
+  },
   inspection: () => import('../LiveInspectionPanel'),
   maintenance: () => Promise.all([
     import('../LiveMaintenancePlanPanel'),
@@ -29,6 +33,8 @@ const prefetchers: Record<string, Prefetcher> = {
 const labelToView: Array<[string, string]> = [
   ['Nhật ký & cấu hình', 'settings'],
   ['Jig, gá & dụng cụ', 'tooling'],
+  ['Kiểm kê thiết bị', 'inventory'],
+  ['Kiểm kê', 'inventory'],
   ['Kiểm tra ngày', 'inspection'],
   ['Hồ sơ A4', 'print'],
   ['Hiệu chuẩn', 'calibration'],
@@ -62,7 +68,7 @@ function viewFromNavigationButton(button: HTMLButtonElement) {
 function handleIntent(event: Event) {
   const target = event.target
   if (!(target instanceof Element)) return
-  const button = target.closest<HTMLButtonElement>('.sidebar nav button, .mobile-primary-nav button, .mobile-more-grid button')
+  const button = target.closest<HTMLButtonElement>('.sidebar nav button, .mobile-primary-nav button, .mobile-more-grid button, .dashboard-mobile-actions button')
   if (!button) return
   const view = viewFromNavigationButton(button)
   if (view) void prefetchViewCode(view)

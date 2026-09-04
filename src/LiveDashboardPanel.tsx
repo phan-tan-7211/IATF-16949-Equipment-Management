@@ -25,7 +25,7 @@ const kindLabel: Record<LiveDashboardAction['kind'], string> = {
   DOWNTIME_OPEN: 'DỪNG MÁY',
 }
 
-type DashboardTarget = 'qr' | 'maintenance' | 'equipment' | 'inspection'
+type DashboardTarget = 'qr' | 'maintenance' | 'equipment' | 'inventory' | 'inspection'
 
 type Props = {
   onNavigate?: (view: DashboardTarget) => void
@@ -84,6 +84,7 @@ export function LiveDashboardPanel({ onNavigate }: Props) {
       <button type="button" className="primary" onClick={() => onNavigate?.('qr')}><span aria-hidden="true">▣</span><strong>Quét QR</strong><small>Mở thiết bị ngay</small></button>
       <button type="button" onClick={() => onNavigate?.('maintenance')}><span aria-hidden="true">⚒</span><strong>Công việc</strong><small>Lệnh bảo trì & kế hoạch</small></button>
       <button type="button" onClick={() => onNavigate?.('equipment')}><span aria-hidden="true">▤</span><strong>Thiết bị</strong><small>Danh mục & hồ sơ</small></button>
+      <button type="button" onClick={() => onNavigate?.('inventory')}><span aria-hidden="true">◎</span><strong>Kiểm kê</strong><small>Quét tem · xác nhận hiện trạng</small></button>
       <button type="button" onClick={() => onNavigate?.('inspection')}><span aria-hidden="true">✓</span><strong>Kiểm tra</strong><small>Kiểm tra hằng ngày</small></button>
     </section>
 

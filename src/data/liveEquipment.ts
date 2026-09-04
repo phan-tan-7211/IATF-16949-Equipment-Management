@@ -8,11 +8,15 @@ export type LiveEquipment = {
   equipmentType: 'PRODUCTION' | 'MEASUREMENT'
   equipmentCategory: string
   manufacturer: string
+  distributor?: string
   model: string
   serialNumber: string
   currentArea: string
   currentLine: string
   managingDepartment: string
+  managementResponsiblePrimary?: string
+  managementResponsibleSecondary?: string
+  defaultLabelSize?: 'tiny' | 'standard' | 'large'
   usingDepartment: string
   technicalSpecification: string
   description: string
@@ -50,6 +54,9 @@ function sourceBoolean(source: Record<string, unknown>, key: string) {
   const value = source[key]
   return typeof value === 'boolean' ? value : undefined
 }
+function labelSize(value: string): LiveEquipment['defaultLabelSize'] {
+  return value === 'tiny' || value === 'large' ? value : value === 'standard' ? value : undefined
+}
 
 export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipment | null {
   const equipmentId = text(row.equipment_id ?? row.equipmentId)
@@ -63,11 +70,15 @@ export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipme
     equipmentType: equipmentType as LiveEquipment['equipmentType'],
     equipmentCategory: text(row.equipmentCategory) || sourceText(source, 'equipmentCategory'),
     manufacturer: text(row.manufacturer),
+    distributor: text(row.distributor) || sourceText(source, 'distributor'),
     model: text(row.model),
     serialNumber: text(row.serial_number ?? row.serialNumber),
     currentArea: text(row.currentArea) || sourceText(source, 'currentArea'),
     currentLine: text(row.currentLine) || sourceText(source, 'currentLine'),
     managingDepartment: text(row.managingDepartment) || sourceText(source, 'managingDepartment'),
+    managementResponsiblePrimary: text(row.managementResponsiblePrimary) || sourceText(source, 'managementResponsiblePrimary'),
+    managementResponsibleSecondary: text(row.managementResponsibleSecondary) || sourceText(source, 'managementResponsibleSecondary'),
+    defaultLabelSize: labelSize(text(row.defaultLabelSize) || sourceText(source, 'defaultLabelSize')),
     usingDepartment: text(row.department ?? row.usingDepartment) || sourceText(source, 'usingDepartment'),
     technicalSpecification: text(row.technicalSpecification) || sourceText(source, 'technicalSpecification'),
     description: sourceText(source, 'description'),
