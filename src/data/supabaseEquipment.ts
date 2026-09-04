@@ -12,6 +12,17 @@ function sourceText(source: unknown, key: string) {
   return value === null || value === undefined ? '' : String(value).trim()
 }
 
+function sourceObject(source: unknown, key: string) {
+  if (!source || typeof source !== 'object') return {} as Record<string, unknown>
+  const value = (source as Record<string, unknown>)[key]
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {}
+}
+
+function sourceBoolean(source: Record<string, unknown>, key: string) {
+  const value = source[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
 export type EquipmentEditInput = {
   oldEquipmentId: string
   equipmentId: string
@@ -49,6 +60,7 @@ export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
 
   return (data || []).map((row) => {
     const source = row.source_data
+    const criticalityFacts = sourceObject(source, 'criticalityFacts')
     return {
       equipmentId: String(row.equipment_id || ''),
       equipmentName: String(row.equipment_name || row.equipment_id || ''),
@@ -64,6 +76,13 @@ export async function loadSupabaseEquipment(): Promise<LiveEquipment[]> {
       technicalSpecification: sourceText(source, 'technicalSpecification'),
       status: String(row.status || 'UNKNOWN'),
       criticality: sourceText(source, 'criticality'),
+      criticalityFacts: {
+        controlsProductQuality: sourceBoolean(criticalityFacts, 'controlsProductQuality'),
+        specialCharacteristicImpact: sourceBoolean(criticalityFacts, 'specialCharacteristicImpact'),
+        stopsProduction: sourceBoolean(criticalityFacts, 'stopsProduction'),
+        hasBackup: sourceBoolean(criticalityFacts, 'hasBackup'),
+        capacityImpact: sourceBoolean(criticalityFacts, 'capacityImpact'),
+      },
       qrCode: String(row.qr_code || row.equipment_id || ''),
       active: Boolean(row.active),
       updatedAt: String(row.updated_at || ''),
