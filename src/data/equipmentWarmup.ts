@@ -22,12 +22,12 @@ export function installEquipmentWarmup() {
 
   const schedule = () => {
     const run = () => { void warmEquipmentCache(true) }
-    if ('requestIdleCallback' in window) {
+    if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(run, { timeout: 1200 })
       return () => window.cancelIdleCallback(id)
     }
-    const id = window.setTimeout(run, 350)
-    return () => window.clearTimeout(id)
+    const id = globalThis.setTimeout(run, 350)
+    return () => globalThis.clearTimeout(id)
   }
 
   const cancelScheduled = schedule()
