@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './EquipmentProfile.css'
+import { EquipmentQr } from './components/EquipmentQr'
 import type { LiveEquipment } from './data/liveEquipment'
 import { loadEquipmentHistory, type EquipmentHistory } from './data/supabaseEquipment'
 
@@ -127,6 +128,10 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit, onNavig
             {equipment.currentLine ? <div><dt>Line</dt><dd>{equipment.currentLine}</dd></div> : null}
             {equipment.currentArea && equipment.currentArea !== equipment.usingDepartment ? <div><dt>Khu vực</dt><dd>{equipment.currentArea}</dd></div> : null}
           </dl>
+          <div className="equipment-profile-qr-preview">
+            <span>Mã QR thiết bị</span>
+            <EquipmentQr value={equipment.qrCode || equipment.equipmentId} size={112} />
+          </div>
         </div>
       </section>
 
