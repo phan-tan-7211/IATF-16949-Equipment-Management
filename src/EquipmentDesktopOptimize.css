@@ -1,21 +1,15 @@
-/* Equipment desktop workspace: use the full viewport and keep controls compact. */
+/* Equipment desktop workspace: stable full-height layout without overlays or display:contents. */
 @media screen and (min-width:901px){
   .app-body{width:calc(100vw - 196px);max-width:none;overflow:hidden}
   .main-content.equipment-main{width:100%;max-width:none;margin:0;height:100dvh;padding:8px 10px 10px;box-sizing:border-box}
   .equipment-main>.workspace-keepalive-pane:not([hidden]){width:100%;height:100%;min-width:0;min-height:0}
   .equipment-main .maintenance-workspace-stack{width:100%;height:100%;min-width:0;min-height:0;grid-template-rows:auto minmax(0,1fr);gap:8px}
 
-  /*
-   * Equipment is one real responsive grid, not an overlay.
-   * Row 1: title | KPI | actions
-   * Remaining controls span the full workspace width in DOM order.
-   */
+  /* One stable workspace. Never flatten wrappers and never position KPI absolutely. */
   .equipment-page{
-    position:relative;
     display:grid;
-    grid-template-columns:minmax(220px,.9fr) minmax(360px,1.35fr) auto;
-    grid-auto-rows:max-content;
-    align-content:start;
+    grid-template-rows:auto minmax(0,1fr);
+    gap:0;
     width:100%;
     height:100%;
     min-width:0;
@@ -27,38 +21,17 @@
     box-sizing:border-box;
   }
 
-  /* Flatten only the structural wrappers so title, KPI and actions share the same grid row. */
-  .equipment-surface,
-  .equipment-page-header{display:contents}
-
-  .equipment-page-header>div:first-child{
-    grid-column:1;
-    grid-row:1;
-    min-width:0;
-    max-width:none;
-    align-self:center;
-    padding:7px 12px;
-    box-sizing:border-box;
-  }
-  .equipment-page-header .eyebrow{display:none}
-  .equipment-page-header h2{margin:0;font-size:16px;line-height:1.15}
-  .equipment-page-header p:last-child{margin:2px 0 0;font-size:10px;line-height:1.2;color:var(--color-text-muted)}
-
+  /* KPI is a compact strip inside the same visual frame, not three floating cards. */
   .equipment-summary{
-    grid-column:2;
-    grid-row:1;
-    position:static;
-    z-index:auto;
-    width:100%;
-    height:auto;
-    min-width:0;
-    align-self:stretch;
+    order:0;
     display:grid;
     grid-template-columns:repeat(3,minmax(0,1fr));
     gap:0;
-    pointer-events:auto;
-    border-left:1px solid var(--color-border);
-    border-right:1px solid var(--color-border);
+    width:100%;
+    min-width:0;
+    min-height:38px;
+    border-bottom:1px solid var(--color-border);
+    background:var(--color-surface);
   }
   .equipment-summary article{
     display:flex;
@@ -66,8 +39,8 @@
     justify-content:center;
     gap:7px;
     min-width:0;
-    min-height:46px;
-    padding:5px 10px;
+    min-height:38px;
+    padding:4px 10px;
     border:0;
     border-left:1px solid var(--color-border);
     border-radius:0;
@@ -76,49 +49,57 @@
     box-sizing:border-box;
   }
   .equipment-summary article:first-child{border-left:0}
-  .equipment-summary span{font-size:10px;line-height:1.1;white-space:normal;text-align:center;color:var(--color-text-muted)}
-  .equipment-summary strong{font-size:17px;line-height:1;font-weight:900;color:var(--color-text)}
+  .equipment-summary span{font-size:10px;line-height:1.1;color:var(--color-text-muted);white-space:nowrap}
+  .equipment-summary strong{font-size:16px;line-height:1;font-weight:900;color:var(--color-text)}
 
-  .equipment-page-actions{
-    grid-column:3;
-    grid-row:1;
+  .equipment-surface{
+    order:1;
+    height:100%;
+    min-width:0;
+    min-height:0;
     display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    border:0;
+    border-radius:0;
+    box-shadow:none;
+    background:var(--color-surface);
+  }
+
+  .equipment-page-header{
+    flex:0 0 auto;
+    display:grid;
+    grid-template-columns:minmax(210px,1fr) auto;
     align-items:center;
-    justify-content:flex-end;
-    gap:7px;
-    flex-wrap:nowrap;
-    min-width:max-content;
+    gap:10px;
+    min-height:46px;
     padding:7px 12px;
-    position:relative;
-    z-index:13;
+    border-bottom:1px solid var(--color-border);
     box-sizing:border-box;
   }
+  .equipment-page-header>div:first-child{min-width:0;max-width:none}
+  .equipment-page-header .eyebrow{display:none}
+  .equipment-page-header h2{margin:0;font-size:16px;line-height:1.15}
+  .equipment-page-header p:last-child{margin:2px 0 0;font-size:10px;line-height:1.2;color:var(--color-text-muted)}
+  .equipment-page-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:nowrap;min-width:max-content}
   .equipment-page-actions button,.equipment-register-header-action{min-height:32px;padding:0 10px;border-radius:7px;font-size:11px;white-space:nowrap}
 
-  /* Everything after the header occupies the full grid width. */
-  .equipment-toolbar,
-  .equipment-bulk-editor,
-  .equipment-bulk-hint,
-  .equipment-feedback,
-  .equipment-state,
-  .equipment-table-scroll{
-    grid-column:1/-1;
-    min-width:0;
-  }
-
   .equipment-toolbar{
+    flex:0 0 auto;
     display:grid;
     grid-template-columns:minmax(260px,1fr) auto;
-    padding:7px 12px;
     gap:8px;
-    border-top:1px solid var(--color-border);
+    padding:7px 12px;
     border-bottom:1px solid var(--color-border);
+    background:var(--color-surface-subtle);
+    box-sizing:border-box;
   }
   .equipment-toolbar input{min-height:32px;font-size:11px}
   .equipment-sheet-tools{gap:6px;flex-wrap:nowrap}
   .equipment-sheet-tools>button{min-height:32px;padding:0 10px;font-size:11px;white-space:nowrap}
 
-  .equipment-table-scroll{width:100%;height:100%;min-width:0;min-height:0;overflow:auto}
+  .equipment-bulk-editor,.equipment-bulk-hint,.equipment-feedback,.equipment-state{flex:0 0 auto}
+  .equipment-table-scroll{flex:1 1 auto;width:100%;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
   .equipment-data-table{width:max-content;min-width:100%}
 
   /* Registration stays dense and consistently two-column. */
@@ -139,7 +120,6 @@
   .equipment-register-form footer{gap:7px}
   .equipment-register-form footer button,.equipment-register-save{min-height:32px;padding:0 10px;border-radius:6px;font-size:11px}
 
-  /* Column picker: compact checklist instead of oversized controls. */
   .equipment-column-menu{width:260px;max-height:min(430px,70dvh);padding:8px;border-radius:8px}
   .equipment-column-menu header{margin-bottom:4px;gap:6px}
   .equipment-column-menu header strong{font-size:12px}
@@ -147,9 +127,8 @@
   .equipment-column-menu small{margin:7px 3px 3px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
   .equipment-column-menu label{display:grid;grid-template-columns:16px minmax(0,1fr);align-items:center;gap:7px;min-height:27px;padding:3px 4px;border-radius:5px}
   .equipment-column-menu label input[type=checkbox]{width:14px;height:14px;margin:0;accent-color:#2563eb}
-  .equipment-column-menu label span{min-width:0;font-size:11px;line-height:1.2;white-space:normal;word-break:normal}
+  .equipment-column-menu label span{min-width:0;font-size:11px;line-height:1.2;white-space:normal}
 
-  /* Filter panel remains slightly wider than column picker for values. */
   .equipment-filter-popover{width:280px;max-width:280px;max-height:min(430px,65dvh);padding:8px}
   .equipment-filter-popover input[type=search]{min-height:32px;padding:4px 7px;font-size:11px}
   .equipment-filter-actions{top:29px;gap:5px;padding-bottom:5px}
@@ -158,31 +137,12 @@
   .equipment-filter-option input{width:13px;height:13px;margin:0}
 }
 
-/* Zoom/narrow desktop: title gets smaller first, KPI stays inside the row and actions never overlap it. */
-@media screen and (min-width:901px) and (max-width:1250px){
-  .equipment-page{grid-template-columns:minmax(180px,.72fr) minmax(300px,1.15fr) auto}
-  .equipment-page-header>div:first-child{padding-left:9px;padding-right:9px}
-  .equipment-page-header h2{font-size:14px}
-  .equipment-page-header p:last-child{font-size:9px}
-  .equipment-summary article{padding:4px 6px;gap:4px}
-  .equipment-summary span{font-size:9px}
+/* Zoom/high density desktop: wrap controls, never split the workspace into KPI columns. */
+@media screen and (min-width:901px) and (max-width:1150px){
+  .equipment-page-header{grid-template-columns:1fr;gap:6px}
+  .equipment-page-actions{justify-content:flex-start;min-width:0;flex-wrap:wrap}
+  .equipment-toolbar{grid-template-columns:1fr}
+  .equipment-sheet-tools{flex-wrap:wrap}
+  .equipment-summary span{white-space:normal;text-align:center;font-size:9px}
   .equipment-summary strong{font-size:15px}
-  .equipment-page-actions{padding-left:8px;padding-right:8px;gap:5px}
-  .equipment-page-actions button,.equipment-register-header-action{padding:0 8px;font-size:10px}
-}
-
-/* High browser zoom / compact desktop: make the header two rows instead of allowing overlap. */
-@media screen and (min-width:901px) and (max-width:1050px){
-  .equipment-page{grid-template-columns:minmax(180px,1fr) auto}
-  .equipment-page-header>div:first-child{grid-column:1;grid-row:1}
-  .equipment-page-actions{grid-column:2;grid-row:1}
-  .equipment-summary{
-    grid-column:1/-1;
-    grid-row:2;
-    border-left:0;
-    border-right:0;
-    border-top:1px solid var(--color-border);
-  }
-  .equipment-summary article{min-height:36px}
-  .equipment-toolbar{border-top:1px solid var(--color-border)}
 }
