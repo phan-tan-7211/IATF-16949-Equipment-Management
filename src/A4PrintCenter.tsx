@@ -81,6 +81,13 @@ function printableFields(row: Row | null) {
     .filter(([key, value]) => Boolean(LABELS[key]) && value !== null && value !== undefined && value !== '' && typeof value !== 'object')
 }
 
+function safeTitlePart(value: unknown) {
+  return String(value || '')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function DetailTable({ rows }: { rows: Row[] }) {
   if (!rows.length) return <p className="a4-empty">Chưa có hạng mục chi tiết.</p>
   const normalized = rows.map((row) => ({ ...sourceData(row), ...row }))
@@ -208,13 +215,29 @@ export function A4PrintCenter() {
 
   const bm06Rows = docType === 'bm06' ? records.map((row) => ({ ...sourceData(row), ...row })) : []
 
+  function printA4() {
+    const previousTitle = document.title
+    const equipmentId = safeTitlePart(selected?.equipment_id)
+    const equipmentName = safeTitlePart(selected?.equipment_name)
+    document.title = docType === 'equipment' && selected
+      ? ['CEV Equipment', equipmentId, equipmentName].filter(Boolean).join(' · ')
+      : ['CEV Equipment', safeTitlePart(config.code)].filter(Boolean).join(' · ')
+
+    const restoreTitle = () => {
+      document.title = previousTitle
+      window.removeEventListener('afterprint', restoreTitle)
+    }
+    window.addEventListener('afterprint', restoreTitle, { once: true })
+    window.print()
+  }
+
   return <div className="print-center">
     <section className="print-toolbar no-print">
       <div><h2>Hồ sơ A4 / PDF</h2><p>Chọn biểu mẫu và hồ sơ cần in.</p></div>
       <div className="print-controls">
         <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
         {docType !== 'bm06' ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
-        <button type="button" disabled={loading || Boolean(error) || (docType === 'bm06' ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={() => window.print()}>In / Xuất PDF A4</button>
+        <button type="button" disabled={loading || Boolean(error) || (docType === 'bm06' ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button>
       </div>
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
     </section>
