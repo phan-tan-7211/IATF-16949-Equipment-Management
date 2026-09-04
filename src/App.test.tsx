@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./data/supabaseClient', () => ({ supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'test-user' } } } }), onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })), signOut: vi.fn().mockResolvedValue({ error: null }) } } }))
 
@@ -26,6 +26,9 @@ vi.mock('./LiveDowntimePanel', () => ({ LiveDowntimePanel: () => null }))
 vi.mock('./LiveCalibrationEvaluationPanel', () => ({ LiveCalibrationEvaluationPanel: () => null }))
 vi.mock('./LiveCalibrationQuotePanel', () => ({ LiveCalibrationQuotePanel: () => null }))
 
+beforeEach(() => {
+  window.history.replaceState({}, '', '/')
+})
 afterEach(() => cleanup())
 
 import App from './App'
