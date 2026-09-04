@@ -63,42 +63,34 @@ export async function bulkUpdateEquipment(equipmentIds: string[], patch: Equipme
 }
 
 function cachePatch(change: EquipmentRowChange): Partial<LiveEquipment> & { equipmentId: string; department?: string } {
-  const patch = change.patch
-  return {
-    equipmentId: change.equipmentId,
-    equipmentName: patch.equipmentName,
-    equipmentCategory: patch.equipmentCategory,
-    manufacturer: patch.manufacturer,
-    distributor: patch.distributor,
-    model: patch.model,
-    serialNumber: patch.serialNumber,
-    department: patch.department,
-    managingDepartment: patch.managingDepartment,
-    managementResponsiblePrimary: patch.managementResponsiblePrimary,
-    managementResponsibleSecondary: patch.managementResponsibleSecondary,
-    currentArea: patch.currentArea,
-    currentLine: patch.currentLine,
-    status: patch.status,
-    defaultLabelSize: patch.defaultLabelSize,
-    technicalSpecification: patch.technicalSpecification,
-    description: patch.description,
-    accuracy: patch.accuracy,
-    origin: patch.origin,
-    manufactureDate: patch.manufactureDate,
-    inServiceDate: patch.inServiceDate,
-    warrantyUntil: patch.warrantyUntil,
-    warrantyContact: patch.warrantyContact,
-    note: patch.note,
-    relatedDocuments: patch.relatedDocuments,
-    active: patch.active,
-    criticalityFacts: Object.keys(patch).some((key) => ['controlsProductQuality','specialCharacteristicImpact','stopsProduction','hasBackup','capacityImpact'].includes(key)) ? {
-      controlsProductQuality: patch.controlsProductQuality,
-      specialCharacteristicImpact: patch.specialCharacteristicImpact,
-      stopsProduction: patch.stopsProduction,
-      hasBackup: patch.hasBackup,
-      capacityImpact: patch.capacityImpact,
-    } : undefined,
-  }
+  const source = change.patch
+  const patch: Partial<LiveEquipment> & { equipmentId: string; department?: string } = { equipmentId: change.equipmentId }
+  if ('equipmentName' in source) patch.equipmentName = source.equipmentName
+  if ('equipmentCategory' in source) patch.equipmentCategory = source.equipmentCategory
+  if ('manufacturer' in source) patch.manufacturer = source.manufacturer
+  if ('distributor' in source) patch.distributor = source.distributor
+  if ('model' in source) patch.model = source.model
+  if ('serialNumber' in source) patch.serialNumber = source.serialNumber
+  if ('department' in source) patch.department = source.department
+  if ('managingDepartment' in source) patch.managingDepartment = source.managingDepartment
+  if ('managementResponsiblePrimary' in source) patch.managementResponsiblePrimary = source.managementResponsiblePrimary
+  if ('managementResponsibleSecondary' in source) patch.managementResponsibleSecondary = source.managementResponsibleSecondary
+  if ('currentArea' in source) patch.currentArea = source.currentArea
+  if ('currentLine' in source) patch.currentLine = source.currentLine
+  if ('status' in source) patch.status = source.status
+  if ('defaultLabelSize' in source) patch.defaultLabelSize = source.defaultLabelSize
+  if ('technicalSpecification' in source) patch.technicalSpecification = source.technicalSpecification
+  if ('description' in source) patch.description = source.description
+  if ('accuracy' in source) patch.accuracy = source.accuracy
+  if ('origin' in source) patch.origin = source.origin
+  if ('manufactureDate' in source) patch.manufactureDate = source.manufactureDate
+  if ('inServiceDate' in source) patch.inServiceDate = source.inServiceDate
+  if ('warrantyUntil' in source) patch.warrantyUntil = source.warrantyUntil
+  if ('warrantyContact' in source) patch.warrantyContact = source.warrantyContact
+  if ('note' in source) patch.note = source.note
+  if ('relatedDocuments' in source) patch.relatedDocuments = source.relatedDocuments
+  if ('active' in source) patch.active = source.active
+  return patch
 }
 
 export async function bulkUpdateEquipmentRows(changes: EquipmentRowChange[]) {
