@@ -81,12 +81,6 @@ function printableFields(row: Row | null) {
     .filter(([key, value]) => Boolean(LABELS[key]) && value !== null && value !== undefined && value !== '' && typeof value !== 'object')
 }
 
-function equipmentField(row: Row, key: string, sourceKey?: string) {
-  const direct = row[key]
-  if (direct !== null && direct !== undefined && direct !== '') return direct
-  return sourceKey ? sourceData(row)[sourceKey] : undefined
-}
-
 function DetailTable({ rows }: { rows: Row[] }) {
   if (!rows.length) return <p className="a4-empty">Chưa có hạng mục chi tiết.</p>
   const normalized = rows.map((row) => ({ ...sourceData(row), ...row }))
@@ -108,9 +102,19 @@ function EquipmentA4({ row, photoUrl }: { row: Row; photoUrl: string }) {
 
   return <>
     <div className="a4-equipment-main">
-      <section className="a4-equipment-photo">
+      <section className="a4-equipment-photo a4-equipment-left">
         <div className="a4-section-title">Hình ảnh thiết bị</div>
         <div className="a4-equipment-photo-frame">{photoUrl ? <img src={photoUrl} alt="Hình ảnh thiết bị" /> : <span>Chưa có ảnh thiết bị</span>}</div>
+        <div className="a4-section-title a4-management-title">Thông tin quản lý</div>
+        <dl className="a4-equipment-fields a4-management-fields">
+          <div><dt>Bộ phận sử dụng</dt><dd>{display(usingDepartment)}</dd></div>
+          <div><dt>Bộ phận quản lý</dt><dd>{display(managingDepartment)}</dd></div>
+          <div><dt>Khu vực</dt><dd>{display(area)}</dd></div>
+          <div><dt>Dây chuyền</dt><dd>{display(line)}</dd></div>
+          <div><dt>Trạng thái</dt><dd>{display(row.status)}</dd></div>
+          <div><dt>Đang quản lý</dt><dd>{display(row.active)}</dd></div>
+          <div><dt>Cấp độ thiết bị</dt><dd>{criticality ? `Cấp ${criticality}` : '—'}</dd></div>
+        </dl>
       </section>
       <section className="a4-equipment-info">
         <div className="a4-section-title">Thông tin thiết bị</div>
@@ -123,13 +127,6 @@ function EquipmentA4({ row, photoUrl }: { row: Row; photoUrl: string }) {
           <div><dt>Mẫu / Model</dt><dd>{display(row.model)}</dd></div>
           <div><dt>Số sê-ri</dt><dd>{display(row.serial_number)}</dd></div>
           <div><dt>Mã QR</dt><dd>{display(row.qr_code || row.equipment_id)}</dd></div>
-          <div><dt>Bộ phận sử dụng</dt><dd>{display(usingDepartment)}</dd></div>
-          <div><dt>Bộ phận quản lý</dt><dd>{display(managingDepartment)}</dd></div>
-          <div><dt>Khu vực</dt><dd>{display(area)}</dd></div>
-          <div><dt>Dây chuyền</dt><dd>{display(line)}</dd></div>
-          <div><dt>Trạng thái</dt><dd>{display(row.status)}</dd></div>
-          <div><dt>Đang quản lý</dt><dd>{display(row.active)}</dd></div>
-          <div><dt>Cấp độ thiết bị</dt><dd>{criticality ? `Cấp ${criticality}` : '—'}</dd></div>
           <div><dt>Độ chính xác</dt><dd>{display(accuracy)}</dd></div>
         </dl>
       </section>
@@ -222,7 +219,7 @@ export function A4PrintCenter() {
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
     </section>
 
-    <article className={`a4-document${docType === 'bm06' ? ' landscape' : ''}`}>
+    <article className={`a4-document${docType === 'bm06' ? ' landscape' : ''}${docType === 'equipment' ? ' equipment-sheet' : ''}`}>
       <header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b></div><div><strong>{config.code}</strong></div></header>
       <h1>{config.label.toUpperCase()}</h1>
       {docType === 'bm06' ? <>
