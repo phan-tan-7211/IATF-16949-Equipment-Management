@@ -1,3 +1,4 @@
+import { isClientCacheFresh, readClientCache, writeClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 
 export type DailyInspectionMark = 'V' | 'URGENT_REPAIR' | 'MAINTENANCE_REQUIRED' | 'STOP_REPAIR'
@@ -24,8 +25,28 @@ export type LiveInspection = {
   createdAt: string
 }
 
+type InspectionSnapshot = { equipment: InspectionEquipmentOption[]; inspections: LiveInspection[] }
+const INSPECTION_CACHE_KEY = 'cev:data:daily-inspection'
+const INSPECTION_CACHE_VERSION = 1
+const INSPECTION_CACHE_FRESH_MS = 30_000
+const restoredInspectionCache = readClientCache<InspectionSnapshot>(INSPECTION_CACHE_KEY, INSPECTION_CACHE_VERSION)
+let inspectionCache: InspectionSnapshot | null = restoredInspectionCache?.data || null
+let inspectionCacheSavedAt = restoredInspectionCache?.savedAt || 0
+
 function text(value: unknown) {
   return value == null ? '' : String(value).trim()
+}
+
+function persistInspectionCache() {
+  if (!inspectionCache) return
+  const saved = writeClientCache(INSPECTION_CACHE_KEY, INSPECTION_CACHE_VERSION, inspectionCache)
+  inspectionCacheSavedAt = saved.savedAt
+}
+
+export function getInspectionCacheSnapshot(): InspectionSnapshot {
+  return inspectionCache
+    ? { equipment: [...inspectionCache.equipment], inspections: [...inspectionCache.inspections] }
+    : { equipment: [], inspections: [] }
 }
 
 export function normalizeInspectionEquipment(rows: Array<Record<string, unknown>>): InspectionEquipmentOption[] {
@@ -61,17 +82,23 @@ export function normalizeInspections(rows: Array<Record<string, unknown>>): Live
     .sort((a, b) => (b.createdAt || b.inspectionDate).localeCompare(a.createdAt || a.inspectionDate))
 }
 
-export async function loadLiveInspection() {
+export async function loadLiveInspection(options: { force?: boolean } = {}) {
+  if (!options.force && inspectionCache && isClientCacheFresh(inspectionCacheSavedAt, INSPECTION_CACHE_FRESH_MS)) return inspectionCache
   const [equipmentResult, inspectionResult] = await Promise.all([
     supabase.from('equipment_master').select('equipment_id,equipment_type,equipment_name,department,status,source_data').eq('active', true),
     supabase.from('daily_inspection').select('*').order('created_at', { ascending: false }).limit(100),
   ])
-  if (equipmentResult.error) throw equipmentResult.error
-  if (inspectionResult.error) throw inspectionResult.error
-  return {
+  if (equipmentResult.error || inspectionResult.error) {
+    if (inspectionCache) return inspectionCache
+    if (equipmentResult.error) throw equipmentResult.error
+    throw inspectionResult.error
+  }
+  inspectionCache = {
     equipment: normalizeInspectionEquipment((equipmentResult.data || []) as Array<Record<string, unknown>>),
     inspections: normalizeInspections((inspectionResult.data || []) as Array<Record<string, unknown>>),
   }
+  persistInspectionCache()
+  return inspectionCache
 }
 
 export async function submitLiveInspection(request: {
@@ -96,11 +123,33 @@ export async function submitLiveInspection(request: {
   })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return {
+  const response = {
     result: {
       inspectionId: text(result.inspectionId),
       workOrderId: text(result.workOrderId),
       downtimeId: text(result.downtimeId),
     },
   }
+  if (response.result.inspectionId) {
+    const now = new Date().toISOString()
+    const optimistic: LiveInspection = {
+      inspectionId: response.result.inspectionId,
+      equipmentId: request.equipmentId,
+      inspectionDate: now.slice(0, 10),
+      shift: request.shift,
+      area: request.area,
+      inspectorId: '',
+      overallMark: request.overallMark,
+      note: request.note,
+      damagedParts: request.damagedParts,
+      createdAt: now,
+    }
+    if (!inspectionCache) inspectionCache = { equipment: [], inspections: [] }
+    inspectionCache = {
+      ...inspectionCache,
+      inspections: [optimistic, ...inspectionCache.inspections.filter((item) => item.inspectionId !== optimistic.inspectionId)].slice(0, 100),
+    }
+    persistInspectionCache()
+  }
+  return response
 }
