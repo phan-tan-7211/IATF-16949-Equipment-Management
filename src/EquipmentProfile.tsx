@@ -101,8 +101,12 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
             : <div className="equipment-profile-no-image">Chưa có ảnh thiết bị</div>}
         </div>
         <div className="equipment-profile-identity">
-          <span className={`equipment-profile-status status-${equipment.status.toLowerCase()}`}>{equipment.status}</span>
+          <div className="equipment-profile-badges">
+            <span className={`equipment-profile-status status-${equipment.status.toLowerCase()}`}>{equipment.status}</span>
+            <span className={`equipment-profile-criticality level-${(equipment.criticality || 'unknown').toLowerCase()}`}>Cấp {text(equipment.criticality)}</span>
+          </div>
           <dl>
+            <div><dt>Cấp độ thiết bị</dt><dd>{equipment.criticality ? `Cấp ${equipment.criticality}` : 'Chưa xác định'}</dd></div>
             <div><dt>Serial Number</dt><dd>{text(equipment.serialNumber)}</dd></div>
             <div><dt>Model</dt><dd>{text(equipment.model)}</dd></div>
             <div><dt>Hãng</dt><dd>{text(equipment.manufacturer)}</dd></div>
@@ -128,6 +132,7 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit }: Props
         {error ? <div className="equipment-profile-state error">{error}</div> : null}
 
         {!loading && !error && tab === 'overview' ? <div className="equipment-profile-overview-grid">
+          <article><span>Cấp độ thiết bị</span><strong>{equipment.criticality || '—'}</strong><small>Equipment Criticality</small></article>
           <article><span>Hiệu chuẩn</span><strong>{counts.calibration}</strong><small>bản ghi</small></article>
           <article><span>Bảo trì</span><strong>{counts.maintenance}</strong><small>work order</small></article>
           <article><span>Kiểm tra</span><strong>{counts.inspection}</strong><small>bản ghi</small></article>
