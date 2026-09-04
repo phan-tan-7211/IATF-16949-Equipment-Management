@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './SpareParts.css'
 import { useAppRole } from './auth/AppRoleContext'
@@ -43,6 +43,7 @@ export function LiveSparePartsAutoPanel() {
   const canEdit = ['MAINTENANCE','MANAGER','ADMIN'].includes(role)
   const initialParts = getSparePartsCacheSnapshot()
   const initialEquipment = getEquipmentCacheSnapshot()
+  const initialPartsEmpty = useRef(initialParts.length===0).current
   const [parts,setParts] = useState<LiveSparePart[]>(initialParts)
   const [equipment,setEquipment] = useState<LiveEquipment[]>(initialEquipment)
   const [usage,setUsage] = useState<SpareUsage[]>([])
@@ -63,10 +64,10 @@ export function LiveSparePartsAutoPanel() {
     let active=true
     Promise.all([loadSpareParts({force:true}),loadSupabaseEquipment({force:false})])
       .then(([p,e])=>{if(!active)return;setParts(p);setEquipment(e);setError('')})
-      .catch((cause:unknown)=>{if(active&&initialParts.length===0)setError(cause instanceof Error?cause.message:'Không thể tải phụ tùng')})
+      .catch((cause:unknown)=>{if(active&&initialPartsEmpty)setError(cause instanceof Error?cause.message:'Không thể tải phụ tùng')})
       .finally(()=>{if(active)setLoading(false)})
     return()=>{active=false}
-  },[])
+  },[initialPartsEmpty])
   useEffect(()=>{if(!selectedId){setUsage([]);return}void loadSpareUsage(selectedId).then(setUsage).catch(()=>setUsage([]))},[selectedId])
 
   const selected = parts.find((part)=>part.partId===selectedId) || null
