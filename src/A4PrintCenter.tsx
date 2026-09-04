@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import './A4PrintCenter.css'
 import { fetchSourceRows } from './data/sourceRows'
 import { getEquipmentPhotoPreview } from './data/supabaseEquipment'
+import { loadEquipmentA4Relations, type EquipmentA4Relations } from './data/equipmentA4Data'
 
 type Row = Record<string, unknown>
 type DocType = 'equipment' | 'bm03' | 'bm05' | 'bm08' | 'bm06' | 'calibration'
+
+const EMPTY_RELATIONS: EquipmentA4Relations = { spares: [], history: [], calibration: null }
 
 const DOCS: Array<{ id: DocType; label: string; code: string; table: string; idKey: string; order: string }> = [
   { id: 'equipment', label: 'Lý lịch thiết bị', code: 'CEV-BM-TBSX-01', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
@@ -40,6 +43,7 @@ const VALUE_LABELS: Record<string, string> = {
   MEASUREMENT: 'Thiết bị đo kiểm', PRODUCTION: 'Thiết bị sản xuất',
   RUNNING: 'Hoạt động', DOWN: 'Sự cố', MAINTENANCE: 'Bảo trì', STOPPED: 'Dừng', DISPOSED: 'Thanh lý', UNKNOWN: 'Chưa xác định',
   PASS: 'Đạt', FAIL: 'Không đạt', OK: 'Đạt', NG: 'Không đạt', OPEN: 'Đang mở', CLOSED: 'Đã đóng', COMPLETED: 'Hoàn thành',
+  REQUIRED: 'Bắt buộc dự trữ', RECOMMENDED: 'Khuyến nghị dự trữ', NORMAL: 'Thông thường',
   '길이 측정기': 'Thiết bị đo chiều dài',
 }
 
@@ -96,7 +100,7 @@ function DetailTable({ rows }: { rows: Row[] }) {
   return <table className="a4-table"><thead><tr><th>STT</th>{columns.map((key) => <th key={key}>{LABELS[key]}</th>)}</tr></thead><tbody>{normalized.map((row, index) => <tr key={String(row.maintenance_plan_item_id || row.maintenance_result_item_id || index)}><td>{index + 1}</td>{columns.map((key) => <td key={key}>{display(row[key])}</td>)}</tr>)}</tbody></table>
 }
 
-function EquipmentA4({ row, photoUrl }: { row: Row; photoUrl: string }) {
+function EquipmentA4({ row, photoUrl, relations }: { row: Row; photoUrl: string; relations: EquipmentA4Relations }) {
   const technical = sourceText(row, 'technicalSpecification') || sourceText(row, 'specification')
   const description = sourceText(row, 'description')
   const category = sourceText(row, 'equipmentCategory') || sourceText(row, 'classification')
@@ -106,6 +110,13 @@ function EquipmentA4({ row, photoUrl }: { row: Row; photoUrl: string }) {
   const usingDepartment = String(row.department || sourceText(row, 'usingDepartment') || '')
   const criticality = sourceText(row, 'criticality')
   const accuracy = sourceText(row, 'accuracy')
+  const origin = sourceText(row, 'origin') || sourceText(row, 'countryOfOrigin')
+  const manufactureDate = sourceText(row, 'manufactureDate')
+  const inServiceDate = sourceText(row, 'inServiceDate') || sourceText(row, 'purchaseDate')
+  const warrantyUntil = sourceText(row, 'warrantyUntil') || sourceText(row, 'warrantyPeriod')
+  const warrantyContact = sourceText(row, 'warrantyContact')
+  const showOriginWarranty = Boolean(origin || manufactureDate || inServiceDate || warrantyUntil || warrantyContact)
+  const isMeasurement = String(row.equipment_type || '').toUpperCase() === 'MEASUREMENT'
 
   return <>
     <div className="a4-equipment-main">
@@ -119,7 +130,6 @@ function EquipmentA4({ row, photoUrl }: { row: Row; photoUrl: string }) {
           <div><dt>Khu vực</dt><dd>{display(area)}</dd></div>
           <div><dt>Dây chuyền</dt><dd>{display(line)}</dd></div>
           <div><dt>Trạng thái</dt><dd>{display(row.status)}</dd></div>
-          <div><dt>Đang quản lý</dt><dd>{display(row.active)}</dd></div>
           <div><dt>Cấp độ thiết bị</dt><dd>{criticality ? `Cấp ${criticality}` : '—'}</dd></div>
         </dl>
       </section>
@@ -135,6 +145,7 @@ function EquipmentA4({ row, photoUrl }: { row: Row; photoUrl: string }) {
           <div><dt>Số sê-ri</dt><dd>{display(row.serial_number)}</dd></div>
           <div><dt>Mã QR</dt><dd>{display(row.qr_code || row.equipment_id)}</dd></div>
           <div><dt>Độ chính xác</dt><dd>{display(accuracy)}</dd></div>
+          <div><dt>Đang quản lý</dt><dd>{display(row.active)}</dd></div>
         </dl>
       </section>
     </div>
@@ -146,6 +157,42 @@ function EquipmentA4({ row, photoUrl }: { row: Row; photoUrl: string }) {
         <div><dt>Mô tả / chức năng chính</dt><dd>{display(description)}</dd></div>
       </dl>
     </section>
+
+    {showOriginWarranty ? <section className="a4-compact-section">
+      <div className="a4-section-title">Nguồn gốc và bảo hành</div>
+      <div className="a4-inline-fields">
+        {origin ? <div><span>Xuất xứ</span><strong>{origin}</strong></div> : null}
+        {manufactureDate ? <div><span>Ngày sản xuất</span><strong>{dateDisplay(manufactureDate)}</strong></div> : null}
+        {inServiceDate ? <div><span>Ngày đưa vào sử dụng</span><strong>{dateDisplay(inServiceDate)}</strong></div> : null}
+        {warrantyUntil ? <div><span>Bảo hành</span><strong>{display(warrantyUntil)}</strong></div> : null}
+        {warrantyContact ? <div><span>Liên hệ bảo hành</span><strong>{warrantyContact}</strong></div> : null}
+      </div>
+    </section> : null}
+
+    <section className="a4-compact-section">
+      <div className="a4-section-title">Phụ tùng quan trọng / cần dự trữ</div>
+      {relations.spares.length ? <table className="a4-table a4-summary-table a4-spare-table">
+        <thead><tr><th>STT</th><th>Mã</th><th>Tên phụ tùng</th><th>Part No</th><th>Hãng</th><th>Tồn / Min</th><th>Mức</th></tr></thead>
+        <tbody>{relations.spares.map((part, index) => <tr key={part.partId}><td>{index + 1}</td><td>{part.partId}</td><td>{part.partName}</td><td>{display(part.partNumber)}</td><td>{display(part.maker)}</td><td>{part.stockQty} / {part.minQty}</td><td>{display(part.classification)}</td></tr>)}</tbody>
+      </table> : <p className="a4-inline-empty">Chưa có phụ tùng được liên kết với thiết bị.</p>}
+    </section>
+
+    <section className="a4-compact-section">
+      <div className="a4-section-title">Lịch sử thiết bị gần nhất</div>
+      {relations.history.length ? <table className="a4-table a4-summary-table a4-history-table">
+        <thead><tr><th>Ngày</th><th>Sự kiện</th><th>Nội dung chính</th><th>Mã lệnh</th><th>Người thực hiện</th></tr></thead>
+        <tbody>{relations.history.map((event) => <tr key={`${event.type}-${event.id}`}><td>{dateDisplay(event.date)}</td><td>{event.type}</td><td>{display(event.content)}</td><td>{display(event.workOrderId)}</td><td>{display(event.actor)}</td></tr>)}</tbody>
+      </table> : <p className="a4-inline-empty">Chưa có sự kiện đáng chú ý được ghi nhận.</p>}
+    </section>
+
+    {isMeasurement ? <section className="a4-compact-section">
+      <div className="a4-section-title">Tình trạng hiệu chuẩn</div>
+      {relations.calibration ? <div className="a4-calibration-row">
+        <div><span>Hiệu chuẩn gần nhất</span><strong>{dateDisplay(relations.calibration.calibrationDate)}</strong></div>
+        <div><span>Hạn tiếp theo</span><strong>{dateDisplay(relations.calibration.nextDueDate)}</strong></div>
+        <div><span>Kết quả</span><strong>{display(relations.calibration.result)}</strong></div>
+      </div> : <p className="a4-inline-empty">Chưa có hồ sơ hiệu chuẩn.</p>}
+    </section> : null}
 
     <section className="a4-equipment-meta">
       <div><span>Ngày tạo</span><strong>{dateTimeDisplay(row.created_at)}</strong></div>
@@ -163,11 +210,13 @@ export function A4PrintCenter() {
   const [detailsFor, setDetailsFor] = useState('')
   const [error, setError] = useState('')
   const [equipmentPhotoUrl, setEquipmentPhotoUrl] = useState('')
+  const [equipmentRelations, setEquipmentRelations] = useState<EquipmentA4Relations>(EMPTY_RELATIONS)
+  const [relationsFor, setRelationsFor] = useState('')
   const config = DOCS.find((item) => item.id === docType) || DOCS[0]
 
   useEffect(() => {
     let active = true
-    setLoading(true); setError(''); setSelectedId(''); setRecords([]); setDetails([]); setDetailsFor(''); setEquipmentPhotoUrl('')
+    setLoading(true); setError(''); setSelectedId(''); setRecords([]); setDetails([]); setDetailsFor(''); setEquipmentPhotoUrl(''); setEquipmentRelations(EMPTY_RELATIONS); setRelationsFor('')
     const load = async () => {
       try {
         const next = await fetchSourceRows(config.table)
@@ -189,10 +238,24 @@ export function A4PrintCenter() {
   useEffect(() => {
     let active = true
     setEquipmentPhotoUrl('')
+    setEquipmentRelations(EMPTY_RELATIONS)
+    setRelationsFor('')
     if (docType !== 'equipment' || !selected?.equipment_id) return () => { active = false }
-    void getEquipmentPhotoPreview(String(selected.equipment_id))
-      .then((preview) => { if (active && preview.exists) setEquipmentPhotoUrl(preview.signedUrl) })
-      .catch(() => { if (active) setEquipmentPhotoUrl('') })
+    const equipmentId = String(selected.equipment_id)
+    const run = async () => {
+      const [preview, relations] = await Promise.all([
+        getEquipmentPhotoPreview(equipmentId),
+        loadEquipmentA4Relations(equipmentId),
+      ])
+      if (!active) return
+      if (preview.exists) setEquipmentPhotoUrl(preview.signedUrl)
+      setEquipmentRelations(relations)
+      setRelationsFor(equipmentId)
+    }
+    void run().catch((cause: unknown) => {
+      if (!active) return
+      setError(cause instanceof Error ? cause.message : 'Không tải được dữ liệu liên quan của thiết bị')
+    })
     return () => { active = false }
   }, [docType, selected])
 
@@ -214,6 +277,7 @@ export function A4PrintCenter() {
   }, [docType, selected, selectedId, config.idKey])
 
   const bm06Rows = docType === 'bm06' ? records.map((row) => ({ ...sourceData(row), ...row })) : []
+  const equipmentRelationsReady = docType !== 'equipment' || !selected || relationsFor === String(selected.equipment_id || '')
 
   function printA4() {
     const previousTitle = document.title
@@ -237,7 +301,7 @@ export function A4PrintCenter() {
       <div className="print-controls">
         <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
         {docType !== 'bm06' ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
-        <button type="button" disabled={loading || Boolean(error) || (docType === 'bm06' ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button>
+        <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (docType === 'bm06' ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button>
       </div>
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
     </section>
@@ -251,10 +315,10 @@ export function A4PrintCenter() {
       </> : selected ? <>
         {docType !== 'equipment' ? <div className="a4-meta"><span>Mã hồ sơ: {display(selected[config.idKey])}</span></div> : null}
         {docType === 'equipment'
-          ? <EquipmentA4 row={selected} photoUrl={equipmentPhotoUrl} />
+          ? <EquipmentA4 row={selected} photoUrl={equipmentPhotoUrl} relations={equipmentRelations} />
           : <section className="a4-fields">{printableFields(selected).map(([key, value], index) => <div key={`${key}-${index}`}><span>{LABELS[key]}</span><strong>{key.includes('date') || key.endsWith('_at') || key.endsWith('At') ? dateDisplay(value) : display(value)}</strong></div>)}</section>}
         {(docType === 'bm03' || docType === 'bm08') ? <section className="a4-detail"><h2>Chi tiết hạng mục</h2>{docType === 'bm08' ? <p>○ Tốt · △ Cảnh báo · × Sửa chữa</p> : null}<DetailTable rows={details} /></section> : null}
-        <footer className="a4-signatures"><div><span>Người lập / thực hiện</span><b>Ký, ghi rõ họ tên</b></div><div><span>Người kiểm tra / xác nhận</span><b>Ký, ghi rõ họ tên</b></div><div><span>Phê duyệt</span><b>Ký, ghi rõ họ tên</b></div></footer>
+        {docType !== 'equipment' ? <footer className="a4-signatures"><div><span>Người lập / thực hiện</span><b>Ký, ghi rõ họ tên</b></div><div><span>Người kiểm tra / xác nhận</span><b>Ký, ghi rõ họ tên</b></div><div><span>Phê duyệt</span><b>Ký, ghi rõ họ tên</b></div></footer> : null}
       </> : <p className="a4-empty">Chưa có hồ sơ cho biểu mẫu này.</p>}
     </article>
   </div>
