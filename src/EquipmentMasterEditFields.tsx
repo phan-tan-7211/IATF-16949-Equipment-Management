@@ -20,14 +20,14 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
     <label><span>Mã thiết bị</span><input value={value.equipmentId} readOnly /></label>
     <label><span>Loại thiết bị</span><input value={value.equipmentType === 'MEASUREMENT' ? 'Thiết bị đo kiểm' : 'Thiết bị sản xuất'} readOnly /></label>
     {textField('equipmentName','Tên thiết bị','equipmentName',true)}
-    {textField('equipmentCategory','Nhóm / Category','equipmentCategory')}
-    {textField('manufacturer','Maker / Hãng','manufacturer')}
-    {textField('model','Model','model')}
-    {textField('serialNumber','Serial Number')}
+    {textField('equipmentCategory','Nhóm thiết bị','equipmentCategory')}
+    {textField('manufacturer','Hãng / nhà sản xuất','manufacturer')}
+    {textField('model','Mẫu máy','model')}
+    {textField('serialNumber','Số sê-ri')}
     {textField('department','Bộ phận sử dụng','department')}
     {textField('managingDepartment','Bộ phận quản lý','managingDepartment')}
     {textField('currentArea','Khu vực','currentArea')}
-    {textField('currentLine','Line','currentLine')}
+    {textField('currentLine','Dây chuyền','currentLine')}
     {textField('origin','Xuất xứ','origin')}
     {textField('accuracy','Độ chính xác','accuracy')}
     <label><span>Ngày sản xuất</span><input type="date" value={value.manufactureDate} onChange={(event) => setField('manufactureDate', event.target.value)} /></label>
