@@ -1,3 +1,4 @@
+import { isClientCacheFresh, readClientCache, writeClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 
 export type SpareClassification = 'NORMAL' | 'RECOMMENDED' | 'REQUIRED'
@@ -58,6 +59,13 @@ export type SaveSparePartInput = {
   equipmentIds: string[]
 }
 
+const SPARE_CACHE_KEY = 'cev:data:spare-parts'
+const SPARE_CACHE_VERSION = 1
+const SPARE_CACHE_FRESH_MS = 30_000
+const restoredSpareCache = readClientCache<LiveSparePart[]>(SPARE_CACHE_KEY, SPARE_CACHE_VERSION)
+let spareCache: LiveSparePart[] | null = restoredSpareCache?.data || null
+let spareCacheSavedAt = restoredSpareCache?.savedAt || 0
+
 function text(value: unknown) { return value === null || value === undefined ? '' : String(value).trim() }
 function num(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 function bool(value: unknown) { return value === true || text(value).toLowerCase() === 'true' }
@@ -72,25 +80,25 @@ function normalizeEquipment(value: unknown): SpareEquipmentLink[] {
 
 function normalizePart(row: Record<string, unknown>): LiveSparePart {
   return {
-    partId: text(row.part_id),
-    partName: text(row.part_name),
-    partNumber: text(row.part_number),
+    partId: text(row.part_id ?? row.partId),
+    partName: text(row.part_name ?? row.partName),
+    partNumber: text(row.part_number ?? row.partNumber),
     maker: text(row.maker),
-    stockQty: num(row.stock_qty),
-    minQty: num(row.min_qty),
+    stockQty: num(row.stock_qty ?? row.stockQty),
+    minQty: num(row.min_qty ?? row.minQty),
     location: text(row.location),
-    leadTimeDays: row.lead_time_days === null || row.lead_time_days === undefined ? null : num(row.lead_time_days),
-    stopsProduction: bool(row.stops_production),
-    qualitySafetyImpact: bool(row.quality_safety_impact),
-    leadTimeExceedsRecovery: bool(row.lead_time_exceeds_recovery),
-    rationaleNote: text(row.rationale_note),
-    equipmentCount: num(row.equipment_count),
-    criticalEquipmentCount: num(row.critical_equipment_count),
-    sharedCritical: bool(row.shared_critical),
-    riskScore: num(row.risk_score),
-    classification: (text(row.spare_classification) || 'NORMAL') as SpareClassification,
+    leadTimeDays: row.lead_time_days === null || row.leadTimeDays === null || (row.lead_time_days === undefined && row.leadTimeDays === undefined) ? null : num(row.lead_time_days ?? row.leadTimeDays),
+    stopsProduction: bool(row.stops_production ?? row.stopsProduction),
+    qualitySafetyImpact: bool(row.quality_safety_impact ?? row.qualitySafetyImpact),
+    leadTimeExceedsRecovery: bool(row.lead_time_exceeds_recovery ?? row.leadTimeExceedsRecovery),
+    rationaleNote: text(row.rationale_note ?? row.rationaleNote),
+    equipmentCount: num(row.equipment_count ?? row.equipmentCount),
+    criticalEquipmentCount: num(row.critical_equipment_count ?? row.criticalEquipmentCount),
+    sharedCritical: bool(row.shared_critical ?? row.sharedCritical),
+    riskScore: num(row.risk_score ?? row.riskScore),
+    classification: (text(row.spare_classification ?? row.classification) || 'NORMAL') as SpareClassification,
     equipment: normalizeEquipment(row.equipment),
-    updatedAt: text(row.updated_at),
+    updatedAt: text(row.updated_at ?? row.updatedAt),
   }
 }
 
@@ -108,17 +116,49 @@ function normalizeUsage(row: Record<string, unknown>): SpareUsage {
   }
 }
 
-export async function loadSpareParts() {
+function persistSpareCache() {
+  if (!spareCache) return
+  const saved = writeClientCache(SPARE_CACHE_KEY, SPARE_CACHE_VERSION, spareCache)
+  spareCacheSavedAt = saved.savedAt
+}
+
+export function getSparePartsCacheSnapshot(): LiveSparePart[] {
+  return spareCache ? [...spareCache] : []
+}
+
+function upsertSpareCache(part: LiveSparePart) {
+  if (!spareCache) spareCache = []
+  const index = spareCache.findIndex((item) => item.partId === part.partId)
+  if (index >= 0) spareCache = spareCache.map((item, i) => i === index ? part : item)
+  else spareCache = [...spareCache, part].sort((a, b) => a.partId.localeCompare(b.partId, 'vi', { numeric: true }))
+  persistSpareCache()
+}
+
+function decrementSpareCache(partId: string, quantity: number) {
+  if (!spareCache) return
+  spareCache = spareCache.map((item) => item.partId === partId ? { ...item, stockQty: Math.max(0, item.stockQty - quantity), updatedAt: new Date().toISOString() } : item)
+  persistSpareCache()
+}
+
+export async function loadSpareParts(options: { force?: boolean } = {}) {
+  if (!options.force && spareCache && isClientCacheFresh(spareCacheSavedAt, SPARE_CACHE_FRESH_MS)) return spareCache
   const { data, error } = await supabase.from('spare_part_overview').select('*').order('part_id')
-  if (error) throw error
-  return ((data || []) as Array<Record<string, unknown>>).map(normalizePart)
+  if (error) {
+    if (spareCache) return spareCache
+    throw error
+  }
+  spareCache = ((data || []) as Array<Record<string, unknown>>).map(normalizePart)
+  persistSpareCache()
+  return spareCache
 }
 
 export async function saveSparePart(input: SaveSparePartInput) {
   const payload = { ...input, leadTimeDays: input.leadTimeDays ?? null }
   const { data, error } = await supabase.rpc('rpc_save_spare_part', { p_input: payload })
   if (error) throw error
-  return normalizePart((data || {}) as Record<string, unknown>)
+  const saved = normalizePart((data || {}) as Record<string, unknown>)
+  upsertSpareCache(saved)
+  return saved
 }
 
 export async function loadSpareUsage(partId: string) {
@@ -136,5 +176,6 @@ export async function loadWorkOrderSpareUsage(workOrderId: string) {
 export async function recordSpareUsage(input: { partId: string; equipmentId: string; quantity: number; reason?: string; performedBy?: string; workOrderId?: string }) {
   const { data, error } = await supabase.rpc('rpc_record_spare_usage', { p_input: input })
   if (error) throw error
+  decrementSpareCache(input.partId, Math.max(0, Number(input.quantity) || 0))
   return data
 }
