@@ -1,3 +1,4 @@
+import { isClientCacheFresh, readClientCache, writeClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 
 export type LiveTooling = {
@@ -9,16 +10,44 @@ export type LiveToolingPlan = {
 export type LiveToolingModification = {
   modificationId: string; toolingId: string; modificationDate: string; modificationType: string; reason: string; proposedBy: string; approvedBy: string; qaConfirmedBy: string; updatedDocuments: string; status: string
 }
+export type LiveToolingSnapshot = { tooling: LiveTooling[]; plans: LiveToolingPlan[]; modifications: LiveToolingModification[] }
+
+const TOOLING_CACHE_KEY = 'cev:data:tooling'
+const TOOLING_CACHE_VERSION = 1
+const TOOLING_CACHE_FRESH_MS = 30_000
+const restoredToolingCache = readClientCache<LiveToolingSnapshot>(TOOLING_CACHE_KEY, TOOLING_CACHE_VERSION)
+let toolingCache: LiveToolingSnapshot | null = restoredToolingCache?.data || null
+let toolingCacheSavedAt = restoredToolingCache?.savedAt || 0
 
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
+function persistToolingCache() {
+  if (!toolingCache) return
+  const saved = writeClientCache(TOOLING_CACHE_KEY, TOOLING_CACHE_VERSION, toolingCache)
+  toolingCacheSavedAt = saved.savedAt
+}
+function inputText(input: Record<string, unknown>, key: string) { return text(input[key]) }
 
-export async function loadLiveTooling() {
+export function getToolingCacheSnapshot(): LiveToolingSnapshot {
+  return toolingCache ? {
+    tooling: [...toolingCache.tooling],
+    plans: [...toolingCache.plans],
+    modifications: [...toolingCache.modifications],
+  } : { tooling: [], plans: [], modifications: [] }
+}
+
+export async function loadLiveTooling(options: { force?: boolean } = {}) {
+  if (!options.force && toolingCache && isClientCacheFresh(toolingCacheSavedAt, TOOLING_CACHE_FRESH_MS)) return toolingCache
   const [masterResult, planResult, modResult] = await Promise.all([
     supabase.from('tooling_master').select('*').order('tooling_id'),
     supabase.from('tooling_maintenance_plan').select('*').order('created_at', { ascending: false }),
     supabase.from('tooling_modification').select('*').order('created_at', { ascending: false }),
   ])
-  for (const result of [masterResult, planResult, modResult]) if (result.error) throw result.error
+  for (const result of [masterResult, planResult, modResult]) {
+    if (result.error) {
+      if (toolingCache) return toolingCache
+      throw result.error
+    }
+  }
 
   const tooling: LiveTooling[] = ((masterResult.data || []) as Array<Record<string, unknown>>).map((row) => {
     const source = (row.source_data as Record<string, unknown> | null) || {}
@@ -35,28 +64,78 @@ export async function loadLiveTooling() {
     return { modificationId: text(row.modification_id), toolingId: text(row.tooling_id), modificationDate: text(source.modificationDate), modificationType: text(row.modification_type), reason: text(source.reason), proposedBy: text(source.proposedBy), approvedBy: text(source.approvedBy), qaConfirmedBy: text(source.qaConfirmedBy), updatedDocuments: text(source.updatedDocuments), status: text(row.status) }
   }).filter((row) => row.modificationId)
 
-  return { tooling, plans, modifications }
+  toolingCache = { tooling, plans, modifications }
+  persistToolingCache()
+  return toolingCache
 }
 
 export async function createTooling(input: Record<string, unknown>) {
   const { data, error } = await supabase.rpc('rpc_create_tooling', { p_input: input })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return { result: { toolingId: text(result.toolingId) } }
+  const toolingId = text(result.toolingId) || inputText(input, 'toolingId')
+  const created: LiveTooling = {
+    toolingId,
+    toolingName: inputText(input, 'toolingName'),
+    toolingType: inputText(input, 'toolingType'),
+    ownership: inputText(input, 'ownership'),
+    managingDepartment: inputText(input, 'managingDepartment'),
+    storageLocation: inputText(input, 'storageLocation'),
+    status: inputText(input, 'status') || 'IN_PRODUCTION',
+    inspectionCycleDays: inputText(input, 'inspectionCycleDays'),
+  }
+  if (toolingCache && toolingId) {
+    toolingCache = { ...toolingCache, tooling: [...toolingCache.tooling.filter((item) => item.toolingId !== toolingId), created].sort((a, b) => a.toolingId.localeCompare(b.toolingId)) }
+    persistToolingCache()
+  }
+  return { result: { toolingId } }
 }
 
 export async function createToolingPlan(input: Record<string, unknown>) {
   const { data, error } = await supabase.rpc('rpc_create_tooling_plan', { p_input: input })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return { result: { toolingPlanId: text(result.toolingPlanId) } }
+  const toolingPlanId = text(result.toolingPlanId)
+  if (toolingCache && toolingPlanId) {
+    const created: LiveToolingPlan = {
+      toolingPlanId,
+      toolingId: inputText(input, 'toolingId'),
+      inspectionItem: inputText(input, 'inspectionItem'),
+      acceptanceCriteria: inputText(input, 'acceptanceCriteria'),
+      frequencyType: inputText(input, 'frequencyType'),
+      frequencyValue: inputText(input, 'frequencyValue'),
+      responsiblePerson: inputText(input, 'responsiblePerson'),
+      lastResultDate: inputText(input, 'lastResultDate'),
+    }
+    toolingCache = { ...toolingCache, plans: [created, ...toolingCache.plans.filter((item) => item.toolingPlanId !== toolingPlanId)] }
+    persistToolingCache()
+  }
+  return { result: { toolingPlanId } }
 }
 
 export async function createToolingModification(input: Record<string, unknown>) {
   const { data, error } = await supabase.rpc('rpc_create_tooling_modification', { p_input: input })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return { result: { modificationId: text(result.modificationId), status: text(result.status) } }
+  const modificationId = text(result.modificationId)
+  const status = text(result.status) || 'OPEN'
+  if (toolingCache && modificationId) {
+    const created: LiveToolingModification = {
+      modificationId,
+      toolingId: inputText(input, 'toolingId'),
+      modificationDate: inputText(input, 'modificationDate'),
+      modificationType: inputText(input, 'modificationType'),
+      reason: inputText(input, 'reason'),
+      proposedBy: '',
+      approvedBy: '',
+      qaConfirmedBy: '',
+      updatedDocuments: '',
+      status,
+    }
+    toolingCache = { ...toolingCache, modifications: [created, ...toolingCache.modifications.filter((item) => item.modificationId !== modificationId)] }
+    persistToolingCache()
+  }
+  return { result: { modificationId, status } }
 }
 
 export async function transitionToolingModification(modificationId: string, action: 'APPROVE' | 'QA_CONFIRM' | 'COMPLETE', updatedDocuments = '') {
@@ -67,5 +146,18 @@ export async function transitionToolingModification(modificationId: string, acti
   })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return { result: { modificationId: text(result.modificationId), status: text(result.status) } }
+  const resultId = text(result.modificationId) || modificationId
+  const status = text(result.status)
+  if (toolingCache) {
+    toolingCache = {
+      ...toolingCache,
+      modifications: toolingCache.modifications.map((item) => item.modificationId === resultId ? {
+        ...item,
+        status: status || item.status,
+        updatedDocuments: updatedDocuments || item.updatedDocuments,
+      } : item),
+    }
+    persistToolingCache()
+  }
+  return { result: { modificationId: resultId, status } }
 }
