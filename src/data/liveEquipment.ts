@@ -8,6 +8,7 @@ export type LiveEquipment = {
   equipmentType: 'PRODUCTION' | 'MEASUREMENT'
   equipmentCategory: string
   manufacturer: string
+  distributor?: string
   model: string
   serialNumber: string
   currentArea: string
@@ -69,6 +70,7 @@ export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipme
     equipmentType: equipmentType as LiveEquipment['equipmentType'],
     equipmentCategory: text(row.equipmentCategory) || sourceText(source, 'equipmentCategory'),
     manufacturer: text(row.manufacturer),
+    distributor: text(row.distributor) || sourceText(source, 'distributor'),
     model: text(row.model),
     serialNumber: text(row.serial_number ?? row.serialNumber),
     currentArea: text(row.currentArea) || sourceText(source, 'currentArea'),
