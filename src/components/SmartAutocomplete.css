@@ -1,0 +1,59 @@
+.smart-autocomplete {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.smart-autocomplete > input {
+  width: 100%;
+}
+
+.smart-autocomplete-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 18%);
+  padding: 4px;
+}
+
+.smart-autocomplete-menu.open-down {
+  top: calc(100% + 6px);
+}
+
+.smart-autocomplete-menu.open-up {
+  bottom: calc(100% + 6px);
+}
+
+.smart-autocomplete-menu > button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.smart-autocomplete-menu > button:hover,
+.smart-autocomplete-menu > button:focus-visible,
+.smart-autocomplete-menu > button.is-active {
+  background: #f1f5f9;
+  outline: none;
+}
+
+@media (max-width: 768px) {
+  .smart-autocomplete-menu {
+    box-shadow: 0 8px 24px rgb(15 23 42 / 22%);
+  }
+}
