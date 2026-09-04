@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './EquipmentRegistration.css'
 import { useAppRole } from './auth/AppRoleContext'
+import { SmartAutocomplete } from './components/SmartAutocomplete'
 import { loadLiveEquipment } from './data/liveEquipment'
 import { uploadEquipmentPhoto } from './data/supabaseEquipment'
 import { buildEquipmentMasterSuggestions, canonicalizeMasterValue, EMPTY_MASTER_SUGGESTIONS, type EquipmentMasterSuggestionKey } from './data/equipmentMasterFields'
@@ -64,8 +65,7 @@ export function LiveEquipmentRegistrationPanel() {
 
   function resetForm() { setForm(EMPTY); setPhotoFile(null); setPhotoPreview('') }
   function textField(key: keyof EquipmentRegistrationInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false, placeholder = '') {
-    const listId = suggestionKey ? `master-${suggestionKey}-suggestions` : undefined
-    return <label className={wide ? 'wide' : undefined}><span>{label}</span><input list={listId} value={String(form[key] || '')} onChange={(e) => setForm({ ...form, [key]: e.target.value })} onBlur={() => suggestionKey && setForm((current) => ({ ...current, [key]: canonicalizeMasterValue(String(current[key] || ''), suggestions[suggestionKey]) }))} placeholder={placeholder} />{suggestionKey ? <datalist id={listId}>{suggestions[suggestionKey].map((value) => <option key={value} value={value} />)}</datalist> : null}</label>
+    return <label className={wide ? 'wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete value={String(form[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setForm({ ...form, [key]: nextValue })} onBlur={() => setForm((current) => ({ ...current, [key]: canonicalizeMasterValue(String(current[key] || ''), suggestions[suggestionKey]) }))} placeholder={placeholder} /> : <input value={String(form[key] || '')} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={placeholder} />}</label>
   }
 
   async function submit(event: FormEvent) {
@@ -94,7 +94,7 @@ export function LiveEquipmentRegistrationPanel() {
     {open ? <form className="equipment-register-form" onSubmit={submit}>
       <label><span>Loại thiết bị</span><select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value as EquipmentRegistrationInput['equipmentType'] })}><option value="PRODUCTION">Thiết bị sản xuất → CEV-PR</option><option value="MEASUREMENT">Thiết bị đo/kiểm → CEV-ME</option></select></label>
       <label><span>Trạng thái</span><select value={form.status || 'RUNNING'} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
-      <label className="wide"><span>Tên thiết bị *</span><input autoFocus list="master-equipmentName-suggestions" value={form.equipmentName} onChange={(e) => setForm({ ...form, equipmentName: e.target.value })} onBlur={() => setForm((current) => ({ ...current, equipmentName: canonicalizeMasterValue(current.equipmentName, suggestions.equipmentName) }))} required placeholder="Chọn tên chuẩn đã có hoặc nhập tên mới" /><datalist id="master-equipmentName-suggestions">{suggestions.equipmentName.map((value) => <option key={value} value={value} />)}</datalist><small className="equipment-standardize-hint">Nếu đã có “Máy nhúng bể”, chọn đúng tên đó thay vì tạo biến thể mới.</small></label>
+      <label className="wide"><span>Tên thiết bị *</span><SmartAutocomplete autoFocus required value={form.equipmentName} options={suggestions.equipmentName} onChange={(nextValue) => setForm({ ...form, equipmentName: nextValue })} onBlur={() => setForm((current) => ({ ...current, equipmentName: canonicalizeMasterValue(current.equipmentName, suggestions.equipmentName) }))} placeholder="Chọn tên chuẩn đã có hoặc nhập tên mới" /><small className="equipment-standardize-hint">Nếu đã có “Máy nhúng bể”, chọn đúng tên đó thay vì tạo biến thể mới.</small></label>
       {textField('equipmentCategory','Nhóm thiết bị','equipmentCategory')}{textField('manufacturer','Hãng / nhà sản xuất','manufacturer')}{textField('model','Mẫu máy','model')}{textField('serialNumber','Số sê-ri')}
       {textField('department','Bộ phận sử dụng','department')}{textField('managingDepartment','Bộ phận quản lý','managingDepartment')}{textField('currentArea','Khu vực','currentArea')}{textField('currentLine','Dây chuyền','currentLine')}
       {textField('origin','Xuất xứ','origin')}{textField('accuracy','Độ chính xác','accuracy')}
