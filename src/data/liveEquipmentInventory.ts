@@ -25,6 +25,7 @@ export type EquipmentInventoryResult = {
   sessionId: string
   equipmentId: string
   status: EquipmentInventoryStatus
+  labelOk: boolean | null
   actualArea: string
   actualLine: string
   note: string
@@ -40,7 +41,7 @@ export type EquipmentInventorySnapshot = {
 }
 
 const CACHE_KEY = 'cev:data:equipment-inventory'
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 const CACHE_FRESH_MS = 30_000
 const MAX_SESSIONS = 12
 
@@ -52,6 +53,11 @@ const targetedSyncs = new Map<string, Promise<void>>()
 
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 function sourceObject(value: unknown) { return value && typeof value === 'object' ? value as Record<string, unknown> : {} }
+function nullableBoolean(primary: unknown, fallback: unknown) {
+  if (typeof primary === 'boolean') return primary
+  if (typeof fallback === 'boolean') return fallback
+  return null
+}
 
 function normalizeBounded(snapshot: EquipmentInventorySnapshot): EquipmentInventorySnapshot {
   const sessions = [...snapshot.sessions]
@@ -102,6 +108,7 @@ function normalizeResult(row: Record<string, unknown>): EquipmentInventoryResult
     sessionId: text(row.session_id || row.sessionId),
     equipmentId: text(row.equipment_id || row.equipmentId).toUpperCase(),
     status: text(row.status).toUpperCase() as EquipmentInventoryStatus,
+    labelOk: nullableBoolean(row.label_ok, row.labelOk),
     actualArea: text(row.actual_area || row.actualArea),
     actualLine: text(row.actual_line || row.actualLine),
     note: text(row.note),
@@ -241,6 +248,7 @@ export async function recordEquipmentInventory(input: {
   sessionId: string
   equipmentId: string
   status: EquipmentInventoryStatus
+  labelOk?: boolean | null
   actualArea?: string
   actualLine?: string
   note?: string
@@ -249,10 +257,12 @@ export async function recordEquipmentInventory(input: {
   const sessionId = input.sessionId.trim().toUpperCase()
   const equipmentId = input.equipmentId.trim().toUpperCase()
   const previous = cloneSnapshot(inventoryCache)
+  const labelOk = input.status === 'FOUND_LABEL_OK' ? true : input.status === 'FOUND_NO_LABEL' ? false : input.status === 'MOVED' ? (input.labelOk ?? null) : null
   const optimistic: EquipmentInventoryResult = {
     sessionId,
     equipmentId,
     status: input.status,
+    labelOk,
     actualArea: input.status === 'MOVED' ? (input.actualArea || '').trim() : '',
     actualLine: input.status === 'MOVED' ? (input.actualLine || '').trim() : '',
     note: (input.note || '').trim(),
@@ -270,6 +280,7 @@ export async function recordEquipmentInventory(input: {
     p_actual_line: input.actualLine || '',
     p_note: input.note || '',
     p_source: input.source,
+    p_label_ok: input.labelOk ?? null,
   })
   if (error) {
     inventoryCache = previous
