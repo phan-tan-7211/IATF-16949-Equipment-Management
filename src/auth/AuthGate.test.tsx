@@ -4,11 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), loadLiveSession: vi.fn(),
-  callback: () => {}, unsubscribe: vi.fn(),
+  callback: (_event?: string) => {}, unsubscribe: vi.fn(),
 }))
 vi.mock('../data/supabaseClient', () => ({ supabase: { auth: {
   getSession: mocks.getSession, signInWithPassword: mocks.signInWithPassword, signOut: mocks.signOut,
-  onAuthStateChange: (callback: () => void) => { mocks.callback = callback; return { data: { subscription: { unsubscribe: mocks.unsubscribe } } } },
+  onAuthStateChange: (callback: (event: string) => void) => { mocks.callback = callback; return { data: { subscription: { unsubscribe: mocks.unsubscribe } } } },
 } } }))
 vi.mock('../data/liveAudit', () => ({ loadLiveSession: mocks.loadLiveSession }))
 import { AuthGate } from './AuthGate'
@@ -39,7 +39,7 @@ describe('Supabase authentication boundary', () => {
   it('signs in, resolves database role, and unmounts private data on logout', async () => {
     mocks.signInWithPassword.mockImplementation(async () => {
       mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } })
-      mocks.callback()
+      mocks.callback('SIGNED_IN')
       return { error: null }
     })
     mount()
@@ -66,7 +66,7 @@ describe('Supabase authentication boundary', () => {
     mount()
     await waitFor(() => expect(mocks.loadLiveSession).toHaveBeenCalled())
     mocks.getSession.mockResolvedValue({ data: { session: null } })
-    act(() => mocks.callback())
+    act(() => mocks.callback('SIGNED_OUT'))
     await act(async () => finish({ role: 'ADMIN' }))
     expect(await screen.findByLabelText('Mật khẩu')).toBeInTheDocument()
     expect(screen.queryByText(/Workspace/)).not.toBeInTheDocument()
