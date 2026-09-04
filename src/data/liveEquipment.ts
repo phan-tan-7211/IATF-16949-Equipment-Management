@@ -1,3 +1,4 @@
+import { readClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 import type { EquipmentCriticalityFacts } from './autoRegistration'
 
@@ -30,6 +31,9 @@ export type LiveEquipment = {
   active: boolean
   updatedAt: string
 }
+
+const EQUIPMENT_CACHE_KEY = 'cev:data:equipment-master'
+const EQUIPMENT_CACHE_VERSION = 1
 
 function text(value: unknown) { return value === null || value === undefined ? '' : String(value).trim() }
 function bool(value: unknown) { return typeof value === 'boolean' ? value : ['TRUE', '1', 'YES'].includes(text(value).toUpperCase()) }
@@ -90,7 +94,11 @@ export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipme
   }
 }
 
-export async function loadLiveEquipment() {
+export async function loadLiveEquipment(options: { force?: boolean } = {}) {
+  if (!options.force) {
+    const cached = readClientCache<LiveEquipment[]>(EQUIPMENT_CACHE_KEY, EQUIPMENT_CACHE_VERSION)
+    if (cached?.data?.length) return cached.data
+  }
   const { data, error } = await supabase.from('equipment_master').select('*').order('equipment_id')
   if (error) throw error
   return ((data || []) as Array<Record<string, unknown>>).map(normalizeEquipmentRow).filter((row): row is LiveEquipment => Boolean(row))
