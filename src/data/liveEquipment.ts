@@ -16,7 +16,7 @@ export type LiveEquipment = {
   technicalSpecification: string
   status: string
   criticality: string
-  criticalityFacts: EquipmentCriticalityFacts
+  criticalityFacts?: EquipmentCriticalityFacts
   qrCode: string
   active: boolean
   updatedAt: string
