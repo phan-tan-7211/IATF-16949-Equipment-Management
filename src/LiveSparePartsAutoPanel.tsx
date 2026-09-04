@@ -3,8 +3,9 @@ import type { FormEvent } from 'react'
 import './SpareParts.css'
 import { useAppRole } from './auth/AppRoleContext'
 import { EquipmentMultiSelect } from './components/EquipmentMultiSelect'
-import { loadLiveEquipment, type LiveEquipment } from './data/liveEquipment'
-import { loadSpareParts, loadSpareUsage, recordSpareUsage, saveSparePart, type LiveSparePart, type SpareClassification, type SpareUsage } from './data/liveSpareParts'
+import { type LiveEquipment } from './data/liveEquipment'
+import { getEquipmentCacheSnapshot, loadSupabaseEquipment } from './data/supabaseEquipment'
+import { getSparePartsCacheSnapshot, loadSpareParts, loadSpareUsage, recordSpareUsage, saveSparePart, type LiveSparePart, type SpareClassification, type SpareUsage } from './data/liveSpareParts'
 
 type PartForm = {
   partId: string
@@ -40,10 +41,12 @@ function editForm(part: LiveSparePart): PartForm {
 export function LiveSparePartsAutoPanel() {
   const role = useAppRole()
   const canEdit = ['MAINTENANCE','MANAGER','ADMIN'].includes(role)
-  const [parts,setParts] = useState<LiveSparePart[]>([])
-  const [equipment,setEquipment] = useState<LiveEquipment[]>([])
+  const initialParts = getSparePartsCacheSnapshot()
+  const initialEquipment = getEquipmentCacheSnapshot()
+  const [parts,setParts] = useState<LiveSparePart[]>(initialParts)
+  const [equipment,setEquipment] = useState<LiveEquipment[]>(initialEquipment)
   const [usage,setUsage] = useState<SpareUsage[]>([])
-  const [loading,setLoading] = useState(true)
+  const [loading,setLoading] = useState(initialParts.length===0)
   const [saving,setSaving] = useState(false)
   const [error,setError] = useState('')
   const [message,setMessage] = useState('')
@@ -56,8 +59,14 @@ export function LiveSparePartsAutoPanel() {
   const [usageQty,setUsageQty] = useState('1')
   const [usageReason,setUsageReason] = useState('')
 
-  async function reload(){const [p,e]=await Promise.all([loadSpareParts(),loadLiveEquipment()]);setParts(p);setEquipment(e)}
-  useEffect(()=>{let active=true;reload().catch((cause:unknown)=>{if(active)setError(cause instanceof Error?cause.message:'Không thể tải phụ tùng')}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[])
+  useEffect(()=>{
+    let active=true
+    Promise.all([loadSpareParts({force:true}),loadSupabaseEquipment({force:false})])
+      .then(([p,e])=>{if(!active)return;setParts(p);setEquipment(e);setError('')})
+      .catch((cause:unknown)=>{if(active&&initialParts.length===0)setError(cause instanceof Error?cause.message:'Không thể tải phụ tùng')})
+      .finally(()=>{if(active)setLoading(false)})
+    return()=>{active=false}
+  },[])
   useEffect(()=>{if(!selectedId){setUsage([]);return}void loadSpareUsage(selectedId).then(setUsage).catch(()=>setUsage([]))},[selectedId])
 
   const selected = parts.find((part)=>part.partId===selectedId) || null
@@ -84,7 +93,7 @@ export function LiveSparePartsAutoPanel() {
     setSaving(true);setError('');setMessage('')
     try{
       const saved=await saveSparePart({partId:form.partId,partName:form.partName.trim(),partNumber:form.partNumber.trim(),maker:form.maker.trim(),stockQty:Math.max(0,Number(form.stockQty)||0),minQty:Math.max(0,Number(form.minQty)||0),location:form.location.trim(),leadTimeDays:form.leadTimeDays===''?null:Math.max(0,Number(form.leadTimeDays)||0),stopsProduction:form.stopsProduction,qualitySafetyImpact:form.qualitySafetyImpact,leadTimeExceedsRecovery:form.leadTimeExceedsRecovery,rationaleNote:form.rationaleNote.trim(),equipmentIds:form.equipmentIds})
-      await reload();setSelectedId(saved.partId);setFormOpen(false);setMessage(`Đã lưu ${saved.partId} · ${LABEL[saved.classification]} ${saved.riskScore}/4 · ${saved.equipmentCount} thiết bị`)
+      setParts(getSparePartsCacheSnapshot());setSelectedId(saved.partId);setFormOpen(false);setMessage(`Đã lưu ${saved.partId} · ${LABEL[saved.classification]} ${saved.riskScore}/4 · ${saved.equipmentCount} thiết bị`)
     }catch(cause:unknown){const text=cause instanceof Error?cause.message:'Không thể lưu phụ tùng';setError(text.replace('SPARE_PART_POSSIBLE_DUPLICATE:','Có thể đã tồn tại mã '))}finally{setSaving(false)}
   }
 
@@ -93,7 +102,7 @@ export function LiveSparePartsAutoPanel() {
     setSaving(true);setError('')
     try{
       await recordSpareUsage({partId:selected.partId,equipmentId:usageEquipment,quantity:Math.max(1,Number(usageQty)||1),reason:usageReason.trim()})
-      await reload();setUsage(await loadSpareUsage(selected.partId));setUsageReason('');setUsageQty('1');setMessage(`Đã ghi thay ${selected.partId} cho ${usageEquipment}`)
+      setParts(getSparePartsCacheSnapshot());setUsage(await loadSpareUsage(selected.partId));setUsageReason('');setUsageQty('1');setMessage(`Đã ghi thay ${selected.partId} cho ${usageEquipment}`)
     }catch(cause:unknown){setError(cause instanceof Error?cause.message:'Không thể ghi lịch sử thay')}finally{setSaving(false)}
   }
 
