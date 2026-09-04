@@ -25,6 +25,21 @@ For every UI, responsive, mobile, navigation, form, drawer, modal, profile, work
 8. Verify at 375, 440, 768, 1024 and 1440 px before declaring UI work complete.
 9. Never fix responsive overflow by hiding Delete/Save/Cancel or another required action.
 10. Global bottom navigation does not replace contextual Back navigation.
+11. Equipment images follow the immutable Equipment Image Contract below. Do not change image fit/crop behavior without an explicit product decision and corresponding update to all three UI/UX rule files.
+
+## Immutable Equipment Image Contract
+
+This rule applies to every equipment image surface: Equipment Profile, Equipment List thumbnails, Edit Equipment, Register Equipment, preview, QR result and any future equipment-image component.
+
+- The complete source image must always remain visible. Never crop, mask, zoom-crop, clip away corners or hide any part of the bitmap.
+- Images must automatically scale UP when smaller than the available frame and scale DOWN when larger than the frame.
+- Scaling must preserve the original aspect ratio. Never stretch or distort width/height independently.
+- Use a fixed/predictable frame for each surface. Breakpoints may resize the frame, but must not change the image-fit behavior.
+- The image stays centered in the frame.
+- The implementation contract is a frame that constrains size plus an image rendered as `width:100%; height:100%; object-fit:contain; object-position:center` (or an equivalent implementation with identical visual behavior).
+- `object-fit: cover`, background-image cover behavior, manual crop transforms, negative offsets, and aspect-ratio distortion are forbidden for equipment images.
+- Equipment List thumbnails must use one consistent frame size within the list so source-image dimensions cannot change row height or break layout.
+- A UI change involving equipment images is not complete until tested with: small source image, very large source image, portrait image, landscape image, and square image.
 
 Work on feature branches / pull requests, not directly on main.
 Before merge: tests, build, lint, Chromium/Pixel 7/WebKit automated smoke,
