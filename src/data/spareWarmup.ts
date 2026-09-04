@@ -21,12 +21,12 @@ export function installSpareWarmup() {
   if (typeof window === 'undefined') return () => undefined
 
   const schedule = () => {
-    if ('requestIdleCallback' in window) {
+    if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(() => { void warmSpareCache(false) }, { timeout: 1600 })
       return () => window.cancelIdleCallback(id)
     }
-    const id = window.setTimeout(() => { void warmSpareCache(false) }, 500)
-    return () => window.clearTimeout(id)
+    const id = globalThis.setTimeout(() => { void warmSpareCache(false) }, 500)
+    return () => globalThis.clearTimeout(id)
   }
 
   const cancelScheduled = schedule()
