@@ -15,8 +15,8 @@ function runWarmup() {
 
 export function installDashboardWarmup() {
   const schedule = () => {
-    if ('requestIdleCallback' in window) window.requestIdleCallback(() => runWarmup(), { timeout: 1800 })
-    else window.setTimeout(runWarmup, 600)
+    if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => runWarmup(), { timeout: 1800 })
+    else globalThis.setTimeout(runWarmup, 600)
   }
   schedule()
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') runWarmup() })
