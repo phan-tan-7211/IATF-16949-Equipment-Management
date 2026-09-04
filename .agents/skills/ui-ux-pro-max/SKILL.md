@@ -79,7 +79,24 @@ Use this skill for every UI, responsive, mobile, navigation, drawer, form, card,
 - Avoid desktop tables on mobile; convert to cards/label-value rows.
 - Sticky CTA is allowed when it does not cover content or bottom navigation.
 
-### 10. Pre-delivery UI checklist
+### 10. Equipment image contract — immutable
+Applies to Equipment Profile, Equipment List thumbnails, Edit Equipment, Register Equipment, QR/profile previews and all future equipment-image UI.
+
+- Always show the complete source bitmap.
+- Never crop, clip, mask, zoom-crop or hide corners/edges.
+- Small images must scale UP to use the available frame.
+- Large images must scale DOWN to fit the available frame.
+- Preserve original aspect ratio at all times; never stretch or squash.
+- Keep the image centered.
+- Use `object-fit: contain` behavior, never `cover`, for equipment images.
+- Preferred implementation: stable frame + image `width:100%; height:100%; object-fit:contain; object-position:center`.
+- Breakpoints may resize/reflow the frame only; they must never change fit behavior.
+- Equipment List thumbnails must share one fixed frame size so source dimensions never alter row/card layout.
+- Do not replace this with natural-size-only rendering (`width:auto;height:auto`) because small source images must also upscale to the frame.
+- Do not add CSS overrides that revert any equipment image to `cover`.
+- Before delivery test five image shapes/sizes: small, large, portrait, landscape, square.
+
+### 11. Pre-delivery UI checklist
 Before claiming a UI change is done, verify:
 - [ ] 375 px
 - [ ] 440 px
@@ -96,6 +113,7 @@ Before claiming a UI change is done, verify:
 - [ ] touch targets usable
 - [ ] badge meaning not color-only
 - [ ] safe-area does not hide CTA/nav
+- [ ] equipment images show full bitmap, upscale/downscale, never crop or distort
 - [ ] Chromium + Pixel/WebKit smoke gates remain green
 
 ## Project-specific mobile architecture
