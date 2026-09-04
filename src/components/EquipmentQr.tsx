@@ -1,3 +1,5 @@
+import './EquipmentQr.css'
+
 type Props = {
   value: string
   size?: number
@@ -87,7 +89,7 @@ function setFinder(matrix: Matrix, top: number, left: number) {
 }
 
 function formatBits(mask: number) {
-  const data = (1 << 3) | mask // Error correction level L = 01.
+  const data = (1 << 3) | mask
   let remainder = data << 10
   for (let bit = 14; bit >= 10; bit -= 1) {
     if (((remainder >>> bit) & 1) !== 0) remainder ^= 0x537 << (bit - 10)
