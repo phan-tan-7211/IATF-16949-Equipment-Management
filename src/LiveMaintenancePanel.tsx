@@ -9,8 +9,12 @@ import type { MaintenanceWorkflowAction, MaintenanceWorkflowStatus } from './dom
 const statusLabel: Record<string, string> = {
   OPEN: 'Mở', WAITING_APPROVAL: 'Chờ phê duyệt', APPROVED: 'Đã phê duyệt', IN_PROGRESS: 'Đang xử lý', COMPLETED: 'Đã hoàn tất', VERIFIED: 'Đã xác nhận', RELEASED: 'Đã bàn giao',
 }
+const priorityLabel: Record<string,string> = { LOW:'Thấp', MEDIUM:'Trung bình', HIGH:'Cao', CRITICAL:'Khẩn cấp' }
+const sourceLabel: Record<string,string> = { MANUAL:'Tạo thủ công', INSPECTION:'Từ kiểm tra', PM:'Từ kế hoạch bảo dưỡng', REQUEST:'Từ yêu cầu' }
+const roleLabel: Record<string,string> = { MAINTENANCE:'Bảo trì', SUPERVISOR:'Giám sát', QUALITY:'Chất lượng', MANAGER:'Quản lý', ADMIN:'Quản trị hệ thống', UNKNOWN:'Chưa xác định' }
+const planStatusLabel: Record<string,string> = { OVERDUE:'Quá hạn', DUE:'Đến hạn', PLANNED:'Đã lập kế hoạch', COMPLETED:'Đã hoàn tất', ACTIVE:'Đang áp dụng' }
 const nextAction: Partial<Record<MaintenanceWorkflowStatus, { action: MaintenanceWorkflowAction; label: string }>> = {
-  OPEN: { action: 'REQUEST_APPROVAL', label: 'Gửi phê duyệt' }, WAITING_APPROVAL: { action: 'APPROVE', label: 'Phê duyệt' }, APPROVED: { action: 'START', label: 'Bắt đầu sửa chữa' }, IN_PROGRESS: { action: 'COMPLETE', label: 'Hoàn tất sửa chữa' }, COMPLETED: { action: 'VERIFY', label: 'Xác nhận chạy thử' }, VERIFIED: { action: 'RELEASE', label: 'Release / bàn giao' },
+  OPEN: { action: 'REQUEST_APPROVAL', label: 'Gửi phê duyệt' }, WAITING_APPROVAL: { action: 'APPROVE', label: 'Phê duyệt' }, APPROVED: { action: 'START', label: 'Bắt đầu sửa chữa' }, IN_PROGRESS: { action: 'COMPLETE', label: 'Hoàn tất sửa chữa' }, COMPLETED: { action: 'VERIFY', label: 'Xác nhận chạy thử' }, VERIFIED: { action: 'RELEASE', label: 'Bàn giao thiết bị' },
 }
 const OPEN_STATUSES = new Set<MaintenanceWorkflowStatus>(['OPEN', 'WAITING_APPROVAL', 'APPROVED', 'IN_PROGRESS', 'COMPLETED', 'VERIFIED'])
 
@@ -55,7 +59,7 @@ export function LiveMaintenancePanel() {
     let active = true
     loadLiveMaintenance()
       .then((result) => { if (active) applyResult(result) })
-      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải Maintenance') })
+      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải dữ liệu bảo trì') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
@@ -89,7 +93,7 @@ export function LiveMaintenancePanel() {
 
   const onCreate = async (event: FormEvent) => {
     event.preventDefault()
-    if (!canCreate) return setError(`Role ${role} không có quyền tạo Work Order.`)
+    if (!canCreate) return setError(`Vai trò ${roleLabel[role] || role} không có quyền tạo lệnh công việc.`)
     if (!equipmentId || !reason.trim()) return
     setBusy('create'); setError(''); setMessage('')
     try {
@@ -99,38 +103,38 @@ export function LiveMaintenancePanel() {
       setCreateOpen(false)
       await refresh()
       setSelectedId(result.result.workOrderId)
-    } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể tạo Work Order') }
+    } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể tạo lệnh công việc') }
     finally { setBusy('') }
   }
 
   const advance = async (workOrderId: string, action: MaintenanceWorkflowAction) => {
-    if (!canTransitionMaintenance(role, action)) return setError(`Role ${role} không có quyền thực hiện ${action}.`)
+    if (!canTransitionMaintenance(role, action)) return setError(`Vai trò ${roleLabel[role] || role} không có quyền thực hiện thao tác này.`)
     setBusy(workOrderId); setError(''); setMessage('')
     try {
       const result = await transitionLiveMaintenance({ workOrderId, workflowAction: action, operationId: operationId(`maintenance-${action.toLowerCase()}`) })
       setMessage(`${workOrderId}: ${statusLabel[result.result.status] || result.result.status}`)
       await refresh()
-    } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể chuyển trạng thái Work Order') }
+    } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'Không thể chuyển trạng thái lệnh công việc') }
     finally { setBusy('') }
   }
 
   return <div className="maintenance-page">
     <section className="maintenance-summary" aria-label="Tổng quan bảo trì">
-      <article><span>Work Order đang mở</span><strong>{openCount}</strong><small>{criticalCount} critical</small></article>
-      <article><span>Đang sửa chữa</span><strong>{inProgressCount}</strong><small>IN_PROGRESS</small></article>
-      <article><span>PM quá hạn</span><strong>{overduePlans}</strong><small>Kế hoạch cần xử lý</small></article>
-      <article><span>BM-05 accepted</span><strong>{acceptedHandovers.length}</strong><small>Đủ điều kiện release</small></article>
+      <article><span>Lệnh công việc đang mở</span><strong>{openCount}</strong><small>{criticalCount} khẩn cấp</small></article>
+      <article><span>Đang sửa chữa</span><strong>{inProgressCount}</strong><small>Đang xử lý</small></article>
+      <article><span>Bảo dưỡng quá hạn</span><strong>{overduePlans}</strong><small>Kế hoạch cần xử lý</small></article>
+      <article><span>BM-05 đã chấp nhận</span><strong>{acceptedHandovers.length}</strong><small>Đủ điều kiện bàn giao</small></article>
     </section>
 
     <section className="maintenance-surface" aria-labelledby="maintenance-title">
       <header className="maintenance-header">
-        <div><p className="eyebrow">Maintenance Control</p><h2 id="maintenance-title">Work Order</h2><p>{filteredWorkOrders.length} / {workOrders.length} hồ sơ · workflow chạy bằng Supabase RPC</p></div>
-        {canCreate ? <button className="maintenance-primary" type="button" onClick={() => setCreateOpen(true)}>+ Tạo Work Order</button> : <span className="maintenance-readonly">Chỉ xem · {role}</span>}
+        <div><p className="eyebrow">Kiểm soát bảo trì</p><h2 id="maintenance-title">Lệnh công việc</h2><p>{filteredWorkOrders.length} / {workOrders.length} hồ sơ · quy trình được kiểm soát trên hệ thống</p></div>
+        {canCreate ? <button className="maintenance-primary" type="button" onClick={() => setCreateOpen(true)}>+ Tạo lệnh công việc</button> : <span className="maintenance-readonly">Chỉ xem · {roleLabel[role] || role}</span>}
       </header>
 
       <div className="maintenance-toolbar" role="search">
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm WO, mã máy, lý do, người yêu cầu…" aria-label="Tìm Work Order" />
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} aria-label="Lọc trạng thái Work Order">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã lệnh, mã máy, lý do, người yêu cầu…" aria-label="Tìm lệnh công việc" />
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} aria-label="Lọc trạng thái lệnh công việc">
           <option value="ALL">Tất cả trạng thái</option>
           {Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
@@ -143,60 +147,60 @@ export function LiveMaintenancePanel() {
 
       {!loading ? <div className="maintenance-table-scroll">
         <table className="maintenance-table">
-          <thead><tr><th>Work Order</th><th>Thiết bị</th><th>Lý do</th><th>Ưu tiên</th><th>Trạng thái</th><th>Yêu cầu lúc</th><th>BM-05</th><th /></tr></thead>
+          <thead><tr><th>Lệnh công việc</th><th>Thiết bị</th><th>Lý do</th><th>Ưu tiên</th><th>Trạng thái</th><th>Yêu cầu lúc</th><th>BM-05</th><th /></tr></thead>
           <tbody>{filteredWorkOrders.map((item) => {
             const handover = handovers.find((entry) => entry.workOrderId === item.workOrderId && entry.accepted)
             return <tr key={item.workOrderId}>
-              <td><button className="maintenance-link" type="button" onClick={() => setSelectedId(item.workOrderId)}>{item.workOrderId}</button><small>{item.sourceType || 'MANUAL'}</small></td>
+              <td><button className="maintenance-link" type="button" onClick={() => setSelectedId(item.workOrderId)}>{item.workOrderId}</button><small>{sourceLabel[item.sourceType] || item.sourceType || 'Tạo thủ công'}</small></td>
               <td><b>{item.equipmentId}</b><small>{equipmentName.get(item.equipmentId) || '—'}</small></td>
               <td className="maintenance-reason">{item.reason || '—'}</td>
-              <td><span className={`maintenance-priority priority-${item.priority.toLowerCase()}`}>{item.priority || '—'}</span></td>
+              <td><span className={`maintenance-priority priority-${item.priority.toLowerCase()}`}>{priorityLabel[item.priority] || item.priority || '—'}</span></td>
               <td><span className={`maintenance-status status-${item.status.toLowerCase()}`}>{statusLabel[item.status] || item.status}</span></td>
               <td>{dateTime(item.requestedAt)}</td>
-              <td>{handover ? <span className="maintenance-handover yes">Accepted</span> : <span className="maintenance-handover">—</span>}</td>
+              <td>{handover ? <span className="maintenance-handover yes">Đã chấp nhận</span> : <span className="maintenance-handover">—</span>}</td>
               <td><button className="maintenance-row-action" type="button" onClick={() => setSelectedId(item.workOrderId)}>Xem</button></td>
             </tr>
           })}</tbody>
         </table>
-        {!filteredWorkOrders.length ? <div className="maintenance-state">Không có Work Order phù hợp.</div> : null}
+        {!filteredWorkOrders.length ? <div className="maintenance-state">Không có lệnh công việc phù hợp.</div> : null}
       </div> : null}
     </section>
 
     <section className="maintenance-surface maintenance-pm" aria-labelledby="pm-title">
-      <header className="maintenance-header compact"><div><p className="eyebrow">BM-TBSX-03</p><h3 id="pm-title">Kế hoạch PM</h3></div><span>{plans.length} kế hoạch</span></header>
-      {plans.length ? <div className="maintenance-pm-list">{plans.slice(0, 12).map((plan) => <div key={plan.planId}><span><b>{plan.equipmentId}</b> · {plan.maintenanceType || 'PM'}</span><span>{plan.plannedDate || '—'} <em className={`maintenance-status ${plan.status === 'OVERDUE' ? 'status-open' : 'status-approved'}`}>{plan.status}</em></span></div>)}</div> : <div className="maintenance-state">Chưa có kế hoạch PM.</div>}
+      <header className="maintenance-header compact"><div><p className="eyebrow">BM-TBSX-03</p><h3 id="pm-title">Kế hoạch bảo dưỡng định kỳ</h3></div><span>{plans.length} kế hoạch</span></header>
+      {plans.length ? <div className="maintenance-pm-list">{plans.slice(0, 12).map((plan) => <div key={plan.planId}><span><b>{plan.equipmentId}</b> · {plan.maintenanceType || 'Bảo dưỡng định kỳ'}</span><span>{plan.plannedDate || '—'} <em className={`maintenance-status ${plan.status === 'OVERDUE' ? 'status-open' : 'status-approved'}`}>{planStatusLabel[plan.status] || plan.status}</em></span></div>)}</div> : <div className="maintenance-state">Chưa có kế hoạch bảo dưỡng định kỳ.</div>}
     </section>
 
     {selected ? <div className="maintenance-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId('') }}>
       <aside className="maintenance-drawer" role="dialog" aria-modal="true" aria-labelledby="wo-detail-title">
-        <header><div><p className="eyebrow">Work Order Detail</p><h2 id="wo-detail-title">{selected.workOrderId}</h2><p>{selected.equipmentId} · {equipmentName.get(selected.equipmentId) || '—'}</p></div><button type="button" aria-label="Đóng" onClick={() => setSelectedId('')}>×</button></header>
+        <header><div><p className="eyebrow">Chi tiết lệnh công việc</p><h2 id="wo-detail-title">{selected.workOrderId}</h2><p>{selected.equipmentId} · {equipmentName.get(selected.equipmentId) || '—'}</p></div><button type="button" aria-label="Đóng" onClick={() => setSelectedId('')}>×</button></header>
         <div className="maintenance-detail-grid">
           <div><span>Trạng thái</span><strong>{statusLabel[selected.status] || selected.status}</strong></div>
-          <div><span>Ưu tiên</span><strong>{selected.priority || '—'}</strong></div>
-          <div><span>Nguồn</span><strong>{selected.sourceType || '—'}</strong></div>
+          <div><span>Ưu tiên</span><strong>{priorityLabel[selected.priority] || selected.priority || '—'}</strong></div>
+          <div><span>Nguồn</span><strong>{sourceLabel[selected.sourceType] || selected.sourceType || '—'}</strong></div>
           <div><span>Người yêu cầu</span><strong>{selected.requestedBy || '—'}</strong></div>
           <div><span>Thời gian yêu cầu</span><strong>{dateTime(selected.requestedAt)}</strong></div>
-          <div><span>BM-05</span><strong>{selectedHandover ? `${selectedHandover.handoverId} · Accepted` : 'Chưa accepted'}</strong></div>
+          <div><span>BM-05</span><strong>{selectedHandover ? `${selectedHandover.handoverId} · Đã chấp nhận` : 'Chưa chấp nhận'}</strong></div>
         </div>
         <section className="maintenance-detail-section"><span>Lý do / hiện tượng</span><p>{selected.reason || '—'}</p></section>
         {selected.approvedBy ? <section className="maintenance-detail-section"><span>Phê duyệt</span><p>{selected.approvedBy} · {dateTime(selected.approvedAt)}</p></section> : null}
         <MaintenanceSpareFlow equipmentId={selected.equipmentId} workOrderId={selected.workOrderId} />
-        <div className="maintenance-workflow"><span>OPEN</span><b>→</b><span>APPROVE</span><b>→</b><span>REPAIR</span><b>→</b><span>VERIFY</span><b>→</b><span>RELEASE</span></div>
+        <div className="maintenance-workflow"><span>Mở</span><b>→</b><span>Phê duyệt</span><b>→</b><span>Sửa chữa</span><b>→</b><span>Xác nhận</span><b>→</b><span>Bàn giao</span></div>
         <footer>{selectedNext ? <>
-          {selected.status === 'VERIFIED' && !selectedHandover ? <p className="maintenance-release-lock">Cần BM-05 accepted trước khi Release.</p> : null}
-          {canAdvanceSelected ? <button className="maintenance-primary" type="button" disabled={busy === selected.workOrderId || (selected.status === 'VERIFIED' && !selectedHandover)} onClick={() => void advance(selected.workOrderId, selectedNext.action)}>{busy === selected.workOrderId ? 'Đang xử lý…' : selectedNext.label}</button> : <span className="maintenance-readonly">Role {role} không có quyền: {selectedNext.label}</span>}
-        </> : <span className="maintenance-complete">Workflow đã hoàn tất</span>}</footer>
+          {selected.status === 'VERIFIED' && !selectedHandover ? <p className="maintenance-release-lock">Cần BM-05 được chấp nhận trước khi bàn giao.</p> : null}
+          {canAdvanceSelected ? <button className="maintenance-primary" type="button" disabled={busy === selected.workOrderId || (selected.status === 'VERIFIED' && !selectedHandover)} onClick={() => void advance(selected.workOrderId, selectedNext.action)}>{busy === selected.workOrderId ? 'Đang xử lý…' : selectedNext.label}</button> : <span className="maintenance-readonly">Vai trò {roleLabel[role] || role} không có quyền: {selectedNext.label}</span>}
+        </> : <span className="maintenance-complete">Quy trình đã hoàn tất</span>}</footer>
       </aside>
     </div> : null}
 
     {createOpen && canCreate ? <div className="maintenance-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false) }}>
       <aside className="maintenance-drawer create" role="dialog" aria-modal="true" aria-labelledby="create-wo-title">
-        <header><div><p className="eyebrow">Manual Work Order</p><h2 id="create-wo-title">Tạo yêu cầu bảo trì</h2></div><button type="button" aria-label="Đóng" onClick={() => setCreateOpen(false)}>×</button></header>
+        <header><div><p className="eyebrow">Lệnh công việc thủ công</p><h2 id="create-wo-title">Tạo yêu cầu bảo trì</h2></div><button type="button" aria-label="Đóng" onClick={() => setCreateOpen(false)}>×</button></header>
         <form className="maintenance-create-form" onSubmit={onCreate}>
           <label><span>Thiết bị</span><select value={equipmentId} onChange={(event) => setEquipmentId(event.target.value)}>{equipment.map((item) => <option key={item.equipmentId} value={item.equipmentId}>{item.equipmentId} · {item.equipmentName}</option>)}</select></label>
-          <label><span>Ưu tiên</span><select value={priority} onChange={(event) => setPriority(event.target.value as typeof priority)}><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select></label>
+          <label><span>Ưu tiên</span><select value={priority} onChange={(event) => setPriority(event.target.value as typeof priority)}><option value="LOW">Thấp</option><option value="MEDIUM">Trung bình</option><option value="HIGH">Cao</option><option value="CRITICAL">Khẩn cấp</option></select></label>
           <label className="wide"><span>Lý do / hiện tượng</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={6} required autoFocus /></label>
-          <footer><button type="button" onClick={() => setCreateOpen(false)}>Hủy</button><button className="maintenance-primary" type="submit" disabled={busy === 'create' || !equipment.length}>{busy === 'create' ? 'Đang tạo…' : 'Tạo Work Order'}</button></footer>
+          <footer><button type="button" onClick={() => setCreateOpen(false)}>Hủy</button><button className="maintenance-primary" type="submit" disabled={busy === 'create' || !equipment.length}>{busy === 'create' ? 'Đang tạo…' : 'Tạo lệnh công việc'}</button></footer>
         </form>
       </aside>
     </div> : null}
