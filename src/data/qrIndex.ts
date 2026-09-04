@@ -1,4 +1,6 @@
+import { readClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
+import type { LiveEquipment } from './liveEquipment'
 
 export type QrEquipmentIndexItem = {
   equipmentId: string
@@ -8,6 +10,8 @@ export type QrEquipmentIndexItem = {
 }
 
 const CANONICAL_EQUIPMENT_ID = /CEV-(?:PR|ME)-\d{3}/i
+const EQUIPMENT_CACHE_KEY = 'cev:data:equipment-master'
+const EQUIPMENT_CACHE_VERSION = 1
 
 export function parseEquipmentIdFromQr(rawValue: string) {
   const raw = rawValue.trim()
@@ -26,7 +30,24 @@ export function parseEquipmentIdFromQr(rawValue: string) {
   return match ? match[0].toUpperCase() : ''
 }
 
-export async function loadQrEquipmentIndex(): Promise<QrEquipmentIndexItem[]> {
+function fromEquipmentCache(rows: LiveEquipment[]): QrEquipmentIndexItem[] {
+  return rows
+    .filter((row) => row.active)
+    .map((row) => ({
+      equipmentId: row.equipmentId,
+      equipmentName: row.equipmentName || row.equipmentId,
+      equipmentType: row.equipmentType,
+      status: row.status || 'UNKNOWN',
+    }))
+    .toSorted((a, b) => a.equipmentId.localeCompare(b.equipmentId))
+}
+
+export async function loadQrEquipmentIndex(options: { force?: boolean } = {}): Promise<QrEquipmentIndexItem[]> {
+  if (!options.force) {
+    const cached = readClientCache<LiveEquipment[]>(EQUIPMENT_CACHE_KEY, EQUIPMENT_CACHE_VERSION)
+    if (cached?.data?.length) return fromEquipmentCache(cached.data)
+  }
+
   const { data, error } = await supabase
     .from('equipment_master')
     .select('equipment_id,equipment_name,equipment_type,status')
