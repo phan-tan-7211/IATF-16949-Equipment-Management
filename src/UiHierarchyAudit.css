@@ -17,12 +17,8 @@
   display:none !important;
 }
 
-/* Generic descriptions that add no operational meaning. */
-.tooling-header>div>p:last-child {
-  display:none;
-}
+.tooling-header>div>p:last-child { display:none; }
 
-/* Keep one strong title and one useful context line only. */
 .spare-header h2,
 .tooling-header h2,
 .dashboard-command h2,
@@ -36,77 +32,98 @@
 }
 
 @media screen and (min-width:901px){
-  /* Main workspace pages should use the available desktop width instead of inheriting centered content limits. */
-  .main-content {
-    max-width:none;
-    width:100%;
-    box-sizing:border-box;
-  }
+  .main-content { max-width:none; width:100%; box-sizing:border-box; }
 
-  /* Reduce vertical gaps between page blocks. */
+  /* One module = one visual workspace surface. Summary/KPI rows are internal strips, not floating cards. */
   .spare-page,
   .tooling-page,
-  .dashboard-page,
   .inspection-page,
   .maintenance-page,
   .calibration-page,
   .audit-page {
-    gap:8px !important;
+    gap:0 !important;
+    overflow:hidden;
+    border:1px solid var(--color-border);
+    border-radius:12px;
+    background:var(--color-surface);
+    box-shadow:var(--shadow-card);
   }
 
-  /* Compact the KPI summaries across modules. Small descriptions are redundant beside their labels. */
+  /* Nested operational surfaces no longer create a second card around the same module. */
+  .spare-surface,
+  .tooling-surface,
+  .inspection-surface,
+  .maintenance-page>.maintenance-surface,
+  .calibration-surface,
+  .audit-surface {
+    border:0 !important;
+    border-radius:0 !important;
+    box-shadow:none !important;
+    background:transparent !important;
+  }
+
+  /* KPI strip belongs to the module: compact, flat, separated only by dividers. */
   .spare-summary,
   .tooling-summary,
   .inspection-summary,
   .maintenance-summary,
   .calibration-summary,
-  .audit-summary,
-  .dashboard-priority-grid {
-    gap:7px !important;
+  .audit-summary {
+    order:0;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:0 !important;
+    padding:0 10px;
+    border-bottom:1px solid var(--color-border);
+    background:var(--color-surface);
   }
   .spare-summary article,
   .tooling-summary article,
   .inspection-summary article,
   .maintenance-summary article,
   .calibration-summary article,
-  .audit-summary article,
-  .dashboard-priority-grid article {
-    min-height:44px;
-    padding:7px 10px !important;
-    gap:2px !important;
-    border-radius:10px !important;
+  .audit-summary article {
+    min-height:48px;
+    padding:6px 10px !important;
+    gap:1px !important;
+    border:0 !important;
+    border-right:1px solid var(--color-border) !important;
+    border-radius:0 !important;
+    background:transparent !important;
+    box-shadow:none !important;
   }
+  .spare-summary article:last-child,
+  .tooling-summary article:last-child,
+  .inspection-summary article:last-child,
+  .maintenance-summary article:last-child,
+  .calibration-summary article:last-child,
+  .audit-summary article:last-child { border-right:0 !important; }
+
   .spare-summary strong,
   .tooling-summary strong,
   .inspection-summary strong,
   .maintenance-summary strong,
   .calibration-summary strong,
   .audit-summary strong,
-  .dashboard-priority-grid strong {
-    font-size:18px !important;
-    line-height:1 !important;
-  }
+  .dashboard-priority-grid strong { font-size:18px !important; line-height:1 !important; }
+
   .spare-summary span,
   .tooling-summary span,
   .inspection-summary span,
   .maintenance-summary span,
   .calibration-summary span,
   .audit-summary span,
-  .dashboard-priority-grid span {
-    font-size:10px !important;
-    line-height:1.15 !important;
-  }
+  .dashboard-priority-grid span { font-size:10px !important; line-height:1.15 !important; }
+
   .spare-summary small,
   .tooling-summary small,
   .inspection-summary small,
   .maintenance-summary small,
   .calibration-summary small,
   .audit-summary small,
-  .dashboard-priority-grid small {
-    display:none !important;
-  }
+  .dashboard-priority-grid small { display:none !important; }
 
-  /* Primary headers: 46-52px target, not oversized card headers. */
+  /* Primary headers: one title, compact action row. */
   .spare-header,
   .tooling-header,
   .inspection-header,
@@ -119,6 +136,13 @@
     padding:7px 10px !important;
     gap:10px !important;
   }
+  .spare-header,
+  .tooling-header,
+  .inspection-header,
+  .maintenance-page>.maintenance-surface>.maintenance-header,
+  .calibration-header,
+  .audit-header { border-bottom:1px solid var(--color-border); }
+
   .spare-header h2,
   .tooling-header h2,
   .inspection-header h2,
@@ -126,9 +150,8 @@
   .maintenance-header h3,
   .calibration-header h2,
   .audit-header h2,
-  .dashboard-command h2 {
-    font-size:16px !important;
-  }
+  .dashboard-command h2 { font-size:16px !important; }
+
   .spare-header>div>p:last-child,
   .inspection-header>div>p:last-child,
   .maintenance-header>div>p:last-child,
@@ -140,58 +163,44 @@
     line-height:1.25 !important;
   }
 
-  /* Surface padding/toolbar spacing standardized so data receives the space. */
   .tooling-surface,
   .inspection-surface,
   .maintenance-surface,
   .calibration-surface,
-  .audit-surface {
-    padding:10px !important;
-    border-radius:12px !important;
-  }
+  .audit-surface { padding:10px !important; }
+
+  /* Header is already inside the unified surface; remove extra top padding that made it look detached. */
+  .tooling-surface,
+  .inspection-surface,
+  .calibration-surface,
+  .audit-surface { padding-top:0 !important; }
+
   .spare-toolbar,
   .tooling-toolbar,
   .inspection-toolbar,
   .maintenance-toolbar,
   .calibration-toolbar,
-  .audit-toolbar {
-    margin-top:8px !important;
-  }
-  .spare-toolbar {
-    padding:7px 10px !important;
-  }
-  .tooling-tabs {
-    margin-top:8px !important;
-    padding-bottom:6px !important;
-  }
+  .audit-toolbar { margin-top:8px !important; }
+  .spare-toolbar { padding:7px 10px !important; }
+  .tooling-tabs { margin-top:8px !important; padding-bottom:6px !important; }
 
-  /* Dashboard: the status chip is enough; remove the large hero feeling. */
-  .dashboard-command {
-    border-radius:12px !important;
-    box-shadow:none !important;
+  /* Dashboard remains a command page but avoids a large hero treatment. */
+  .dashboard-page { gap:8px !important; }
+  .dashboard-priority-grid { gap:7px !important; }
+  .dashboard-priority-grid article {
+    min-height:44px;
+    padding:7px 10px !important;
+    gap:2px !important;
+    border-radius:10px !important;
   }
-  .dashboard-live {
-    min-height:25px;
-    padding:0 8px;
-    font-size:10px;
-  }
-  .dashboard-overview-strip,
-  .dashboard-action-panel,
-  .dashboard-workflow {
-    border-radius:12px !important;
-  }
-  .dashboard-overview-strip>div {
-    padding:8px 10px !important;
-  }
-  .dashboard-action-panel>header {
-    padding:9px 11px !important;
-  }
-  .dashboard-workflow {
-    padding:9px 11px !important;
-  }
+  .dashboard-command { border-radius:12px !important; box-shadow:none !important; }
+  .dashboard-live { min-height:25px; padding:0 8px; font-size:10px; }
+  .dashboard-overview-strip,.dashboard-action-panel,.dashboard-workflow { border-radius:12px !important; }
+  .dashboard-overview-strip>div { padding:8px 10px !important; }
+  .dashboard-action-panel>header { padding:9px 11px !important; }
+  .dashboard-workflow { padding:9px 11px !important; }
 }
 
-/* Mobile also removes duplicated page eyebrows, but keeps comfortable touch spacing. */
 @media(max-width:900px){
   .spare-header>div>.eyebrow,
   .tooling-header>div>.eyebrow,
@@ -200,7 +209,5 @@
   .maintenance-page>.maintenance-surface>.maintenance-header>div>.eyebrow,
   .calibration-header>div>.eyebrow,
   .audit-header>div>.eyebrow,
-  .dashboard-action-panel>header .eyebrow {
-    display:none !important;
-  }
+  .dashboard-action-panel>header .eyebrow { display:none !important; }
 }
