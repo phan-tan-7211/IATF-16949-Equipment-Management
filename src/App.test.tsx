@@ -10,14 +10,14 @@ vi.mock('./data/liveAudit', () => ({
   loadLiveSession: vi.fn().mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN', contractVersion: 'G1-frozen-2026-08-28' }),
   loadLiveAudit: vi.fn().mockResolvedValue([]),
 }))
-vi.mock('./LiveDashboardPanel', () => ({ LiveDashboardPanel: () => <h2>Dashboard live</h2> }))
-vi.mock('./LiveEquipmentPanel', () => ({ LiveEquipmentPanel: () => <h2>Equipment live</h2> }))
-vi.mock('./LiveInspectionPanel', () => ({ LiveInspectionPanel: () => <h2>Inspection live</h2> }))
-vi.mock('./LiveMaintenancePanel', () => ({ LiveMaintenancePanel: () => <h2>Maintenance live</h2> }))
-vi.mock('./LiveToolingPanel', () => ({ LiveToolingPanel: () => <h2>Tooling live</h2> }))
-vi.mock('./LiveCalibrationPanel', () => ({ LiveCalibrationPanel: () => <h2>Calibration live</h2> }))
-vi.mock('./LiveAuditPanel', () => ({ LiveAuditPanel: () => <h2>Audit live</h2> }))
-vi.mock('./QrEquipmentResult', () => ({ QrEquipmentResult: ({ equipmentId }: { equipmentId: string }) => <h2>Equipment profile {equipmentId}</h2> }))
+vi.mock('./LiveDashboardPanel', () => ({ LiveDashboardPanel: () => <h2>Tổng quan trực tiếp</h2> }))
+vi.mock('./LiveEquipmentPanel', () => ({ LiveEquipmentPanel: () => <h2>Thiết bị trực tiếp</h2> }))
+vi.mock('./LiveInspectionPanel', () => ({ LiveInspectionPanel: () => <h2>Kiểm tra trực tiếp</h2> }))
+vi.mock('./LiveMaintenancePanel', () => ({ LiveMaintenancePanel: () => <h2>Bảo trì trực tiếp</h2> }))
+vi.mock('./LiveToolingPanel', () => ({ LiveToolingPanel: () => <h2>Jig gá trực tiếp</h2> }))
+vi.mock('./LiveCalibrationPanel', () => ({ LiveCalibrationPanel: () => <h2>Hiệu chuẩn trực tiếp</h2> }))
+vi.mock('./LiveAuditPanel', () => ({ LiveAuditPanel: () => <h2>Nhật ký trực tiếp</h2> }))
+vi.mock('./QrEquipmentResult', () => ({ QrEquipmentResult: ({ equipmentId }: { equipmentId: string }) => <h2>Hồ sơ thiết bị {equipmentId}</h2> }))
 
 vi.mock('./LiveMaintenancePlanPanel', () => ({ LiveMaintenancePlanPanel: () => null }))
 vi.mock('./LiveMaintenanceResultPanel', () => ({ LiveMaintenanceResultPanel: () => null }))
@@ -33,21 +33,21 @@ afterEach(() => cleanup())
 
 import App from './App'
 
-describe('Vercel + Supabase app shell', () => {
-  it('renders the live dashboard by default', async () => {
+describe('khung ứng dụng Vercel + Supabase', () => {
+  it('hiển thị tổng quan mặc định', async () => {
     render(<App />)
-    expect(await screen.findByRole('heading', { name: 'Dashboard live' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Tổng quan trực tiếp' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tài khoản' })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByText(/React \+ Vite \+ TypeScript/)).toBeInTheDocument()
-    expect((await screen.findAllByText('ADMIN')).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Hệ thống quản lý thiết bị CEV/)).toBeInTheDocument()
+    expect((await screen.findAllByText('Quản trị hệ thống')).length).toBeGreaterThan(0)
   })
 
-  it('routes every desktop workspace to its live module', async () => {
+  it('điều hướng toàn bộ chức năng desktop đúng module', async () => {
     render(<App />)
-    await screen.findByRole('heading', { name: 'Dashboard live' })
-    const desktopNav = screen.getByLabelText('Điều hướng desktop')
+    await screen.findByRole('heading', { name: 'Tổng quan trực tiếp' })
+    const desktopNav = screen.getByLabelText('Điều hướng trên máy tính')
     const cases = [
-      ['Thiết bị', 'Equipment live'], ['Kiểm tra ngày', 'Inspection live'], ['Bảo trì', 'Maintenance live'], ['Jig & Tooling', 'Tooling live'], ['Hiệu chuẩn', 'Calibration live'], ['Audit & Cấu hình', 'Audit live'], ['Tổng quan', 'Dashboard live'],
+      ['Thiết bị', 'Thiết bị trực tiếp'], ['Kiểm tra ngày', 'Kiểm tra trực tiếp'], ['Bảo trì', 'Bảo trì trực tiếp'], ['Jig, gá & dụng cụ', 'Jig gá trực tiếp'], ['Hiệu chuẩn', 'Hiệu chuẩn trực tiếp'], ['Nhật ký & cấu hình', 'Nhật ký trực tiếp'], ['Tổng quan', 'Tổng quan trực tiếp'],
     ] as const
     for (const [navLabel, heading] of cases) {
       fireEvent.click(within(desktopNav).getByRole('button', { name: navLabel }))
@@ -55,34 +55,34 @@ describe('Vercel + Supabase app shell', () => {
     }
   })
 
-  it('keeps primary mobile actions compact and exposes remaining workspaces from More', async () => {
+  it('giữ thanh mobile gọn và mở chức năng còn lại từ Thêm', async () => {
     render(<App />)
-    expect((await screen.findAllByText('ADMIN')).length).toBeGreaterThan(0)
-    const mobileNav = screen.getByLabelText('Điều hướng mobile')
-    ;['Home', 'Work', 'Scan', 'Equipment', 'More'].forEach((label) => expect(within(mobileNav).getByRole('button', { name: label })).toBeInTheDocument())
+    expect((await screen.findAllByText('Quản trị hệ thống')).length).toBeGreaterThan(0)
+    const mobileNav = screen.getByLabelText('Điều hướng trên điện thoại')
+    ;['Trang chủ', 'Công việc', 'Quét QR', 'Thiết bị', 'Thêm'].forEach((label) => expect(within(mobileNav).getByRole('button', { name: label })).toBeInTheDocument())
 
-    fireEvent.click(within(mobileNav).getByRole('button', { name: 'More' }))
+    fireEvent.click(within(mobileNav).getByRole('button', { name: 'Thêm' }))
     const more = screen.getByRole('dialog', { name: 'Các chức năng khác' })
-    ;['Kiểm tra ngày', 'Phụ tùng', 'Jig & Tooling', 'Hiệu chuẩn', 'Hồ sơ A4', 'Audit & Cấu hình'].forEach((label) => expect(within(more).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument())
+    ;['Kiểm tra ngày', 'Phụ tùng', 'Jig, gá & dụng cụ', 'Hiệu chuẩn', 'Hồ sơ A4', 'Nhật ký & cấu hình'].forEach((label) => expect(within(more).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument())
 
-    fireEvent.click(within(more).getByRole('button', { name: /Audit & Cấu hình/ }))
-    expect(await screen.findByRole('heading', { name: 'Audit live' })).toBeInTheDocument()
+    fireEvent.click(within(more).getByRole('button', { name: /Nhật ký & cấu hình/ }))
+    expect(await screen.findByRole('heading', { name: 'Nhật ký trực tiếp' })).toBeInTheDocument()
   })
 
-  it('keeps equipment context and returns to the originating profile', async () => {
+  it('giữ ngữ cảnh thiết bị và quay về đúng hồ sơ ban đầu', async () => {
     render(<App />)
-    await screen.findByRole('heading', { name: 'Dashboard live' })
+    await screen.findByRole('heading', { name: 'Tổng quan trực tiếp' })
 
     window.dispatchEvent(new CustomEvent('cev:navigate', {
       detail: { view: 'maintenance', equipmentId: 'CEV-ME-002' },
     }))
 
-    expect(await screen.findByRole('heading', { name: 'Maintenance live' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Bảo trì trực tiếp' })).toBeInTheDocument()
     const back = screen.getByRole('button', { name: '← Trở về CEV-ME-002' })
     expect(back).toBeInTheDocument()
 
     fireEvent.click(back)
-    expect(await screen.findByRole('heading', { name: 'Equipment profile CEV-ME-002' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Hồ sơ thiết bị CEV-ME-002' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '← Trở về CEV-ME-002' })).not.toBeInTheDocument()
   })
 })
