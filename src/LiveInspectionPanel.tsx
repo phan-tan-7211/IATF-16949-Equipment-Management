@@ -18,7 +18,6 @@ const markLabel: Record<string, string> = {
   MAINTENANCE_REQUIRED: '△ · Cần bảo trì',
   STOP_REPAIR: 'X · Dừng máy',
 }
-const priorityLabel: Record<string,string> = { LOW:'Thấp', MEDIUM:'Trung bình', HIGH:'Cao', CRITICAL:'Khẩn cấp' }
 const shiftLabel: Record<string,string> = { MORNING:'Ca sáng', AFTERNOON:'Ca chiều', NIGHT:'Ca đêm' }
 const roleLabel: Record<string,string> = { MAINTENANCE:'Bảo trì', SUPERVISOR:'Giám sát', QUALITY:'Chất lượng', MANAGER:'Quản lý', ADMIN:'Quản trị hệ thống', UNKNOWN:'Chưa xác định' }
 
