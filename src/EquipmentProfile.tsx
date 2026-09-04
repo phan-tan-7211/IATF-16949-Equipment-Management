@@ -76,7 +76,11 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit, onNavig
   }), [history])
 
   function navigate(view: EquipmentProfileTarget) {
-    onNavigate?.(view)
+    if (onNavigate) {
+      onNavigate(view)
+      return
+    }
+    window.dispatchEvent(new CustomEvent('cev:navigate', { detail: { view } }))
   }
 
   return <div
