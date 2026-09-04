@@ -31,6 +31,7 @@ const CACHE_FRESH_MS = 30_000
 const restored = readClientCache<LiveMaintenanceSnapshot>(CACHE_KEY, CACHE_VERSION)
 let maintenanceCache: LiveMaintenanceSnapshot | null = restored?.data || null
 let maintenanceCacheSavedAt = restored?.savedAt || 0
+let maintenanceRefreshPromise: Promise<LiveMaintenanceSnapshot> | null = null
 
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 function bool(value: unknown) { return value === true || ['TRUE', '1', 'YES'].includes(text(value).toUpperCase()) }
@@ -79,70 +80,79 @@ function insertCreatedWorkOrder(input: { workOrderId: string; equipmentId: strin
   persistMaintenanceCache()
 }
 
+async function fetchMaintenanceFromServer(): Promise<LiveMaintenanceSnapshot> {
+  if (maintenanceRefreshPromise) return maintenanceRefreshPromise
+
+  maintenanceRefreshPromise = (async () => {
+    const [equipmentResult, planResult, planItemResult, woResult, handoverResult] = await Promise.all([
+      supabase.from('equipment_master').select('equipment_id,equipment_name,equipment_type,status,active').eq('active', true),
+      supabase.from('maintenance_plan').select('*').order('created_at', { ascending: false }),
+      supabase.from('maintenance_plan_item').select('*'),
+      supabase.from('maintenance_work_order').select('*').order('created_at', { ascending: false }),
+      supabase.from('equipment_handover').select('*').order('created_at', { ascending: false }),
+    ])
+    for (const result of [equipmentResult, planResult, planItemResult, woResult, handoverResult]) if (result.error) throw result.error
+
+    const equipment: MaintenanceEquipmentOption[] = ((equipmentResult.data || []) as Array<Record<string, unknown>>)
+      .filter((row) => text(row.equipment_id) && text(row.equipment_type) === 'PRODUCTION' && text(row.status) !== 'DISPOSED')
+      .map((row) => ({ equipmentId: text(row.equipment_id), equipmentName: text(row.equipment_name) }))
+      .toSorted((a, b) => a.equipmentId.localeCompare(b.equipmentId))
+
+    const itemsByPlan = new Map<string, LiveMaintenancePlanItem[]>()
+    for (const row of (planItemResult.data || []) as Array<Record<string, unknown>>) {
+      const source = (row.source_data as Record<string, unknown> | null) || {}
+      const item: LiveMaintenancePlanItem = {
+        itemId: text(row.item_id), itemName: text(source.itemName), standard: text(source.standard), method: text(source.method), note: text(source.note), sequence: number(source.sequence),
+      }
+      const planId = text(row.plan_id)
+      itemsByPlan.set(planId, [...(itemsByPlan.get(planId) || []), item])
+    }
+
+    const plans: LiveMaintenancePlan[] = ((planResult.data || []) as Array<Record<string, unknown>>).map((row) => {
+      const source = (row.source_data as Record<string, unknown> | null) || {}
+      const planId = text(row.plan_id)
+      return {
+        planId,
+        equipmentId: text(row.equipment_id),
+        maintenanceType: text(source.maintenanceType),
+        frequency: text(source.frequency),
+        plannedDate: text(source.plannedDate),
+        responsiblePerson: text(source.responsiblePerson),
+        scheduledWindow: text(source.scheduledWindow),
+        note: text(source.note),
+        status: text(source.status) || (row.active === false ? 'INACTIVE' : 'ACTIVE'),
+        active: row.active !== false,
+        items: (itemsByPlan.get(planId) || []).toSorted((a, b) => a.sequence - b.sequence),
+      }
+    })
+
+    const workOrders: LiveMaintenanceWorkOrder[] = ((woResult.data || []) as Array<Record<string, unknown>>).map((row) => {
+      const source = (row.source_data as Record<string, unknown> | null) || {}
+      return {
+        workOrderId: text(row.work_order_id), equipmentId: text(row.equipment_id), sourceType: text(row.source_type), requestedAt: text(row.created_at), requestedBy: text(row.created_by), reason: text(row.reason), priority: text(row.priority), status: text(row.status) as MaintenanceWorkflowStatus, approvedBy: text(source.approvedBy), approvedAt: text(source.approvedAt),
+      }
+    })
+
+    const handovers: LiveHandover[] = ((handoverResult.data || []) as Array<Record<string, unknown>>).map((row) => ({
+      handoverId: text(row.handover_id), workOrderId: text(row.work_order_id), equipmentId: text(row.equipment_id), accepted: bool(row.accepted), condition: text(row.equipment_condition), handoverAt: text(row.created_at),
+    }))
+
+    maintenanceCache = { equipment, plans, workOrders, handovers }
+    persistMaintenanceCache()
+    return maintenanceCache
+  })().finally(() => { maintenanceRefreshPromise = null })
+
+  return maintenanceRefreshPromise
+}
+
 export async function loadLiveMaintenance(options: { force?: boolean } = {}) {
   if (!options.force && maintenanceCache && isClientCacheFresh(maintenanceCacheSavedAt, CACHE_FRESH_MS)) return maintenanceCache
-
-  const [equipmentResult, planResult, planItemResult, woResult, handoverResult] = await Promise.all([
-    supabase.from('equipment_master').select('equipment_id,equipment_name,equipment_type,status,active').eq('active', true),
-    supabase.from('maintenance_plan').select('*').order('created_at', { ascending: false }),
-    supabase.from('maintenance_plan_item').select('*'),
-    supabase.from('maintenance_work_order').select('*').order('created_at', { ascending: false }),
-    supabase.from('equipment_handover').select('*').order('created_at', { ascending: false }),
-  ])
-  for (const result of [equipmentResult, planResult, planItemResult, woResult, handoverResult]) {
-    if (result.error) {
-      if (maintenanceCache) return maintenanceCache
-      throw result.error
-    }
+  try {
+    return await fetchMaintenanceFromServer()
+  } catch (cause) {
+    if (maintenanceCache) return maintenanceCache
+    throw cause
   }
-
-  const equipment: MaintenanceEquipmentOption[] = ((equipmentResult.data || []) as Array<Record<string, unknown>>)
-    .filter((row) => text(row.equipment_id) && text(row.equipment_type) === 'PRODUCTION' && text(row.status) !== 'DISPOSED')
-    .map((row) => ({ equipmentId: text(row.equipment_id), equipmentName: text(row.equipment_name) }))
-    .toSorted((a, b) => a.equipmentId.localeCompare(b.equipmentId))
-
-  const itemsByPlan = new Map<string, LiveMaintenancePlanItem[]>()
-  for (const row of (planItemResult.data || []) as Array<Record<string, unknown>>) {
-    const source = (row.source_data as Record<string, unknown> | null) || {}
-    const item: LiveMaintenancePlanItem = {
-      itemId: text(row.item_id), itemName: text(source.itemName), standard: text(source.standard), method: text(source.method), note: text(source.note), sequence: number(source.sequence),
-    }
-    const planId = text(row.plan_id)
-    itemsByPlan.set(planId, [...(itemsByPlan.get(planId) || []), item])
-  }
-
-  const plans: LiveMaintenancePlan[] = ((planResult.data || []) as Array<Record<string, unknown>>).map((row) => {
-    const source = (row.source_data as Record<string, unknown> | null) || {}
-    const planId = text(row.plan_id)
-    return {
-      planId,
-      equipmentId: text(row.equipment_id),
-      maintenanceType: text(source.maintenanceType),
-      frequency: text(source.frequency),
-      plannedDate: text(source.plannedDate),
-      responsiblePerson: text(source.responsiblePerson),
-      scheduledWindow: text(source.scheduledWindow),
-      note: text(source.note),
-      status: text(source.status) || (row.active === false ? 'INACTIVE' : 'ACTIVE'),
-      active: row.active !== false,
-      items: (itemsByPlan.get(planId) || []).toSorted((a, b) => a.sequence - b.sequence),
-    }
-  })
-
-  const workOrders: LiveMaintenanceWorkOrder[] = ((woResult.data || []) as Array<Record<string, unknown>>).map((row) => {
-    const source = (row.source_data as Record<string, unknown> | null) || {}
-    return {
-      workOrderId: text(row.work_order_id), equipmentId: text(row.equipment_id), sourceType: text(row.source_type), requestedAt: text(row.created_at), requestedBy: text(row.created_by), reason: text(row.reason), priority: text(row.priority), status: text(row.status) as MaintenanceWorkflowStatus, approvedBy: text(source.approvedBy), approvedAt: text(source.approvedAt),
-    }
-  })
-
-  const handovers: LiveHandover[] = ((handoverResult.data || []) as Array<Record<string, unknown>>).map((row) => ({
-    handoverId: text(row.handover_id), workOrderId: text(row.work_order_id), equipmentId: text(row.equipment_id), accepted: bool(row.accepted), condition: text(row.equipment_condition), handoverAt: text(row.created_at),
-  }))
-
-  maintenanceCache = { equipment, plans, workOrders, handovers }
-  persistMaintenanceCache()
-  return maintenanceCache
 }
 
 export async function upsertMaintenancePlan(input: MaintenancePlanInput) {
