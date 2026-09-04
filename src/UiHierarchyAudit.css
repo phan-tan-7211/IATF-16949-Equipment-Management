@@ -1,0 +1,206 @@
+/* UI hierarchy audit: one clear page title, compact summaries, more workspace. */
+
+/* Top-level page headers: remove decorative/compliance eyebrows that duplicate the module title. */
+.spare-header>.eyebrow,
+.spare-header>div>.eyebrow,
+.tooling-header>.eyebrow,
+.tooling-header>div>.eyebrow,
+.dashboard-command .eyebrow,
+.inspection-header>.eyebrow,
+.inspection-header>div>.eyebrow,
+.maintenance-page>.maintenance-surface>.maintenance-header>div>.eyebrow,
+.calibration-header>.eyebrow,
+.calibration-header>div>.eyebrow,
+.audit-header>.eyebrow,
+.audit-header>div>.eyebrow,
+.dashboard-action-panel>header .eyebrow {
+  display:none !important;
+}
+
+/* Generic descriptions that add no operational meaning. */
+.tooling-header>div>p:last-child {
+  display:none;
+}
+
+/* Keep one strong title and one useful context line only. */
+.spare-header h2,
+.tooling-header h2,
+.dashboard-command h2,
+.inspection-header h2,
+.maintenance-header h2,
+.maintenance-header h3,
+.calibration-header h2,
+.audit-header h2 {
+  margin:0;
+  line-height:1.15;
+}
+
+@media screen and (min-width:901px){
+  /* Main workspace pages should use the available desktop width instead of inheriting centered content limits. */
+  .main-content {
+    max-width:none;
+    width:100%;
+    box-sizing:border-box;
+  }
+
+  /* Reduce vertical gaps between page blocks. */
+  .spare-page,
+  .tooling-page,
+  .dashboard-page,
+  .inspection-page,
+  .maintenance-page,
+  .calibration-page,
+  .audit-page {
+    gap:8px !important;
+  }
+
+  /* Compact the KPI summaries across modules. Small descriptions are redundant beside their labels. */
+  .spare-summary,
+  .tooling-summary,
+  .inspection-summary,
+  .maintenance-summary,
+  .calibration-summary,
+  .audit-summary,
+  .dashboard-priority-grid {
+    gap:7px !important;
+  }
+  .spare-summary article,
+  .tooling-summary article,
+  .inspection-summary article,
+  .maintenance-summary article,
+  .calibration-summary article,
+  .audit-summary article,
+  .dashboard-priority-grid article {
+    min-height:44px;
+    padding:7px 10px !important;
+    gap:2px !important;
+    border-radius:10px !important;
+  }
+  .spare-summary strong,
+  .tooling-summary strong,
+  .inspection-summary strong,
+  .maintenance-summary strong,
+  .calibration-summary strong,
+  .audit-summary strong,
+  .dashboard-priority-grid strong {
+    font-size:18px !important;
+    line-height:1 !important;
+  }
+  .spare-summary span,
+  .tooling-summary span,
+  .inspection-summary span,
+  .maintenance-summary span,
+  .calibration-summary span,
+  .audit-summary span,
+  .dashboard-priority-grid span {
+    font-size:10px !important;
+    line-height:1.15 !important;
+  }
+  .spare-summary small,
+  .tooling-summary small,
+  .inspection-summary small,
+  .maintenance-summary small,
+  .calibration-summary small,
+  .audit-summary small,
+  .dashboard-priority-grid small {
+    display:none !important;
+  }
+
+  /* Primary headers: 46-52px target, not oversized card headers. */
+  .spare-header,
+  .tooling-header,
+  .inspection-header,
+  .maintenance-header,
+  .calibration-header,
+  .audit-header,
+  .dashboard-command {
+    min-height:46px;
+    box-sizing:border-box;
+    padding:7px 10px !important;
+    gap:10px !important;
+  }
+  .spare-header h2,
+  .tooling-header h2,
+  .inspection-header h2,
+  .maintenance-header h2,
+  .maintenance-header h3,
+  .calibration-header h2,
+  .audit-header h2,
+  .dashboard-command h2 {
+    font-size:16px !important;
+  }
+  .spare-header>div>p:last-child,
+  .inspection-header>div>p:last-child,
+  .maintenance-header>div>p:last-child,
+  .calibration-header>div>p:last-child,
+  .audit-header>div>p:last-child,
+  .dashboard-command>div>p:last-child {
+    margin-top:2px !important;
+    font-size:10px !important;
+    line-height:1.25 !important;
+  }
+
+  /* Surface padding/toolbar spacing standardized so data receives the space. */
+  .tooling-surface,
+  .inspection-surface,
+  .maintenance-surface,
+  .calibration-surface,
+  .audit-surface {
+    padding:10px !important;
+    border-radius:12px !important;
+  }
+  .spare-toolbar,
+  .tooling-toolbar,
+  .inspection-toolbar,
+  .maintenance-toolbar,
+  .calibration-toolbar,
+  .audit-toolbar {
+    margin-top:8px !important;
+  }
+  .spare-toolbar {
+    padding:7px 10px !important;
+  }
+  .tooling-tabs {
+    margin-top:8px !important;
+    padding-bottom:6px !important;
+  }
+
+  /* Dashboard: the status chip is enough; remove the large hero feeling. */
+  .dashboard-command {
+    border-radius:12px !important;
+    box-shadow:none !important;
+  }
+  .dashboard-live {
+    min-height:25px;
+    padding:0 8px;
+    font-size:10px;
+  }
+  .dashboard-overview-strip,
+  .dashboard-action-panel,
+  .dashboard-workflow {
+    border-radius:12px !important;
+  }
+  .dashboard-overview-strip>div {
+    padding:8px 10px !important;
+  }
+  .dashboard-action-panel>header {
+    padding:9px 11px !important;
+  }
+  .dashboard-workflow {
+    padding:9px 11px !important;
+  }
+}
+
+/* Mobile also removes duplicated page eyebrows, but keeps comfortable touch spacing. */
+@media(max-width:900px){
+  .spare-header>div>.eyebrow,
+  .tooling-header>div>.eyebrow,
+  .dashboard-command .eyebrow,
+  .inspection-header>div>.eyebrow,
+  .maintenance-page>.maintenance-surface>.maintenance-header>div>.eyebrow,
+  .calibration-header>div>.eyebrow,
+  .audit-header>div>.eyebrow,
+  .dashboard-action-panel>header .eyebrow {
+    display:none !important;
+  }
+}
