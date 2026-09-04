@@ -14,6 +14,7 @@ import { installEquipmentWarmup } from './data/equipmentWarmup'
 import { installSpareWarmup } from './data/spareWarmup'
 import { installMaintenanceWarmup } from './data/maintenanceWarmup'
 import { installInspectionWarmup } from './data/inspectionWarmup'
+import { installCalibrationWarmup } from './data/calibrationWarmup'
 
 const SupabaseTestPanel = lazy(() => import('./SupabaseTestPanel').then((module) => ({ default: module.SupabaseTestPanel })))
 const phase3Preview = new URLSearchParams(window.location.search).get('phase3')
@@ -23,6 +24,7 @@ if (phase3Preview !== 'supabase-test') {
   installSpareWarmup()
   installMaintenanceWarmup()
   installInspectionWarmup()
+  installCalibrationWarmup()
 }
 
 const content = phase3Preview === 'supabase-test'
