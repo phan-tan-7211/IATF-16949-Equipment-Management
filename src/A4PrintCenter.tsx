@@ -2,17 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import './A4PrintCenter.css'
 import './A4Bm02.css'
 import { EquipmentQr } from './components/EquipmentQr'
+import { EquipmentManagementLabel } from './components/EquipmentManagementLabel'
 import { fetchSourceRows } from './data/sourceRows'
 import { getEquipmentPhotoPreview } from './data/supabaseEquipment'
 import { loadEquipmentA4Relations, type EquipmentA4Relations } from './data/equipmentA4Data'
 
 type Row = Record<string, unknown>
-type DocType = 'equipment' | 'bm02' | 'bm03' | 'bm05' | 'bm08' | 'bm06' | 'calibration'
+type DocType = 'equipment' | 'label' | 'bm02' | 'bm03' | 'bm05' | 'bm08' | 'bm06' | 'calibration'
 
 const EMPTY_RELATIONS: EquipmentA4Relations = { spares: [], history: [], calibration: null }
 
 const DOCS: Array<{ id: DocType; label: string; code: string; table: string; idKey: string; order: string }> = [
   { id: 'equipment', label: 'Lý lịch thiết bị', code: 'CEV-BM-TBSX-01', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
+  { id: 'label', label: 'Tem quản lý thiết bị', code: 'TEM QUẢN LÝ', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
   { id: 'bm02', label: 'Danh mục quản lý thiết bị sản xuất', code: 'CEV-BM-TBSX-02', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
   { id: 'bm03', label: 'Kế hoạch bảo dưỡng máy', code: 'CEV-BM-TBSX-03', table: 'maintenance_plan', idKey: 'plan_id', order: 'created_at' },
   { id: 'bm05', label: 'Biên bản bàn giao trang thiết bị', code: 'CEV-BM-TBSX-05', table: 'equipment_handover', idKey: 'handover_id', order: 'created_at' },
@@ -333,8 +335,8 @@ export function A4PrintCenter() {
     const previousTitle = document.title
     const equipmentId = safeTitlePart(selected?.equipment_id)
     const equipmentName = safeTitlePart(selected?.equipment_name)
-    document.title = docType === 'equipment' && selected
-      ? ['CEV Equipment', equipmentId, equipmentName].filter(Boolean).join(' · ')
+    document.title = (docType === 'equipment' || docType === 'label') && selected
+      ? [docType === 'label' ? 'CEV Label' : 'CEV Equipment', equipmentId, equipmentName].filter(Boolean).join(' · ')
       : ['CEV Equipment', safeTitlePart(config.code)].filter(Boolean).join(' · ')
 
     const restoreTitle = () => {
@@ -347,19 +349,19 @@ export function A4PrintCenter() {
 
   return <div className="print-center">
     <section className="print-toolbar no-print">
-      <div><h2>Hồ sơ A4 / PDF</h2><p>Chọn biểu mẫu và hồ sơ cần in.</p></div>
+      <div><h2>Hồ sơ / Tem quản lý</h2><p>Chọn biểu mẫu và hồ sơ cần in.</p></div>
       <div className="print-controls">
         <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
         {!aggregateDoc ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
-        <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (aggregateDoc ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button>
+        <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (aggregateDoc ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>{docType === 'label' ? 'In tem 80 × 50 mm' : 'In / Xuất PDF A4'}</button>
       </div>
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
     </section>
 
-    <article className={`a4-document${docType === 'bm02' || docType === 'bm06' ? ' landscape' : ''}${docType === 'bm02' ? ' bm02-sheet' : ''}${docType === 'equipment' ? ' equipment-sheet' : ''}`}>
-      <header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b></div><div><strong>{config.code}</strong></div></header>
-      <h1>{config.label.toUpperCase()}</h1>
-      {docType === 'bm02' ? <EquipmentManagementListA4 rows={records}/>
+    <article className={`a4-document${docType === 'bm02' || docType === 'bm06' ? ' landscape' : ''}${docType === 'bm02' ? ' bm02-sheet' : ''}${docType === 'equipment' ? ' equipment-sheet' : ''}${docType === 'label' ? ' equipment-label-sheet' : ''}`}>
+      {docType !== 'label' ? <><header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b></div><div><strong>{config.code}</strong></div></header><h1>{config.label.toUpperCase()}</h1></> : null}
+      {docType === 'label' ? (selected ? <div className="equipment-label-preview-shell"><EquipmentManagementLabel row={selected}/></div> : <p className="a4-empty">Chưa có thiết bị để in tem.</p>)
+      : docType === 'bm02' ? <EquipmentManagementListA4 rows={records}/>
       : docType === 'bm06' ? <>
         <div className="a4-meta"><span>Số sự kiện: {bm06Rows.length}</span></div>
         <table className="a4-table"><thead><tr><th>STT</th><th>Thiết bị</th><th>Bắt đầu</th><th>Khôi phục</th><th>Nguyên nhân</th><th>Mô tả / hành động</th></tr></thead><tbody>{bm06Rows.map((row, index) => <tr key={String(row.downtime_id)}><td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{dateTimeDisplay(row.started_at)}</td><td>{dateTimeDisplay(row.ended_at)}</td><td>{display(row.causeCategory || row.cause)}</td><td>{display(row.detail)} / {display(row.actionTaken || row.recoveryAction)}</td></tr>)}</tbody></table>
