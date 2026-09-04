@@ -117,13 +117,13 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit, onNavig
             <span className={`equipment-profile-criticality level-${(equipment.criticality || 'unknown').toLowerCase()}`}>Cấp {text(equipment.criticality)}</span>
           </div>
           <dl>
-            <div><dt>Cấp độ thiết bị</dt><dd>{equipment.criticality ? `Cấp ${equipment.criticality}` : 'Chưa xác định'}</dd></div>
             <div><dt>Serial Number</dt><dd>{text(equipment.serialNumber)}</dd></div>
             <div><dt>Model</dt><dd>{text(equipment.model)}</dd></div>
             <div><dt>Hãng</dt><dd>{text(equipment.manufacturer)}</dd></div>
             <div><dt>Bộ phận</dt><dd>{text(equipment.usingDepartment || equipment.managingDepartment || equipment.currentArea)}</dd></div>
             <div><dt>Loại</dt><dd>{equipment.equipmentType === 'MEASUREMENT' ? 'Thiết bị đo kiểm' : 'Thiết bị sản xuất'}</dd></div>
-            <div><dt>QR / Equipment ID</dt><dd>{equipment.qrCode}</dd></div>
+            {equipment.currentLine ? <div><dt>Line</dt><dd>{equipment.currentLine}</dd></div> : null}
+            {equipment.currentArea && equipment.currentArea !== equipment.usingDepartment ? <div><dt>Khu vực</dt><dd>{equipment.currentArea}</dd></div> : null}
           </dl>
         </div>
       </section>
@@ -150,7 +150,6 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit, onNavig
         {error ? <div className="equipment-profile-state error">{error}</div> : null}
 
         {!loading && !error && tab === 'overview' ? <div className="equipment-profile-overview-grid">
-          <article><span>Cấp độ thiết bị</span><strong>{equipment.criticality || '—'}</strong><small>Equipment Criticality</small></article>
           <article><span>Hiệu chuẩn</span><strong>{counts.calibration}</strong><small>bản ghi</small></article>
           <article><span>Bảo trì</span><strong>{counts.maintenance}</strong><small>work order</small></article>
           <article><span>Kiểm tra</span><strong>{counts.inspection}</strong><small>bản ghi</small></article>
