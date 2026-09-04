@@ -17,6 +17,7 @@ vi.mock('./LiveMaintenancePanel', () => ({ LiveMaintenancePanel: () => <h2>Maint
 vi.mock('./LiveToolingPanel', () => ({ LiveToolingPanel: () => <h2>Tooling live</h2> }))
 vi.mock('./LiveCalibrationPanel', () => ({ LiveCalibrationPanel: () => <h2>Calibration live</h2> }))
 vi.mock('./LiveAuditPanel', () => ({ LiveAuditPanel: () => <h2>Audit live</h2> }))
+vi.mock('./QrEquipmentResult', () => ({ QrEquipmentResult: ({ equipmentId }: { equipmentId: string }) => <h2>Equipment profile {equipmentId}</h2> }))
 
 vi.mock('./LiveMaintenancePlanPanel', () => ({ LiveMaintenancePlanPanel: () => null }))
 vi.mock('./LiveMaintenanceResultPanel', () => ({ LiveMaintenanceResultPanel: () => null }))
@@ -63,5 +64,22 @@ describe('Vercel + Supabase app shell', () => {
 
     fireEvent.click(within(more).getByRole('button', { name: /Audit & Cấu hình/ }))
     expect(await screen.findByRole('heading', { name: 'Audit live' })).toBeInTheDocument()
+  })
+
+  it('keeps equipment context and returns to the originating profile', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Dashboard live' })
+
+    window.dispatchEvent(new CustomEvent('cev:navigate', {
+      detail: { view: 'maintenance', equipmentId: 'CEV-ME-002' },
+    }))
+
+    expect(await screen.findByRole('heading', { name: 'Maintenance live' })).toBeInTheDocument()
+    const back = screen.getByRole('button', { name: '← Trở về CEV-ME-002' })
+    expect(back).toBeInTheDocument()
+
+    fireEvent.click(back)
+    expect(await screen.findByRole('heading', { name: 'Equipment profile CEV-ME-002' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '← Trở về CEV-ME-002' })).not.toBeInTheDocument()
   })
 })
