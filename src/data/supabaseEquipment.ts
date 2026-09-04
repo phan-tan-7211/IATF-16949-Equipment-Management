@@ -107,7 +107,7 @@ export function removeEquipmentFromCache(equipmentId: string) {
 }
 
 export async function loadSupabaseEquipment(options: { force?: boolean } = {}): Promise<LiveEquipment[]> {
-  if (consumeEquipmentCacheOnce && equipmentCache) {
+  if (!options.force && consumeEquipmentCacheOnce && equipmentCache) {
     consumeEquipmentCacheOnce = false
     return equipmentCache
   }
