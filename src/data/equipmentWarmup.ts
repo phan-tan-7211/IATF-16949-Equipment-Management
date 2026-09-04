@@ -21,19 +21,20 @@ export function installEquipmentWarmup() {
   if (typeof window === 'undefined') return () => undefined
 
   const schedule = () => {
+    const run = () => { void warmEquipmentCache(true) }
     if ('requestIdleCallback' in window) {
-      const id = window.requestIdleCallback(() => { void warmEquipmentCache(false) }, { timeout: 1200 })
+      const id = window.requestIdleCallback(run, { timeout: 1200 })
       return () => window.cancelIdleCallback(id)
     }
-    const id = window.setTimeout(() => { void warmEquipmentCache(false) }, 350)
+    const id = window.setTimeout(run, 350)
     return () => window.clearTimeout(id)
   }
 
   const cancelScheduled = schedule()
   const onVisibility = () => {
-    if (document.visibilityState === 'visible') void warmEquipmentCache(false)
+    if (document.visibilityState === 'visible') void warmEquipmentCache(true)
   }
-  const onFocus = () => { void warmEquipmentCache(false) }
+  const onFocus = () => { void warmEquipmentCache(true) }
 
   document.addEventListener('visibilitychange', onVisibility)
   window.addEventListener('focus', onFocus)
