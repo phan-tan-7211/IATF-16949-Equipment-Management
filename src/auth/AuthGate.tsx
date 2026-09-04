@@ -18,47 +18,60 @@ export function AuthGate({ children }: { children: (session: LiveSession, signOu
 
   useEffect(() => {
     let active = true
-    let revision = 0
-    const timers = new Set<ReturnType<typeof setTimeout>>()
-    async function resolve(version: number) {
-      const current = () => active && version === revision
+    let resolving = 0
+
+    async function resolveSession(showLoading: boolean) {
+      const version = ++resolving
+      if (showLoading) setState((current) => current.status === 'ready' ? current : { status: 'loading' })
       try {
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
-        if (!current()) return
+        if (!active || version !== resolving) return
         if (wantsPasswordReset()) { setState({ status: 'recovery' }); return }
         if (!data.session) { setState({ status: 'signedOut' }); return }
         try {
           const session = await loadLiveSession()
-          if (!current()) return
+          if (!active || version !== resolving) return
           if (!roles.includes(session.role)) throw new Error('ROLE_REQUIRED')
           setError('')
           setState({ status: 'ready', session })
         } catch {
-          if (current()) {
+          if (active && version === resolving) {
             setState({ status: 'denied' })
             setError('Không xác nhận được quyền tài khoản. Hãy thử lại hoặc liên hệ quản trị viên để kiểm tra quyền truy cập.')
           }
         }
       } catch {
-        if (current()) {
-          setState({ status: 'signedOut' })
-          setError('Không đọc được phiên đăng nhập. Vui lòng đăng nhập lại.')
+        if (active && version === resolving) {
+          setState((current) => current.status === 'ready' ? current : { status: 'signedOut' })
+          setError('Không đọc được phiên đăng nhập. Vui lòng kiểm tra kết nối rồi thử lại.')
         }
       }
     }
-    function refresh(event?: string) {
-      if (event === 'PASSWORD_RECOVERY') markPasswordReset()
-      if (wantsPasswordReset()) { ++revision; setState({ status: 'recovery' }); return }
-      const version = ++revision
-      setState({ status: 'loading' })
-      // Supabase requests must run outside the auth callback's lock.
-      const timer = setTimeout(() => { timers.delete(timer); void resolve(version) }, 0)
-      timers.add(timer)
-    }
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(refresh)
-    refresh()
-    return () => { active = false; ++revision; timers.forEach(clearTimeout); subscription.unsubscribe() }
+
+    void resolveSession(true)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        markPasswordReset()
+        ++resolving
+        setState({ status: 'recovery' })
+        return
+      }
+      if (event === 'SIGNED_OUT') {
+        ++resolving
+        setState({ status: 'signedOut' })
+        return
+      }
+      if (event === 'TOKEN_REFRESHED') {
+        // Token refresh is background auth maintenance. Never unmount the workspace for it.
+        return
+      }
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        // Refresh role/session metadata without replacing the current ready workspace with a loading screen.
+        void resolveSession(false)
+      }
+    })
+    return () => { active = false; ++resolving; subscription.unsubscribe() }
   }, [retry])
 
   async function signOut() {
