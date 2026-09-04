@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), loadLiveSession: vi.fn(),
-  callback: (_event?: string) => {}, unsubscribe: vi.fn(),
+  callback: (_event: string) => {}, unsubscribe: vi.fn(),
 }))
 vi.mock('../data/supabaseClient', () => ({ supabase: { auth: {
   getSession: mocks.getSession, signInWithPassword: mocks.signInWithPassword, signOut: mocks.signOut,
