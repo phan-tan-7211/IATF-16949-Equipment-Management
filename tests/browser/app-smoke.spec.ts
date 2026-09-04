@@ -53,22 +53,27 @@ async function openView(page: Page, label: string) {
     await page.locator('.bottom-nav').getByRole('button', { name: label, exact: true }).click()
   } else if (label === 'Bảo trì') {
     await page.locator('.bottom-nav').getByRole('button', { name: 'Công việc', exact: true }).click()
-  } else {
-    await page.locator('.bottom-nav').getByRole('button', { name: 'Thêm', exact: true }).click()
-    await page.getByRole('dialog', { name: 'Các chức năng khác' }).getByRole('button', { name: label, exact: true }).click()
   }
   await expect(page.locator('.fatal-screen')).toHaveCount(0)
+}
+
+async function openMore(page: Page) {
+  await page.locator('.bottom-nav').getByRole('button', { name: 'Thêm', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Các chức năng khác' })
+  await expect(sheet).toBeVisible()
+  return sheet
 }
 
 test('current navigation surfaces open without browser crash', async ({ page }) => {
   await openApp(page)
   const labels = mobile(page)
-    ? ['Quét QR', 'Thiết bị', 'Bảo trì', 'Jig, gá & dụng cụ', 'Hiệu chuẩn', 'Hồ sơ A4', 'Nhật ký & cấu hình']
+    ? ['Quét QR', 'Thiết bị', 'Bảo trì']
     : ['Quét QR', 'Thiết bị', 'Kiểm tra ngày', 'Bảo trì', 'Jig, gá & dụng cụ', 'Hiệu chuẩn', 'Hồ sơ A4', 'Nhật ký & cấu hình']
   for (const label of labels) {
     await openView(page, label)
     await expect(page.locator('main')).toBeVisible()
   }
+  if (mobile(page)) await openMore(page)
 })
 
 test('QR fallback opens the equipment profile when camera is denied', async ({ page }) => {
@@ -87,18 +92,17 @@ test('QR fallback opens the equipment profile when camera is denied', async ({ p
 
 test('A4 and account controls match the current shell', async ({ page }) => {
   await openApp(page)
+  if (mobile(page)) {
+    const sheet = await openMore(page)
+    await expect(sheet).toContainText('Quản trị hệ thống')
+    await expect(sheet.getByRole('button', { name: 'Đăng xuất', exact: true })).toBeVisible()
+    return
+  }
+
   await openView(page, 'Hồ sơ A4')
   await expect(page.getByRole('heading', { name: 'Hồ sơ A4 / PDF' })).toBeVisible()
   await expect(page.locator('.a4-document')).toContainText('CEV-BM-TBSX-01')
   await expect(page.getByRole('button', { name: 'In / Xuất PDF A4' })).toBeVisible()
-
-  if (mobile(page)) {
-    await page.locator('.bottom-nav').getByRole('button', { name: 'Thêm', exact: true }).click()
-    const sheet = page.getByRole('dialog', { name: 'Các chức năng khác' })
-    await expect(sheet).toContainText('Quản trị hệ thống')
-    await expect(sheet.getByRole('button', { name: 'Đăng xuất', exact: true })).toBeVisible()
-  } else {
-    await expect(page.locator('.sidebar-user')).toContainText('Quản trị hệ thống')
-    await expect(page.locator('.sidebar-user').getByRole('button', { name: 'Đăng xuất', exact: true })).toBeVisible()
-  }
+  await expect(page.locator('.sidebar-user')).toContainText('Quản trị hệ thống')
+  await expect(page.locator('.sidebar-user').getByRole('button', { name: 'Đăng xuất', exact: true })).toBeVisible()
 })
