@@ -6,8 +6,8 @@ export type EquipmentMasterTextFields = {
   serialNumber: string
   department: string
   managingDepartment: string
-  managementResponsiblePrimary: string
-  managementResponsibleSecondary: string
+  managementResponsiblePrimary?: string
+  managementResponsibleSecondary?: string
   currentArea: string
   currentLine: string
   technicalSpecification: string
