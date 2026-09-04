@@ -1,6 +1,7 @@
 import type { EquipmentCriticalityFacts, EquipmentCriticality } from './autoRegistration'
 import { deriveEquipmentCriticality } from './autoRegistration'
 import type { EquipmentMasterTextFields } from './equipmentMasterFields'
+import { patchEquipmentCacheAfterWrite } from './supabaseEquipment'
 import { supabase } from './supabaseClient'
 
 export type EquipmentMasterEditInput = EquipmentCriticalityFacts & EquipmentMasterTextFields & {
@@ -27,8 +28,41 @@ export async function updateEquipmentDetails(input: EquipmentMasterEditInput): P
   })
   if (error) throw new Error(`SUPABASE_EQUIPMENT_SAVE_FAILED: ${error.message}`)
   const row = (data || {}) as Record<string, unknown>
-  return {
+  const result = {
     equipmentId: String(row.equipmentId || row.equipment_id || equipmentId),
     criticality: String(row.criticality || criticality) as EquipmentCriticality,
   }
+  patchEquipmentCacheAfterWrite({
+    equipmentId: result.equipmentId,
+    equipmentName: input.equipmentName.trim(),
+    equipmentType: input.equipmentType,
+    equipmentCategory: input.equipmentCategory.trim(),
+    manufacturer: input.manufacturer.trim(),
+    model: input.model.trim(),
+    serialNumber: input.serialNumber.trim(),
+    currentArea: input.currentArea.trim(),
+    currentLine: input.currentLine.trim(),
+    managingDepartment: input.managingDepartment.trim(),
+    department: input.department.trim(),
+    technicalSpecification: input.technicalSpecification.trim(),
+    description: input.description.trim(),
+    accuracy: input.accuracy.trim(),
+    origin: input.origin.trim(),
+    manufactureDate: input.manufactureDate.trim(),
+    inServiceDate: input.inServiceDate.trim(),
+    warrantyUntil: input.warrantyUntil.trim(),
+    warrantyContact: input.warrantyContact.trim(),
+    note: input.note.trim(),
+    relatedDocuments: input.relatedDocuments.trim(),
+    status: input.status.trim() || 'RUNNING',
+    criticality: result.criticality,
+    criticalityFacts: {
+      controlsProductQuality: input.controlsProductQuality,
+      specialCharacteristicImpact: input.specialCharacteristicImpact,
+      stopsProduction: input.stopsProduction,
+      hasBackup: input.hasBackup,
+      capacityImpact: input.capacityImpact,
+    },
+  })
+  return result
 }
