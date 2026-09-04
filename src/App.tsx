@@ -54,15 +54,6 @@ function AppWorkspace({session,signOut}:{session:LiveSession;signOut:()=>Promise
 
   function markVisited(nextView:View){setVisitedViews((current)=>current.has(nextView)?current:new Set([...current,nextView]))}
   useEffect(()=>{if(roleLoaded&&view==='settings'&&!canViewAudit(role)){markVisited('dashboard');setView('dashboard')}},[role,roleLoaded,view])
-  useEffect(()=>{
-    const handleNavigate=(event:Event)=>{
-      const detail=(event as CustomEvent<{view?:View;equipmentId?:string}>).detail
-      const requested=detail?.view
-      if(requested&&NAV.some((item)=>item.id===requested))openContextView(requested,detail?.equipmentId||'')
-    }
-    window.addEventListener('cev:navigate',handleNavigate)
-    return()=>window.removeEventListener('cev:navigate',handleNavigate)
-  },[])
 
   const visibleNav=useMemo(()=>NAV.filter((item)=>!item.adminOnly||canViewAudit(role)),[role])
   const mobileMoreItems=useMemo(()=>visibleNav.filter((item)=>!MOBILE_PRIMARY.some((primary)=>primary.id===item.id)),[visibleNav])
@@ -81,6 +72,16 @@ function AppWorkspace({session,signOut}:{session:LiveSession;signOut:()=>Promise
   function backToEquipmentContext(){if(!returnEquipmentId)return;const equipmentId=returnEquipmentId;setReturnEquipmentId('');markVisited('equipment');setEquipmentTarget(equipmentId);setView('equipment');syncUrl('equipment',equipmentId);window.scrollTo({top:0,behavior:'auto'})}
   function closeQrResult(){markVisited('qr');setEquipmentTarget('');setView('qr');syncUrl('qr')}
   function editQrResult(){markVisited('equipment');setEquipmentTarget('');setView('equipment');syncUrl('equipment')}
+
+  useEffect(()=>{
+    const handleNavigate=(event:Event)=>{
+      const detail=(event as CustomEvent<{view?:View;equipmentId?:string}>).detail
+      const requested=detail?.view
+      if(requested&&NAV.some((item)=>item.id===requested))openContextView(requested,detail?.equipmentId||'')
+    }
+    window.addEventListener('cev:navigate',handleNavigate)
+    return()=>window.removeEventListener('cev:navigate',handleNavigate)
+  },[])
 
   const mobileNav=<><nav className="bottom-nav mobile-primary-nav" aria-label="Điều hướng trên điện thoại">{MOBILE_PRIMARY.map((item)=><button key={item.id} type="button" className={`${item.id===view?'active ':''}${item.id==='qr'?'scan-action':''}`.trim()} aria-current={item.id===view?'page':undefined} onClick={()=>openView(item.id)}><span className="mobile-nav-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}<button type="button" className={mobileMoreOpen?'active':''} aria-expanded={mobileMoreOpen} onClick={()=>setMobileMoreOpen((current)=>!current)}><span className="mobile-nav-icon" aria-hidden="true">•••</span><span>Thêm</span></button></nav>{mobileMoreOpen?<div className="mobile-more-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)setMobileMoreOpen(false)}}><section className="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Các chức năng khác"><header><div><p className="eyebrow">Quản lý thiết bị CEV</p><h2>Chức năng khác</h2></div><button type="button" aria-label="Đóng" onClick={()=>setMobileMoreOpen(false)}>×</button></header><div className="mobile-more-grid">{mobileMoreItems.map((item)=><button key={item.id} type="button" className={item.id===view?'active':''} onClick={()=>openView(item.id)}><strong>{item.label}</strong><small>Mở chức năng</small></button>)}</div><div className="mobile-more-account"><strong>{ROLE_LABEL[role]}</strong><span>{sessionEmail||'Xác thực Supabase'}</span><button type="button" onClick={()=>{setMobileMoreOpen(false);void signOut()}}>Đăng xuất</button></div></section></div>:null}</>
 
