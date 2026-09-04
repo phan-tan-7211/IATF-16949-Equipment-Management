@@ -3,10 +3,10 @@ import './Equipment.css'
 import './EquipmentSheetView.css'
 import { EquipmentProfile } from './EquipmentProfile'
 import { EquipmentMasterEditFields } from './EquipmentMasterEditFields'
-import { EquipmentBulkEditor } from './components/EquipmentBulkEditor'
+import { EquipmentInlineCell } from './components/EquipmentInlineCell'
 import { canEditEquipment, useAppRole } from './auth/AppRoleContext'
 import { deriveEquipmentCriticality } from './data/autoRegistration'
-import { bulkUpdateEquipment, type EquipmentBulkPatch } from './data/equipmentBulkEdit'
+import { bulkUpdateEquipmentRows, type EquipmentRowPatch } from './data/equipmentBulkEdit'
 import { buildEquipmentMasterSuggestions } from './data/equipmentMasterFields'
 import { loadLiveEquipment, type LiveEquipment } from './data/liveEquipment'
 import { checkEquipmentDeletion, deleteUnusedEquipment } from './data/equipmentDeletion'
@@ -20,7 +20,7 @@ const labelSizeLabel: Record<string, string> = { tiny: '15 × 25 mm', standard: 
 type PhotoInfo = { state: 'loading' | 'yes' | 'no' | 'error'; url: string }
 type SortDirection = 'asc' | 'desc'
 type ColumnKey =
-  | 'equipmentId' | 'equipmentName' | 'equipmentType' | 'equipmentCategory' | 'manufacturer' | 'model' | 'serialNumber'
+  | 'equipmentId' | 'equipmentName' | 'equipmentType' | 'equipmentCategory' | 'manufacturer' | 'distributor' | 'model' | 'serialNumber'
   | 'usingDepartment' | 'managingDepartment' | 'managementResponsiblePrimary' | 'managementResponsibleSecondary' | 'currentArea' | 'currentLine' | 'status' | 'defaultLabelSize'
   | 'technicalSpecification' | 'description' | 'accuracy' | 'criticality'
   | 'controlsProductQuality' | 'specialCharacteristicImpact' | 'stopsProduction' | 'hasBackup' | 'capacityImpact'
@@ -29,17 +29,18 @@ type ColumnKey =
 type ColumnGroup = 'Nhận diện'|'Quản lý'|'Kỹ thuật'|'Vòng đời'|'Tài liệu'|'Hệ thống'
 type ColumnDef = { key: ColumnKey; label: string; defaultVisible?: boolean; group: ColumnGroup }
 type ColumnFilters = Partial<Record<ColumnKey, string[]>>
+type InlineChanges = Record<string, EquipmentRowPatch>
 
-const COLUMN_STORAGE_KEY = 'cev-equipment-visible-columns-v2'
+const COLUMN_STORAGE_KEY = 'cev-equipment-visible-columns-v3'
 const COLUMNS: ColumnDef[] = [
   { key:'equipmentId',label:'Mã thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentName',label:'Tên thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentType',label:'Loại thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentCategory',label:'Nhóm thiết bị',group:'Nhận diện' },
   { key:'manufacturer',label:'Hãng / nhà sản xuất',group:'Nhận diện' },
+  { key:'distributor',label:'Nhà phân phối',group:'Nhận diện' },
   { key:'model',label:'Mẫu máy',defaultVisible:true,group:'Nhận diện' },
   { key:'serialNumber',label:'Số sê-ri',defaultVisible:true,group:'Nhận diện' },
-
   { key:'usingDepartment',label:'Bộ phận sử dụng',defaultVisible:true,group:'Quản lý' },
   { key:'managingDepartment',label:'Bộ phận quản lý',defaultVisible:true,group:'Quản lý' },
   { key:'managementResponsiblePrimary',label:'Người QL chính',defaultVisible:true,group:'Quản lý' },
@@ -48,7 +49,6 @@ const COLUMNS: ColumnDef[] = [
   { key:'currentLine',label:'Dây chuyền',defaultVisible:true,group:'Quản lý' },
   { key:'status',label:'Trạng thái',defaultVisible:true,group:'Quản lý' },
   { key:'defaultLabelSize',label:'Khổ tem mặc định',group:'Quản lý' },
-
   { key:'technicalSpecification',label:'Thông số kỹ thuật',group:'Kỹ thuật' },
   { key:'description',label:'Mô tả / chức năng',group:'Kỹ thuật' },
   { key:'accuracy',label:'Độ chính xác',group:'Kỹ thuật' },
@@ -58,16 +58,13 @@ const COLUMNS: ColumnDef[] = [
   { key:'stopsProduction',label:'Mất máy gây dừng SX',group:'Kỹ thuật' },
   { key:'hasBackup',label:'Có thiết bị dự phòng',group:'Kỹ thuật' },
   { key:'capacityImpact',label:'Ảnh hưởng sản lượng / giao hàng',group:'Kỹ thuật' },
-
   { key:'origin',label:'Xuất xứ',group:'Vòng đời' },
   { key:'manufactureDate',label:'Ngày sản xuất',group:'Vòng đời' },
   { key:'inServiceDate',label:'Ngày đưa vào sử dụng',group:'Vòng đời' },
   { key:'warrantyUntil',label:'Bảo hành đến',group:'Vòng đời' },
   { key:'warrantyContact',label:'Liên hệ bảo hành',group:'Vòng đời' },
-
   { key:'note',label:'Ghi chú',group:'Tài liệu' },
   { key:'relatedDocuments',label:'Tài liệu liên quan',group:'Tài liệu' },
-
   { key:'qrCode',label:'Mã QR',group:'Hệ thống' },
   { key:'active',label:'Đang quản lý',group:'Hệ thống' },
   { key:'updatedAt',label:'Cập nhật gần nhất',group:'Hệ thống' },
@@ -97,11 +94,72 @@ function defaultVisibleColumns() { return COLUMNS.filter((col) => col.defaultVis
 function loadVisibleColumns(): ColumnKey[] { try { const parsed = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || '[]'); const valid = Array.isArray(parsed) ? parsed.filter((key): key is ColumnKey => COLUMNS.some((col) => col.key === key)) : []; return valid.length ? valid : defaultVisibleColumns() } catch { return defaultVisibleColumns() } }
 function photoCacheInitialState(): Record<string, PhotoInfo> { const snapshot=getEquipmentPhotoCacheSnapshot(); return Object.fromEntries(Object.entries(snapshot).map(([id,preview])=>[id,{state:preview.exists?'yes':'no',url:preview.signedUrl} as PhotoInfo])) }
 
+function patchKeyForColumn(key: ColumnKey): keyof EquipmentRowPatch | null {
+  if (key === 'usingDepartment') return 'department'
+  if (['equipmentId','equipmentType','criticality','qrCode','updatedAt'].includes(key)) return null
+  return key as keyof EquipmentRowPatch
+}
+function editableRawValue(row: LiveEquipment, key: ColumnKey) {
+  if (key === 'usingDepartment') return row.usingDepartment
+  if (key === 'controlsProductQuality') return row.criticalityFacts?.controlsProductQuality
+  if (key === 'specialCharacteristicImpact') return row.criticalityFacts?.specialCharacteristicImpact
+  if (key === 'stopsProduction') return row.criticalityFacts?.stopsProduction
+  if (key === 'hasBackup') return row.criticalityFacts?.hasBackup
+  if (key === 'capacityImpact') return row.criticalityFacts?.capacityImpact
+  return row[key as keyof LiveEquipment] as string | boolean | undefined
+}
+function inlineValue(row: LiveEquipment, key: ColumnKey, changes: InlineChanges) {
+  const patchKey=patchKeyForColumn(key)
+  if (!patchKey) return undefined
+  const patch=changes[row.equipmentId]
+  if (patch && Object.prototype.hasOwnProperty.call(patch,patchKey)) return patch[patchKey] as string | boolean | undefined
+  return editableRawValue(row,key)
+}
+function mergeInlinePatch(row: LiveEquipment, patch: EquipmentRowPatch): LiveEquipment {
+  const next: LiveEquipment={...row}
+  if (patch.equipmentName!==undefined) next.equipmentName=patch.equipmentName
+  if (patch.equipmentCategory!==undefined) next.equipmentCategory=patch.equipmentCategory
+  if (patch.manufacturer!==undefined) next.manufacturer=patch.manufacturer
+  if (patch.distributor!==undefined) next.distributor=patch.distributor
+  if (patch.model!==undefined) next.model=patch.model
+  if (patch.serialNumber!==undefined) next.serialNumber=patch.serialNumber
+  if (patch.department!==undefined) next.usingDepartment=patch.department
+  if (patch.managingDepartment!==undefined) next.managingDepartment=patch.managingDepartment
+  if (patch.managementResponsiblePrimary!==undefined) next.managementResponsiblePrimary=patch.managementResponsiblePrimary
+  if (patch.managementResponsibleSecondary!==undefined) next.managementResponsibleSecondary=patch.managementResponsibleSecondary
+  if (patch.currentArea!==undefined) next.currentArea=patch.currentArea
+  if (patch.currentLine!==undefined) next.currentLine=patch.currentLine
+  if (patch.status!==undefined) next.status=patch.status
+  if (patch.defaultLabelSize!==undefined) next.defaultLabelSize=patch.defaultLabelSize
+  if (patch.technicalSpecification!==undefined) next.technicalSpecification=patch.technicalSpecification
+  if (patch.description!==undefined) next.description=patch.description
+  if (patch.accuracy!==undefined) next.accuracy=patch.accuracy
+  if (patch.origin!==undefined) next.origin=patch.origin
+  if (patch.manufactureDate!==undefined) next.manufactureDate=patch.manufactureDate
+  if (patch.inServiceDate!==undefined) next.inServiceDate=patch.inServiceDate
+  if (patch.warrantyUntil!==undefined) next.warrantyUntil=patch.warrantyUntil
+  if (patch.warrantyContact!==undefined) next.warrantyContact=patch.warrantyContact
+  if (patch.note!==undefined) next.note=patch.note
+  if (patch.relatedDocuments!==undefined) next.relatedDocuments=patch.relatedDocuments
+  if (patch.active!==undefined) next.active=patch.active
+  const facts={...(row.criticalityFacts||{})}
+  if (patch.controlsProductQuality!==undefined) facts.controlsProductQuality=patch.controlsProductQuality
+  if (patch.specialCharacteristicImpact!==undefined) facts.specialCharacteristicImpact=patch.specialCharacteristicImpact
+  if (patch.stopsProduction!==undefined) facts.stopsProduction=patch.stopsProduction
+  if (patch.hasBackup!==undefined) facts.hasBackup=patch.hasBackup
+  if (patch.capacityImpact!==undefined) facts.capacityImpact=patch.capacityImpact
+  next.criticalityFacts=facts
+  const derived=deriveEquipmentCriticality(facts)
+  if (derived) next.criticality=derived
+  next.updatedAt=new Date().toISOString()
+  return next
+}
+
 function toDraft(row: LiveEquipment): EquipmentMasterEditInput {
   const criticalityFacts = row.criticalityFacts
   return {
     equipmentId: row.equipmentId, equipmentType: row.equipmentType, equipmentName: row.equipmentName,
-    equipmentCategory: row.equipmentCategory || '', manufacturer: row.manufacturer || '', model: row.model || '', serialNumber: row.serialNumber || '',
+    equipmentCategory: row.equipmentCategory || '', manufacturer: row.manufacturer || '', distributor: row.distributor || '', model: row.model || '', serialNumber: row.serialNumber || '',
     department: row.usingDepartment || '', currentArea: row.currentArea || '', currentLine: row.currentLine || '', managingDepartment: row.managingDepartment || '',
     managementResponsiblePrimary: row.managementResponsiblePrimary || '', managementResponsibleSecondary: row.managementResponsibleSecondary || '',
     technicalSpecification: row.technicalSpecification || '', description: row.description || '', accuracy: row.accuracy || '', origin: row.origin || '',
@@ -117,7 +175,7 @@ function mergeDraftIntoRow(row: LiveEquipment, draft: EquipmentMasterEditInput, 
   return {
     ...row,
     equipmentName: draft.equipmentName.trim(), equipmentType: draft.equipmentType, equipmentCategory: draft.equipmentCategory.trim(),
-    manufacturer: draft.manufacturer.trim(), model: draft.model.trim(), serialNumber: draft.serialNumber.trim(),
+    manufacturer: draft.manufacturer.trim(), distributor: draft.distributor?.trim() || '', model: draft.model.trim(), serialNumber: draft.serialNumber.trim(),
     currentArea: draft.currentArea.trim(), currentLine: draft.currentLine.trim(), managingDepartment: draft.managingDepartment.trim(),
     managementResponsiblePrimary: draft.managementResponsiblePrimary?.trim() || '', managementResponsibleSecondary: draft.managementResponsibleSecondary?.trim() || '',
     usingDepartment: draft.department.trim(), technicalSpecification: draft.technicalSpecification.trim(), description: draft.description.trim(),
@@ -129,16 +187,11 @@ function mergeDraftIntoRow(row: LiveEquipment, draft: EquipmentMasterEditInput, 
   }
 }
 
-function mergeBulkIntoRow(row: LiveEquipment, ids: Set<string>, patch: EquipmentBulkPatch): LiveEquipment {
-  if (!ids.has(row.equipmentId)) return row
-  return { ...row, usingDepartment: patch.department ?? row.usingDepartment, managingDepartment: patch.managingDepartment ?? row.managingDepartment, currentArea: patch.currentArea ?? row.currentArea, currentLine: patch.currentLine ?? row.currentLine, equipmentCategory: patch.equipmentCategory ?? row.equipmentCategory, status: patch.status ?? row.status, updatedAt: new Date().toISOString() }
-}
-
 export function LiveEquipmentPanel() {
   const role = useAppRole(); const canBulkEdit = canEditEquipment(role)
   const [rows,setRows]=useState<LiveEquipment[]>(()=>getEquipmentCacheSnapshot()); const [photos,setPhotos]=useState<Record<string,PhotoInfo>>(photoCacheInitialState); const [editing,setEditing]=useState<EquipmentMasterEditInput|null>(null); const [profileId,setProfileId]=useState('')
   const [loading,setLoading]=useState(()=>getEquipmentCacheSnapshot().length===0); const [error,setError]=useState(''); const [message,setMessage]=useState(''); const [uploadingId,setUploadingId]=useState(''); const [deletingPhotoId,setDeletingPhotoId]=useState(''); const [saving,setSaving]=useState(false); const [deleting,setDeleting]=useState(false)
-  const [query,setQuery]=useState(''); const [sortKey,setSortKey]=useState<ColumnKey>('equipmentId'); const [sortDirection,setSortDirection]=useState<SortDirection>('asc'); const [bulkMode,setBulkMode]=useState(false); const [bulkSaving,setBulkSaving]=useState(false); const [selectedIds,setSelectedIds]=useState<Set<string>>(()=>new Set())
+  const [query,setQuery]=useState(''); const [sortKey,setSortKey]=useState<ColumnKey>('equipmentId'); const [sortDirection,setSortDirection]=useState<SortDirection>('asc'); const [bulkMode,setBulkMode]=useState(false); const [bulkSaving,setBulkSaving]=useState(false); const [inlineChanges,setInlineChanges]=useState<InlineChanges>({})
   const [visibleColumns,setVisibleColumns]=useState<ColumnKey[]>(loadVisibleColumns); const [columnPickerOpen,setColumnPickerOpen]=useState(false); const [filterColumn,setFilterColumn]=useState<ColumnKey|null>(null); const [filterSearch,setFilterSearch]=useState(''); const [columnFilters,setColumnFilters]=useState<ColumnFilters>({})
 
   const masterSuggestions=useMemo(()=>buildEquipmentMasterSuggestions(rows.map((row)=>({...row,department:row.usingDepartment}))),[rows])
@@ -165,30 +218,29 @@ export function LiveEquipmentPanel() {
   const filteredRows=useMemo(()=>rows.filter((row)=>{if(!includesQuery(row,query.trim().toLocaleLowerCase()))return false;for(const [key,values] of Object.entries(columnFilters) as Array<[ColumnKey,string[]|undefined]>){if(values?.length&&!values.includes(columnValue(row,key)||'—'))return false}return true}),[rows,query,columnFilters])
   const sortedRows=useMemo(()=>[...filteredRows].sort((a,b)=>{const result=columnValue(a,sortKey).localeCompare(columnValue(b,sortKey),'vi',{numeric:true,sensitivity:'base'});return sortDirection==='asc'?result:-result}),[filteredRows,sortKey,sortDirection])
   const productionCount=rows.filter((row)=>row.equipmentType==='PRODUCTION').length; const measurementCount=rows.filter((row)=>row.equipmentType==='MEASUREMENT').length
-  const profileEquipment=profileId?rows.find((row)=>row.equipmentId===profileId)||null:null; const allVisibleSelected=sortedRows.length>0&&sortedRows.every((row)=>selectedIds.has(row.equipmentId))
+  const profileEquipment=profileId?rows.find((row)=>row.equipmentId===profileId)||null:null
+  const dirtyCount=Object.keys(inlineChanges).length
   function openEdit(row:LiveEquipment){setProfileId('');setEditing(toDraft(row))}
   function toggleSort(key:ColumnKey){if(sortKey===key)setSortDirection((value)=>value==='asc'?'desc':'asc');else{setSortKey(key);setSortDirection('asc')}}
-  function toggleSelected(equipmentId:string){setSelectedIds((current)=>{const next=new Set(current);if(next.has(equipmentId))next.delete(equipmentId);else next.add(equipmentId);return next})}
-  function toggleAllVisible(){setSelectedIds((current)=>{const next=new Set(current);if(allVisibleSelected)sortedRows.forEach((row)=>next.delete(row.equipmentId));else sortedRows.forEach((row)=>next.add(row.equipmentId));return next})}
-  function exitBulkMode(){setBulkMode(false);setSelectedIds(new Set())}
   function toggleColumn(key:ColumnKey){setVisibleColumns((current)=>current.includes(key)?current.filter((item)=>item!==key):[...current,key])}
   function filterOptions(key:ColumnKey){return Array.from(new Set(rows.map((row)=>columnValue(row,key)||'—'))).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true,sensitivity:'base'}))}
   function toggleFilterValue(key:ColumnKey,value:string){setColumnFilters((current)=>{const selected=current[key]||[];const next=selected.includes(value)?selected.filter((item)=>item!==value):[...selected,value];const result={...current,[key]:next};if(!next.length)delete result[key];return result})}
   function clearFilter(key:ColumnKey){setColumnFilters((current)=>{const next={...current};delete next[key];return next})}
-  async function applyBulkPatch(patch:EquipmentBulkPatch){if(!canBulkEdit||selectedIds.size===0)return;if(!window.confirm(`Cập nhật ${selectedIds.size} thiết bị đã chọn?\n\nHệ thống sẽ ghi nhật ký riêng cho từng thiết bị.`))return;const ids=new Set(selectedIds);setBulkSaving(true);setError('');setMessage('');try{const result=await bulkUpdateEquipment([...ids],patch);setRows((current)=>current.map((row)=>mergeBulkIntoRow(row,ids,patch)));setMessage(`Đã cập nhật ${result.updatedCount} thiết bị.`)}catch(cause){setError(cause instanceof Error?cause.message:'Không thể cập nhật hàng loạt.')}finally{setBulkSaving(false)}}
+  function setInlineCell(equipment:LiveEquipment,key:ColumnKey,value:string|boolean){const patchKey=patchKeyForColumn(key);if(!patchKey)return;setInlineChanges((current)=>({...current,[equipment.equipmentId]:{...(current[equipment.equipmentId]||{}),[patchKey]:value}}))}
+  function exitBulkMode(){if(dirtyCount&&!window.confirm(`Bỏ ${dirtyCount} dòng chưa lưu?`))return;setInlineChanges({});setBulkMode(false)}
+  async function saveInlineChanges(){const changes=Object.entries(inlineChanges).map(([equipmentId,patch])=>({equipmentId,patch}));if(!changes.length)return;const before=rows;setBulkSaving(true);setError('');setMessage('');setRows((current)=>current.map((row)=>inlineChanges[row.equipmentId]?mergeInlinePatch(row,inlineChanges[row.equipmentId]):row));try{const result=await bulkUpdateEquipmentRows(changes);setInlineChanges({});setMessage(`Đã lưu ${result.updatedCount} dòng trực tiếp trên bảng.`)}catch(cause){setRows(before);setError(cause instanceof Error?cause.message:'Không thể lưu thay đổi trên bảng.')}finally{setBulkSaving(false)}}
 
   function renderHeader(column:ColumnDef){const selected=columnFilters[column.key]||[];const options=filterOptions(column.key).filter((value)=>value.toLocaleLowerCase().includes(filterSearch.toLocaleLowerCase()));const active=sortKey===column.key;return <th key={column.key} className="equipment-sheet-head" aria-sort={active?(sortDirection==='asc'?'ascending':'descending'):'none'}><div className="equipment-sheet-head-main"><button className={`equipment-sort${active?' active':''}`} type="button" onClick={()=>toggleSort(column.key)}>{column.label}<span aria-hidden="true">{active?(sortDirection==='asc'?'▲':'▼'):'↕'}</span></button><button className={`equipment-filter-button${selected.length?' active':''}`} type="button" aria-label={`Lọc ${column.label}`} onClick={()=>{setFilterColumn((current)=>current===column.key?null:column.key);setFilterSearch('')}}>▼{selected.length?<span className="equipment-filter-count">{selected.length}</span>:null}</button></div>{filterColumn===column.key?<div className="equipment-filter-popover"><input type="search" value={filterSearch} onChange={(event)=>setFilterSearch(event.target.value)} placeholder={`Tìm trong ${column.label.toLocaleLowerCase()}…`}/><div className="equipment-filter-actions"><button type="button" onClick={()=>clearFilter(column.key)}>Bỏ lọc</button><button type="button" onClick={()=>setColumnFilters((current)=>({...current,[column.key]:filterOptions(column.key)}))}>Chọn tất cả</button></div>{options.map((value)=><label className="equipment-filter-option" key={value}><input type="checkbox" checked={selected.includes(value)} onChange={()=>toggleFilterValue(column.key,value)}/><span>{value}</span></label>)}</div>:null}</th>}
-  function renderCell(equipment:LiveEquipment,key:ColumnKey){if(key==='equipmentId')return <button className="equipment-link" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>{equipment.equipmentId}</button>;if(key==='equipmentName')return <button className="equipment-link equipment-name-link" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>{equipment.equipmentName}</button>;if(key==='status')return <span className={`equipment-status status-${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status]||equipment.status}</span>;if(key==='relatedDocuments'){const links=documentLinks(equipment.relatedDocuments);return links.length?<div className="equipment-doc-links">{links.slice(0,3).map((url,index)=><a key={url} href={url} target="_blank" rel="noreferrer">{index===0?'Mở tài liệu':`Tài liệu ${index+1}`}</a>)}</div>:<span className="equipment-cell-muted">{equipment.relatedDocuments||'—'}</span>}return columnValue(equipment,key)||'—'}
+  function renderCell(equipment:LiveEquipment,column:ColumnDef){const key=column.key;const patchKey=patchKeyForColumn(key);if(bulkMode&&patchKey){return <EquipmentInlineCell equipment={equipment} columnKey={key} label={column.label} value={inlineValue(equipment,key,inlineChanges)} onChange={(value)=>setInlineCell(equipment,key,value)}/>};if(bulkMode&&!patchKey)return <span className="equipment-inline-readonly">{columnValue(equipment,key)||'—'}</span>;if(key==='equipmentId')return <button className="equipment-link" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>{equipment.equipmentId}</button>;if(key==='equipmentName')return <button className="equipment-link equipment-name-link" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>{equipment.equipmentName}</button>;if(key==='status')return <span className={`equipment-status status-${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status]||equipment.status}</span>;if(key==='relatedDocuments'){const links=documentLinks(equipment.relatedDocuments);return links.length?<div className="equipment-doc-links">{links.slice(0,3).map((url,index)=><a key={url} href={url} target="_blank" rel="noreferrer">{index===0?'Mở tài liệu':`Tài liệu ${index+1}`}</a>)}</div>:<span className="equipment-cell-muted">{equipment.relatedDocuments||'—'}</span>}return columnValue(equipment,key)||'—'}
 
   return <div className="equipment-page">
     <section className="equipment-summary" aria-label="Tổng quan thiết bị"><article><span>Tổng thiết bị</span><strong>{rows.length}</strong></article><article><span>Thiết bị sản xuất</span><strong>{productionCount}</strong></article><article><span>Thiết bị đo kiểm</span><strong>{measurementCount}</strong></article></section>
     <section className="equipment-surface" aria-labelledby="equipment-title">
-      <header className="equipment-page-header"><div><p className="eyebrow">Danh mục thiết bị</p><h2 id="equipment-title">Danh sách thiết bị</h2><p>{sortedRows.length} / {rows.length} thiết bị · toàn bộ trường master đều có thể bật cột và lọc</p></div><div className="equipment-page-actions">{canBulkEdit?<button className={`equipment-bulk-mode-toggle${bulkMode?' active':''}`} type="button" onClick={()=>bulkMode?exitBulkMode():setBulkMode(true)}>{bulkMode?'Thoát sửa hàng loạt':'Sửa hàng loạt'}</button>:null}<button className="equipment-refresh" type="button" onClick={()=>void reloadEquipment(true)} disabled={loading}>Làm mới</button></div></header>
+      <header className="equipment-page-header"><div><p className="eyebrow">Danh mục thiết bị</p><h2 id="equipment-title">Danh sách thiết bị</h2><p>{sortedRows.length} / {rows.length} thiết bị · toàn bộ trường master đều có thể bật cột và lọc</p></div><div className="equipment-page-actions">{canBulkEdit?<button className={`equipment-bulk-mode-toggle${bulkMode?' active':''}`} type="button" onClick={()=>bulkMode?exitBulkMode():setBulkMode(true)}>{bulkMode?'Thoát sửa trực tiếp':'Sửa hàng loạt'}</button>:null}<button className="equipment-refresh" type="button" onClick={()=>void reloadEquipment(true)} disabled={loading||bulkSaving}>Làm mới</button></div></header>
       <div className="equipment-toolbar" role="search"><label className="equipment-search"><span className="sr-only">Tìm thiết bị</span><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Tìm trên toàn bộ dữ liệu thiết bị…"/></label><div className="equipment-sheet-tools"><div className="equipment-column-picker"><button className={columnPickerOpen?'active':''} type="button" onClick={()=>setColumnPickerOpen((value)=>!value)}>Cột hiển thị · {visibleColumns.length}/{COLUMNS.length}</button>{columnPickerOpen?<div className="equipment-column-menu"><header><strong>Ẩn / hiện cột</strong><div><button type="button" onClick={()=>setVisibleColumns(COLUMNS.map((column)=>column.key))}>Hiện tất cả</button><button type="button" onClick={()=>setVisibleColumns(defaultVisibleColumns())}>Mặc định</button></div></header>{(['Nhận diện','Quản lý','Kỹ thuật','Vòng đời','Tài liệu','Hệ thống'] as const).map((group)=><div key={group}><small>{group}</small>{COLUMNS.filter((column)=>column.group===group).map((column)=><label key={column.key}><input type="checkbox" checked={visibleColumns.includes(column.key)} onChange={()=>toggleColumn(column.key)}/><span>{column.label}</span></label>)}</div>)}</div>:null}</div><button type="button" className={activeFilterCount?'active':''} onClick={()=>setColumnFilters({})}>Bỏ toàn bộ lọc{activeFilterCount?` · ${activeFilterCount}`:''}</button></div></div>
-      {bulkMode&&canBulkEdit?<EquipmentBulkEditor selectedCount={selectedIds.size} suggestions={masterSuggestions} saving={bulkSaving} onApply={applyBulkPatch} onExit={exitBulkMode}/>:null}
-      {bulkMode&&canBulkEdit?<div className="equipment-bulk-hint"><button type="button" onClick={toggleAllVisible}>{allVisibleSelected?'Bỏ chọn tất cả đang hiển thị':`Chọn tất cả ${sortedRows.length} máy đang hiển thị`}</button><span>Chỉ sửa các trường quản trị. Loại Sản xuất/Đo kiểm không đổi hàng loạt vì mã CEV-PR / CEV-ME gắn với loại thiết bị.</span></div>:null}
-      {message?<div className="equipment-feedback" role="status">{message}</div>:null}{loading&&rows.length===0?<div className="equipment-state">Đang tải danh mục thiết bị…</div>:null}{error&&rows.length===0?<div className="equipment-state error" role="alert">{error}</div>:null}
-      {rows.length>0?<div className="equipment-table-scroll"><table className="equipment-data-table"><caption className="sr-only">Danh sách thiết bị</caption><thead><tr>{bulkMode?<th className="equipment-bulk-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Chọn tất cả thiết bị đang hiển thị"/></th>:null}<th>Ảnh</th>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map(renderHeader)}<th aria-label="Thao tác"/></tr></thead><tbody>{sortedRows.map((equipment)=>{const photo=photos[equipment.equipmentId]||{state:'loading',url:''};const pasteReady=photo.state==='no';const selected=selectedIds.has(equipment.equipmentId);return <tr key={equipment.equipmentId} className={bulkMode&&selected?'bulk-selected':''}>{bulkMode?<td className="equipment-bulk-check"><input type="checkbox" checked={selected} onChange={()=>toggleSelected(equipment.equipmentId)} aria-label={`Chọn ${equipment.equipmentId}`}/></td>:null}<td className={`equipment-image-col${pasteReady?' paste-ready':''}`} tabIndex={pasteReady?0:undefined} title={pasteReady?'Chọn ô ảnh rồi nhấn Ctrl+V để dán ảnh':'Mở hồ sơ thiết bị'} onPaste={pasteReady?(event)=>void handleEmptyPhotoCellPaste(equipment.equipmentId,event):undefined}>{photo.state==='yes'&&photo.url?<button className="equipment-image-button" type="button" onClick={()=>setProfileId(equipment.equipmentId)}><img src={photo.url} alt={equipment.equipmentName}/></button>:photo.state==='loading'?<span className="equipment-photo-state">…</span>:<button className="equipment-photo-empty" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>Chưa có ảnh</button>}</td>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map((column)=><td key={column.key}>{renderCell(equipment,column.key)}</td>)}<td><button className="equipment-edit-row" type="button" onClick={()=>openEdit(equipment)} disabled={bulkMode}>Sửa</button></td></tr>})}</tbody></table></div>:null}
+      {bulkMode&&canBulkEdit?<div className="equipment-spreadsheet-bar"><div className="equipment-spreadsheet-copy"><strong>Chế độ sửa như Excel · {dirtyCount} dòng đã thay đổi</strong><span>Gõ trực tiếp trong ô · Tab/Shift+Tab để chuyển ô · Cấp A/B/C/D tự tính từ 5 câu kỹ thuật.</span></div><div className="equipment-spreadsheet-actions"><button type="button" onClick={()=>setInlineChanges({})} disabled={!dirtyCount||bulkSaving}>Hoàn tác chưa lưu</button><button className="save" type="button" onClick={()=>void saveInlineChanges()} disabled={!dirtyCount||bulkSaving}>{bulkSaving?'Đang lưu…':`Lưu ${dirtyCount} dòng`}</button><button type="button" onClick={exitBulkMode} disabled={bulkSaving}>Thoát</button></div></div>:null}
+      {message?<div className="equipment-feedback" role="status">{message}</div>:null}{error?<div className="equipment-state error" role="alert">{error}</div>:null}{loading&&rows.length===0?<div className="equipment-state">Đang tải danh mục thiết bị…</div>:null}
+      {rows.length>0?<div className="equipment-table-scroll"><table className={`equipment-data-table${bulkMode?' spreadsheet-mode':''}`}><caption className="sr-only">Danh sách thiết bị</caption><thead><tr><th>Ảnh</th>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map(renderHeader)}<th aria-label="Thao tác"/></tr></thead><tbody>{sortedRows.map((equipment)=>{const photo=photos[equipment.equipmentId]||{state:'loading',url:''};const pasteReady=photo.state==='no';const dirty=Boolean(inlineChanges[equipment.equipmentId]);return <tr key={equipment.equipmentId} className={dirty?'is-dirty':''}><td className={`equipment-image-col${pasteReady?' paste-ready':''}`} tabIndex={pasteReady?0:undefined} title={pasteReady?'Chọn ô ảnh rồi nhấn Ctrl+V để dán ảnh':'Mở hồ sơ thiết bị'} onPaste={pasteReady?(event)=>void handleEmptyPhotoCellPaste(equipment.equipmentId,event):undefined}>{photo.state==='yes'&&photo.url?<button className="equipment-image-button" type="button" onClick={()=>setProfileId(equipment.equipmentId)}><img src={photo.url} alt={equipment.equipmentName}/></button>:photo.state==='loading'?<span className="equipment-photo-state">…</span>:<button className="equipment-photo-empty" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>Chưa có ảnh</button>}</td>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map((column)=><td key={column.key}>{renderCell(equipment,column)}</td>)}<td>{bulkMode?<span className={dirty?'equipment-inline-dirty-dot':'equipment-cell-muted'}>{dirty?'Đã sửa':'—'}</span>:<button className="equipment-edit-row" type="button" onClick={()=>openEdit(equipment)}>Sửa</button>}</td></tr>})}</tbody></table></div>:null}
     </section>
 
     {profileEquipment?<EquipmentProfile equipment={profileEquipment} photoUrl={photos[profileEquipment.equipmentId]?.url||''} onClose={()=>setProfileId('')} onEdit={()=>openEdit(profileEquipment)}/>:null}
