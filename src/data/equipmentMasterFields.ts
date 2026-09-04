@@ -2,6 +2,7 @@ export type EquipmentMasterTextFields = {
   equipmentName: string
   equipmentCategory: string
   manufacturer: string
+  distributor?: string
   model: string
   serialNumber: string
   department: string
@@ -26,6 +27,7 @@ export type EquipmentMasterSuggestionKey =
   | 'equipmentName'
   | 'equipmentCategory'
   | 'manufacturer'
+  | 'distributor'
   | 'model'
   | 'department'
   | 'managingDepartment'
@@ -45,7 +47,7 @@ export type EquipmentMasterSuggestionSource = Partial<EquipmentMasterTextFields>
 export type EquipmentMasterSuggestions = Record<EquipmentMasterSuggestionKey, string[]>
 
 export const EMPTY_MASTER_SUGGESTIONS: EquipmentMasterSuggestions = {
-  equipmentName: [], equipmentCategory: [], manufacturer: [], model: [], department: [], managingDepartment: [],
+  equipmentName: [], equipmentCategory: [], manufacturer: [], distributor: [], model: [], department: [], managingDepartment: [],
   managementResponsiblePrimary: [], managementResponsibleSecondary: [], currentArea: [], currentLine: [],
   technicalSpecification: [], description: [], accuracy: [], origin: [], warrantyContact: [], note: [], relatedDocuments: [],
 }
@@ -86,6 +88,7 @@ export function buildEquipmentMasterSuggestions(rows: EquipmentMasterSuggestionS
     equipmentName: unique(rows.map((row) => row.equipmentName)),
     equipmentCategory: unique(rows.map((row) => row.equipmentCategory)),
     manufacturer: unique(rows.map((row) => row.manufacturer)),
+    distributor: unique(rows.map((row) => row.distributor)),
     model: unique(rows.map((row) => row.model)),
     department: departments,
     managingDepartment: departments,
