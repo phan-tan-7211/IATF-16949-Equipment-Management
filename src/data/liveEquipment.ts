@@ -13,6 +13,8 @@ export type LiveEquipment = {
   currentArea: string
   currentLine: string
   managingDepartment: string
+  managementResponsiblePrimary: string
+  managementResponsibleSecondary: string
   usingDepartment: string
   technicalSpecification: string
   description: string
@@ -68,6 +70,8 @@ export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipme
     currentArea: text(row.currentArea) || sourceText(source, 'currentArea'),
     currentLine: text(row.currentLine) || sourceText(source, 'currentLine'),
     managingDepartment: text(row.managingDepartment) || sourceText(source, 'managingDepartment'),
+    managementResponsiblePrimary: text(row.managementResponsiblePrimary) || sourceText(source, 'managementResponsiblePrimary'),
+    managementResponsibleSecondary: text(row.managementResponsibleSecondary) || sourceText(source, 'managementResponsibleSecondary'),
     usingDepartment: text(row.department ?? row.usingDepartment) || sourceText(source, 'usingDepartment'),
     technicalSpecification: text(row.technicalSpecification) || sourceText(source, 'technicalSpecification'),
     description: sourceText(source, 'description'),
