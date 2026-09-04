@@ -13,6 +13,7 @@ import { EquipmentRegisterShortcut } from './EquipmentRegisterShortcut'
 import { installEquipmentWarmup } from './data/equipmentWarmup'
 import { installSpareWarmup } from './data/spareWarmup'
 import { installMaintenanceWarmup } from './data/maintenanceWarmup'
+import { installInspectionWarmup } from './data/inspectionWarmup'
 
 const SupabaseTestPanel = lazy(() => import('./SupabaseTestPanel').then((module) => ({ default: module.SupabaseTestPanel })))
 const phase3Preview = new URLSearchParams(window.location.search).get('phase3')
@@ -21,6 +22,7 @@ if (phase3Preview !== 'supabase-test') {
   installEquipmentWarmup()
   installSpareWarmup()
   installMaintenanceWarmup()
+  installInspectionWarmup()
 }
 
 const content = phase3Preview === 'supabase-test'
