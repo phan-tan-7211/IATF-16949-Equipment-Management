@@ -13,7 +13,7 @@ import {
 } from './data/autoRegistration'
 
 const EMPTY: EquipmentRegistrationInput = {
-  equipmentType: 'PRODUCTION', equipmentName: '', equipmentCategory: '', manufacturer: '', model: '', serialNumber: '', department: '', currentArea: '', currentLine: '', managingDepartment: '', technicalSpecification: '', description: '', accuracy: '', origin: '', manufactureDate: '', inServiceDate: '', warrantyUntil: '', warrantyContact: '', note: '', relatedDocuments: '', status: 'RUNNING', controlsProductQuality: undefined, specialCharacteristicImpact: undefined, stopsProduction: undefined, hasBackup: undefined, capacityImpact: undefined,
+  equipmentType: 'PRODUCTION', equipmentName: '', equipmentCategory: '', manufacturer: '', model: '', serialNumber: '', department: '', currentArea: '', currentLine: '', managingDepartment: '', managementResponsiblePrimary: '', managementResponsibleSecondary: '', technicalSpecification: '', description: '', accuracy: '', origin: '', manufactureDate: '', inServiceDate: '', warrantyUntil: '', warrantyContact: '', note: '', relatedDocuments: '', status: 'RUNNING', controlsProductQuality: undefined, specialCharacteristicImpact: undefined, stopsProduction: undefined, hasBackup: undefined, capacityImpact: undefined,
 }
 
 function booleanSelectValue(value: boolean | undefined) { return value === true ? 'YES' : value === false ? 'NO' : '' }
@@ -58,19 +58,19 @@ export function LiveEquipmentRegistrationPanel() {
 
   const canonical = useMemo(() => {
     const next = { ...form }
-    const keys: EquipmentMasterSuggestionKey[] = ['equipmentName','equipmentCategory','manufacturer','model','department','managingDepartment','currentArea','currentLine','technicalSpecification','description','accuracy','origin','warrantyContact','note','relatedDocuments']
+    const keys: EquipmentMasterSuggestionKey[] = ['equipmentName','equipmentCategory','manufacturer','model','department','managingDepartment','managementResponsiblePrimary','managementResponsibleSecondary','currentArea','currentLine','technicalSpecification','description','accuracy','origin','warrantyContact','note','relatedDocuments']
     for (const key of keys) next[key] = canonicalizeMasterValue(String(next[key] || ''), suggestions[key])
     return next
   }, [form, suggestions])
 
   function resetForm() { setForm(EMPTY); setPhotoFile(null); setPhotoPreview('') }
-  function textField(key: keyof EquipmentRegistrationInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false, placeholder = '') {
-    return <label className={wide ? 'wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete value={String(form[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setForm({ ...form, [key]: nextValue })} onBlur={() => setForm((current) => ({ ...current, [key]: canonicalizeMasterValue(String(current[key] || ''), suggestions[suggestionKey]) }))} placeholder={placeholder} /> : <input value={String(form[key] || '')} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={placeholder} />}</label>
+  function textField(key: keyof EquipmentRegistrationInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false, placeholder = '', required = false) {
+    return <label className={wide ? 'wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete required={required} value={String(form[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setForm({ ...form, [key]: nextValue })} onBlur={() => setForm((current) => ({ ...current, [key]: canonicalizeMasterValue(String(current[key] || ''), suggestions[suggestionKey]) }))} placeholder={placeholder} /> : <input required={required} value={String(form[key] || '')} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={placeholder} />}</label>
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (!canCreate || !canonical.equipmentName?.trim() || !criticality) return
+    if (!canCreate || !canonical.equipmentName?.trim() || !canonical.managementResponsiblePrimary?.trim() || !criticality) return
     setSaving(true); setMessage(''); setError('')
     try {
       const result = await createEquipmentAuto(canonical)
@@ -96,7 +96,10 @@ export function LiveEquipmentRegistrationPanel() {
       <label><span>Trạng thái</span><select value={form.status || 'RUNNING'} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
       <label className="wide"><span>Tên thiết bị *</span><SmartAutocomplete autoFocus required value={form.equipmentName} options={suggestions.equipmentName} onChange={(nextValue) => setForm({ ...form, equipmentName: nextValue })} onBlur={() => setForm((current) => ({ ...current, equipmentName: canonicalizeMasterValue(current.equipmentName, suggestions.equipmentName) }))} placeholder="Chọn tên chuẩn đã có hoặc nhập tên mới" /><small className="equipment-standardize-hint">Nếu đã có “Máy nhúng bể”, chọn đúng tên đó thay vì tạo biến thể mới.</small></label>
       {textField('equipmentCategory','Nhóm thiết bị','equipmentCategory')}{textField('manufacturer','Hãng / nhà sản xuất','manufacturer')}{textField('model','Mẫu máy','model')}{textField('serialNumber','Số sê-ri')}
-      {textField('department','Bộ phận sử dụng','department')}{textField('managingDepartment','Bộ phận quản lý','managingDepartment')}{textField('currentArea','Khu vực','currentArea')}{textField('currentLine','Dây chuyền','currentLine')}
+      {textField('department','Bộ phận sử dụng','department')}{textField('managingDepartment','Bộ phận quản lý','managingDepartment')}
+      {textField('managementResponsiblePrimary','Người phụ trách quản lý · Chính *','managementResponsiblePrimary',false,'Nhập/chọn người chịu trách nhiệm chính',true)}
+      {textField('managementResponsibleSecondary','Người phụ trách quản lý · Phụ','managementResponsibleSecondary',false,'Người thay thế / hỗ trợ')}
+      {textField('currentArea','Khu vực','currentArea')}{textField('currentLine','Dây chuyền','currentLine')}
       {textField('origin','Xuất xứ','origin')}{textField('accuracy','Độ chính xác','accuracy')}
       <label><span>Ngày sản xuất</span><input type="date" value={form.manufactureDate || ''} onChange={(e) => setForm({ ...form, manufactureDate: e.target.value })} /></label>
       <label><span>Ngày đưa vào sử dụng</span><input type="date" value={form.inServiceDate || ''} onChange={(e) => setForm({ ...form, inServiceDate: e.target.value })} /></label>
@@ -113,7 +116,7 @@ export function LiveEquipmentRegistrationPanel() {
         <label><span>Mất chức năng có rủi ro sản lượng / giao hàng?</span><select required value={booleanSelectValue(form.capacityImpact)} onChange={(e) => setForm({ ...form, capacityImpact: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
       </div><div className={`equipment-criticality-result${criticality ? ` level-${criticality.toLowerCase()}` : ''}`}><span>Mức hệ thống tính</span><strong>{criticality ? `Cấp ${criticality}` : 'Chưa đủ dữ kiện'}</strong></div></fieldset>
       <div className="equipment-register-result"><span>Mã thiết bị + mã QR tự sinh sau khi lưu</span><strong>{form.equipmentType === 'PRODUCTION' ? 'CEV-PR-…' : 'CEV-ME-…'}</strong><small>Không nhập mã bằng tay.</small></div>
-      <footer><button type="button" onClick={() => { setOpen(false); resetForm() }}>Hủy</button><button className="equipment-register-save" disabled={saving || !form.equipmentName.trim() || !criticality}>{saving ? 'Đang tạo…' : 'Tạo thiết bị & sinh mã'}</button></footer>
+      <footer><button type="button" onClick={() => { setOpen(false); resetForm() }}>Hủy</button><button className="equipment-register-save" disabled={saving || !form.equipmentName.trim() || !form.managementResponsiblePrimary?.trim() || !criticality}>{saving ? 'Đang tạo…' : 'Tạo thiết bị & sinh mã'}</button></footer>
     </form> : null}
   </section>
 }
