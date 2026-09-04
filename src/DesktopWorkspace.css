@@ -1,36 +1,8 @@
-/* Desktop workspace: sidebar is the primary navigation, so remove the redundant full-width topbar.
-   Keep only the account control as a compact floating action. Mobile keeps the normal topbar. */
+/* Desktop workspace: sidebar is the only desktop shell. No topbar layer. */
 @media screen and (min-width:901px){
-  .topbar{
-    position:fixed;
-    top:8px;
-    right:10px;
-    left:auto;
-    z-index:60;
-    width:auto;
-    min-height:0;
-    padding:0;
-    border:0;
-    background:transparent;
-    backdrop-filter:none;
-    box-shadow:none;
-    gap:0;
-  }
-  .topbar>div:first-child{display:none}
-
   .app-body{min-height:100dvh}
-  .main-content{
-    padding-top:12px;
-  }
-  .equipment-main{
-    height:100dvh;
-    padding-top:10px;
-  }
-
-  /* Give the floating account button its own quiet surface without recreating a bar. */
-  .topbar .account-trigger{
-    background:var(--color-surface);
-    border:1px solid var(--color-border);
-    box-shadow:0 4px 14px rgba(15,23,42,.08);
-  }
+  .main-content{padding-top:12px}
+  .equipment-main{height:100dvh;padding-top:10px}
+  .sidebar-user button{margin-top:6px;min-height:30px;border:1px solid hsl(var(--slate-600));border-radius:7px;background:transparent;color:hsl(var(--slate-200));font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+  .sidebar-user button:hover{background:hsl(var(--slate-700));color:#fff}
 }
