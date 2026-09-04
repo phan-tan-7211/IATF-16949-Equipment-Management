@@ -10,7 +10,7 @@ type Props = {
   photoUrl: string
   onClose: () => void
   onEdit: () => void
-  onNavigate?: (view: EquipmentProfileTarget) => void
+  onNavigate?: (view: EquipmentProfileTarget, equipmentId: string) => void
 }
 
 type Tab = 'overview' | 'calibration' | 'maintenance' | 'inspection' | 'downtime' | 'movement' | 'audit'
@@ -77,10 +77,12 @@ export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit, onNavig
 
   function navigate(view: EquipmentProfileTarget) {
     if (onNavigate) {
-      onNavigate(view)
+      onNavigate(view, equipment.equipmentId)
       return
     }
-    window.dispatchEvent(new CustomEvent('cev:navigate', { detail: { view } }))
+    window.dispatchEvent(new CustomEvent('cev:navigate', {
+      detail: { view, equipmentId: equipment.equipmentId },
+    }))
   }
 
   return <div
