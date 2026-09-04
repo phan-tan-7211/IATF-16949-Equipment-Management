@@ -62,9 +62,11 @@ export type SaveSparePartInput = {
 const SPARE_CACHE_KEY = 'cev:data:spare-parts'
 const SPARE_CACHE_VERSION = 1
 const SPARE_CACHE_FRESH_MS = 30_000
+const SPARE_USAGE_CACHE_FRESH_MS = 60_000
 const restoredSpareCache = readClientCache<LiveSparePart[]>(SPARE_CACHE_KEY, SPARE_CACHE_VERSION)
 let spareCache: LiveSparePart[] | null = restoredSpareCache?.data || null
 let spareCacheSavedAt = restoredSpareCache?.savedAt || 0
+const spareUsageCache = new Map<string, { savedAt: number; data: SpareUsage[] }>()
 
 function text(value: unknown) { return value === null || value === undefined ? '' : String(value).trim() }
 function num(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
@@ -126,6 +128,12 @@ export function getSparePartsCacheSnapshot(): LiveSparePart[] {
   return spareCache ? [...spareCache] : []
 }
 
+export function getSpareUsageCacheSnapshot(partId: string): SpareUsage[] {
+  const id = partId.trim()
+  const cached = spareUsageCache.get(id)
+  return cached && isClientCacheFresh(cached.savedAt, SPARE_USAGE_CACHE_FRESH_MS) ? [...cached.data] : []
+}
+
 function upsertSpareCache(part: LiveSparePart) {
   if (!spareCache) spareCache = []
   const index = spareCache.findIndex((item) => item.partId === part.partId)
@@ -161,10 +169,19 @@ export async function saveSparePart(input: SaveSparePartInput) {
   return saved
 }
 
-export async function loadSpareUsage(partId: string) {
-  const { data, error } = await supabase.from('spare_part_usage').select('*').eq('part_id', partId).order('used_at', { ascending: false }).limit(50)
-  if (error) throw error
-  return ((data || []) as Array<Record<string, unknown>>).map(normalizeUsage)
+export async function loadSpareUsage(partId: string, options: { force?: boolean } = {}) {
+  const id = partId.trim()
+  if (!id) return []
+  const cached = spareUsageCache.get(id)
+  if (!options.force && cached && isClientCacheFresh(cached.savedAt, SPARE_USAGE_CACHE_FRESH_MS)) return cached.data
+  const { data, error } = await supabase.from('spare_part_usage').select('*').eq('part_id', id).order('used_at', { ascending: false }).limit(50)
+  if (error) {
+    if (cached) return cached.data
+    throw error
+  }
+  const normalized = ((data || []) as Array<Record<string, unknown>>).map(normalizeUsage)
+  spareUsageCache.set(id, { savedAt: Date.now(), data: normalized })
+  return normalized
 }
 
 export async function loadWorkOrderSpareUsage(workOrderId: string) {
@@ -177,5 +194,6 @@ export async function recordSpareUsage(input: { partId: string; equipmentId: str
   const { data, error } = await supabase.rpc('rpc_record_spare_usage', { p_input: input })
   if (error) throw error
   decrementSpareCache(input.partId, Math.max(0, Number(input.quantity) || 0))
+  spareUsageCache.delete(input.partId.trim())
   return data
 }
