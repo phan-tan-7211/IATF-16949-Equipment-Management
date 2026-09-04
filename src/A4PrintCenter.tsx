@@ -213,7 +213,7 @@ export function A4PrintCenter() {
 
   return <div className="print-center">
     <section className="print-toolbar no-print">
-      <div><p className="eyebrow">Biểu mẫu từ dữ liệu hệ thống</p><h2>Hồ sơ A4 / PDF</h2><p>Dùng trực tiếp dữ liệu Supabase đã nhập. In: Ctrl+P → Lưu dưới dạng PDF.</p></div>
+      <div><h2>Hồ sơ A4 / PDF</h2><p>Chọn biểu mẫu và hồ sơ cần in.</p></div>
       <div className="print-controls">
         <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
         {docType !== 'bm06' ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
@@ -223,20 +223,19 @@ export function A4PrintCenter() {
     </section>
 
     <article className={`a4-document${docType === 'bm06' ? ' landscape' : ''}`}>
-      <header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b><span>HỆ THỐNG QUẢN LÝ THIẾT BỊ · IATF 16949</span></div><div><strong>{config.code}</strong><span>Dữ liệu trực tiếp từ Supabase</span></div></header>
+      <header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b></div><div><strong>{config.code}</strong></div></header>
       <h1>{config.label.toUpperCase()}</h1>
       {docType === 'bm06' ? <>
-        <div className="a4-meta"><span>Thời điểm in: {new Date().toLocaleString('vi-VN')}</span><span>Số sự kiện: {bm06Rows.length}</span></div>
+        <div className="a4-meta"><span>Số sự kiện: {bm06Rows.length}</span></div>
         <table className="a4-table"><thead><tr><th>STT</th><th>Thiết bị</th><th>Bắt đầu</th><th>Khôi phục</th><th>Nguyên nhân</th><th>Mô tả / hành động</th></tr></thead><tbody>{bm06Rows.map((row, index) => <tr key={String(row.downtime_id)}><td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{dateTimeDisplay(row.started_at)}</td><td>{dateTimeDisplay(row.ended_at)}</td><td>{display(row.causeCategory || row.cause)}</td><td>{display(row.detail)} / {display(row.actionTaken || row.recoveryAction)}</td></tr>)}</tbody></table>
       </> : selected ? <>
-        <div className="a4-meta"><span>Mã hồ sơ: {display(selected[config.idKey])}</span><span>Thời điểm in: {new Date().toLocaleString('vi-VN')}</span></div>
+        {docType !== 'equipment' ? <div className="a4-meta"><span>Mã hồ sơ: {display(selected[config.idKey])}</span></div> : null}
         {docType === 'equipment'
           ? <EquipmentA4 row={selected} photoUrl={equipmentPhotoUrl} />
           : <section className="a4-fields">{printableFields(selected).map(([key, value], index) => <div key={`${key}-${index}`}><span>{LABELS[key]}</span><strong>{key.includes('date') || key.endsWith('_at') || key.endsWith('At') ? dateDisplay(value) : display(value)}</strong></div>)}</section>}
         {(docType === 'bm03' || docType === 'bm08') ? <section className="a4-detail"><h2>Chi tiết hạng mục</h2>{docType === 'bm08' ? <p>○ Tốt · △ Cảnh báo · × Sửa chữa</p> : null}<DetailTable rows={details} /></section> : null}
         <footer className="a4-signatures"><div><span>Người lập / thực hiện</span><b>Ký, ghi rõ họ tên</b></div><div><span>Người kiểm tra / xác nhận</span><b>Ký, ghi rõ họ tên</b></div><div><span>Phê duyệt</span><b>Ký, ghi rõ họ tên</b></div></footer>
-      </> : <p className="a4-empty">Chưa có hồ sơ nguồn cho biểu mẫu này.</p>}
-      <p className="a4-footnote">Dữ liệu được tạo trực tiếp từ hệ thống Supabase. Không nhập lại dữ liệu riêng cho bản in.</p>
+      </> : <p className="a4-empty">Chưa có hồ sơ cho biểu mẫu này.</p>}
     </article>
   </div>
 }
