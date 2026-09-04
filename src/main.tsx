@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './EquipmentDelete.css'
 import './EquipmentDrawerScroll.css'
+import './EquipmentUnified.css'
 import App from './App'
 import { AppErrorBoundary } from './AppErrorBoundary'
 
