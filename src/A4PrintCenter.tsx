@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './A4PrintCenter.css'
+import { EquipmentQr } from './components/EquipmentQr'
 import { fetchSourceRows } from './data/sourceRows'
 import { getEquipmentPhotoPreview } from './data/supabaseEquipment'
 import { loadEquipmentA4Relations, type EquipmentA4Relations } from './data/equipmentA4Data'
@@ -117,6 +118,7 @@ function EquipmentA4({ row, photoUrl, relations }: { row: Row; photoUrl: string;
   const warrantyContact = sourceText(row, 'warrantyContact')
   const showOriginWarranty = Boolean(origin || manufactureDate || inServiceDate || warrantyUntil || warrantyContact)
   const isMeasurement = String(row.equipment_type || '').toUpperCase() === 'MEASUREMENT'
+  const qrValue = String(row.qr_code || row.equipment_id || '').trim()
 
   return <>
     <div className="a4-equipment-main">
@@ -143,7 +145,7 @@ function EquipmentA4({ row, photoUrl, relations }: { row: Row; photoUrl: string;
           <div><dt>Nhà sản xuất</dt><dd>{display(row.manufacturer)}</dd></div>
           <div><dt>Mẫu / Model</dt><dd>{display(row.model)}</dd></div>
           <div><dt>Số sê-ri</dt><dd>{display(row.serial_number)}</dd></div>
-          <div><dt>Mã QR</dt><dd>{display(row.qr_code || row.equipment_id)}</dd></div>
+          <div className="a4-qr-field"><dt>Mã QR</dt><dd><EquipmentQr value={qrValue} size={76} /></dd></div>
           <div><dt>Độ chính xác</dt><dd>{display(accuracy)}</dd></div>
           <div><dt>Đang quản lý</dt><dd>{display(row.active)}</dd></div>
         </dl>
