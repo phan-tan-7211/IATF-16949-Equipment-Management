@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
 import './Equipment.css'
 import { EquipmentProfile } from './EquipmentProfile'
+import { deriveEquipmentCriticality } from './data/autoRegistration'
 import { type LiveEquipment } from './data/liveEquipment'
 import { checkEquipmentDeletion, deleteUnusedEquipment } from './data/equipmentDeletion'
+import { updateEquipmentDetails, type EquipmentMasterEditInput } from './data/equipmentMasterEdit'
 import {
   getEquipmentPhotoPreview,
   getEquipmentPhotoPreviews,
   loadSupabaseEquipment,
-  updateSupabaseEquipment,
   uploadEquipmentPhoto,
-  type EquipmentEditInput,
 } from './data/supabaseEquipment'
 
 const statusLabel: Record<string, string> = {
@@ -33,16 +33,38 @@ function clipboardFileExtension(mimeType: string) {
   return 'jpg'
 }
 
-function toDraft(row: LiveEquipment): EquipmentEditInput {
+function booleanSelectValue(value: boolean | undefined) {
+  if (value === true) return 'YES'
+  if (value === false) return 'NO'
+  return ''
+}
+
+function parseBooleanSelect(value: string) {
+  if (value === 'YES') return true
+  if (value === 'NO') return false
+  return undefined
+}
+
+function toDraft(row: LiveEquipment): EquipmentMasterEditInput {
   return {
-    oldEquipmentId: row.equipmentId,
     equipmentId: row.equipmentId,
     equipmentType: row.equipmentType,
     equipmentName: row.equipmentName,
-    department: row.usingDepartment || row.managingDepartment || row.currentArea || '',
-    model: row.model,
-    serialNumber: row.serialNumber,
+    equipmentCategory: row.equipmentCategory || '',
+    manufacturer: row.manufacturer || '',
+    model: row.model || '',
+    serialNumber: row.serialNumber || '',
+    department: row.usingDepartment || '',
+    currentArea: row.currentArea || '',
+    currentLine: row.currentLine || '',
+    managingDepartment: row.managingDepartment || '',
+    technicalSpecification: row.technicalSpecification || '',
     status: row.status || 'RUNNING',
+    controlsProductQuality: row.criticalityFacts.controlsProductQuality,
+    specialCharacteristicImpact: row.criticalityFacts.specialCharacteristicImpact,
+    stopsProduction: row.criticalityFacts.stopsProduction,
+    hasBackup: row.criticalityFacts.hasBackup,
+    capacityImpact: row.criticalityFacts.capacityImpact,
   }
 }
 
@@ -57,6 +79,8 @@ function includesQuery(row: LiveEquipment, query: string) {
     row.usingDepartment,
     row.managingDepartment,
     row.currentArea,
+    row.currentLine,
+    row.equipmentCategory,
   ].join(' ').toLocaleLowerCase()
   return haystack.includes(query)
 }
@@ -64,7 +88,7 @@ function includesQuery(row: LiveEquipment, query: string) {
 export function LiveEquipmentPanel() {
   const [rows, setRows] = useState<LiveEquipment[]>([])
   const [photos, setPhotos] = useState<Record<string, PhotoInfo>>({})
-  const [editing, setEditing] = useState<EquipmentEditInput | null>(null)
+  const [editing, setEditing] = useState<EquipmentMasterEditInput | null>(null)
   const [profileId, setProfileId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -134,46 +158,26 @@ export function LiveEquipmentPanel() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [editing])
 
+  const editCriticality = editing ? deriveEquipmentCriticality(editing) : ''
+
   async function handleSave() {
     if (!editing) return
-    if (!editing.equipmentId.trim() || !editing.equipmentName.trim()) {
-      setMessage('Mã thiết bị và tên thiết bị không được để trống.')
+    if (!editing.equipmentName.trim()) {
+      setMessage('Tên thiết bị không được để trống.')
+      return
+    }
+    if (!editCriticality) {
+      setMessage('Trả lời đủ 5 câu Criticality trước khi lưu.')
       return
     }
 
-    const saved = editing
-    const nextEquipmentId = saved.equipmentId.trim()
     setSaving(true)
     setMessage('')
     try {
-      await updateSupabaseEquipment(saved)
-
-      setRows((current) => current.map((row) => row.equipmentId !== saved.oldEquipmentId
-        ? row
-        : {
-            ...row,
-            equipmentId: nextEquipmentId,
-            equipmentName: saved.equipmentName.trim(),
-            equipmentType: saved.equipmentType,
-            model: saved.model.trim(),
-            serialNumber: saved.serialNumber.trim(),
-            usingDepartment: saved.department.trim(),
-            status: saved.status.trim() || 'RUNNING',
-            qrCode: nextEquipmentId,
-            updatedAt: new Date().toISOString(),
-          }))
-
-      if (saved.oldEquipmentId !== nextEquipmentId) {
-        setPhotos((current) => {
-          const next = { ...current, [nextEquipmentId]: { state: 'loading', url: '' } as PhotoInfo }
-          delete next[saved.oldEquipmentId]
-          return next
-        })
-        void refreshOnePhoto(nextEquipmentId)
-      }
-
-      setMessage(`Đã lưu ${nextEquipmentId}`)
+      const result = await updateEquipmentDetails(editing)
+      setMessage(`Đã lưu ${result.equipmentId} · Cấp ${result.criticality}`)
       setEditing(null)
+      await reloadEquipment()
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'SAVE_FAILED')
     } finally {
@@ -183,7 +187,7 @@ export function LiveEquipmentPanel() {
 
   async function handleDelete() {
     if (!editing || deleting || saving) return
-    const equipmentId = editing.oldEquipmentId.trim().toUpperCase()
+    const equipmentId = editing.equipmentId.trim().toUpperCase()
     setDeleting(true)
     setMessage('')
     try {
@@ -394,36 +398,57 @@ export function LiveEquipmentPanel() {
     {editing ? <div className="equipment-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null) }}>
       <aside className="equipment-drawer" role="dialog" aria-modal="true" aria-labelledby="equipment-edit-title">
         <header>
-          <div><p className="eyebrow">Equipment Master</p><h2 id="equipment-edit-title">Chỉnh sửa thiết bị</h2></div>
+          <div><p className="eyebrow">Equipment Master</p><h2 id="equipment-edit-title">Chỉnh sửa thiết bị</h2><small>{editing.equipmentId} · QR = {editing.equipmentId}</small></div>
           <button className="equipment-close" type="button" aria-label="Đóng" onClick={() => setEditing(null)}>×</button>
         </header>
 
         <div className="equipment-edit-photo">
-          {photos[editing.oldEquipmentId]?.state === 'yes' && photos[editing.oldEquipmentId]?.url
-            ? <img src={photos[editing.oldEquipmentId].url} alt={`Ảnh ${editing.equipmentName}`} />
+          {photos[editing.equipmentId]?.state === 'yes' && photos[editing.equipmentId]?.url
+            ? <img src={photos[editing.equipmentId].url} alt={`Ảnh ${editing.equipmentName}`} />
             : <div className="equipment-edit-photo-empty">Chưa có ảnh</div>}
           <div>
-            <button type="button" onClick={() => void handleClipboardUpload(editing.oldEquipmentId)} disabled={uploadingId === editing.oldEquipmentId}>{uploadingId === editing.oldEquipmentId ? 'Đang xử lý…' : 'Dán ảnh từ clipboard'}</button>
-            <label className="equipment-upload-label">Chọn ảnh<input type="file" accept="image/*" disabled={uploadingId === editing.oldEquipmentId} onChange={(event) => { const file = event.currentTarget.files?.[0]; void handlePhotoUpload(editing.oldEquipmentId, file); event.currentTarget.value = '' }} /></label>
+            <button type="button" onClick={() => void handleClipboardUpload(editing.equipmentId)} disabled={uploadingId === editing.equipmentId}>{uploadingId === editing.equipmentId ? 'Đang xử lý…' : 'Dán ảnh từ clipboard'}</button>
+            <label className="equipment-upload-label">📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" disabled={uploadingId === editing.equipmentId} onChange={(event) => { const file = event.currentTarget.files?.[0]; void handlePhotoUpload(editing.equipmentId, file); event.currentTarget.value = '' }} /></label>
             <small>1 thiết bị = 1 ảnh · tự nén trước khi lưu</small>
           </div>
         </div>
 
-        <div className="equipment-form-grid">
-          <label><span>Mã thiết bị</span><input value={editing.equipmentId} onChange={(event) => setEditing({ ...editing, equipmentId: event.target.value })} /></label>
-          <label><span>Tên thiết bị</span><input value={editing.equipmentName} onChange={(event) => setEditing({ ...editing, equipmentName: event.target.value })} /></label>
-          <label><span>Loại</span><select value={editing.equipmentType} onChange={(event) => setEditing({ ...editing, equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}><option value="PRODUCTION">Sản xuất</option><option value="MEASUREMENT">Đo kiểm</option></select></label>
-          <label><span>Bộ phận</span><input value={editing.department} onChange={(event) => setEditing({ ...editing, department: event.target.value })} /></label>
+        <div className="equipment-system-fields">
+          <div><span>Equipment ID / QR</span><strong>{editing.equipmentId}</strong><small>Hệ thống tự sinh, không sửa tay.</small></div>
+          <div><span>Loại thiết bị</span><strong>{editing.equipmentType === 'MEASUREMENT' ? 'Thiết bị đo/kiểm · CEV-ME' : 'Thiết bị sản xuất · CEV-PR'}</strong><small>Giữ cố định để không làm sai quy tắc mã.</small></div>
+        </div>
+
+        <div className="equipment-form-grid equipment-form-grid-full">
+          <label className="wide"><span>Tên thiết bị *</span><input value={editing.equipmentName} onChange={(event) => setEditing({ ...editing, equipmentName: event.target.value })} /></label>
+          <label><span>Nhóm / Category</span><input value={editing.equipmentCategory} onChange={(event) => setEditing({ ...editing, equipmentCategory: event.target.value })} /></label>
+          <label><span>Trạng thái</span><select value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
+          <label><span>Maker</span><input value={editing.manufacturer} onChange={(event) => setEditing({ ...editing, manufacturer: event.target.value })} /></label>
           <label><span>Model</span><input value={editing.model} onChange={(event) => setEditing({ ...editing, model: event.target.value })} /></label>
           <label><span>Serial Number</span><input value={editing.serialNumber} onChange={(event) => setEditing({ ...editing, serialNumber: event.target.value })} /></label>
-          <label><span>Trạng thái</span><select value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
+          <label><span>Bộ phận sử dụng</span><input value={editing.department} onChange={(event) => setEditing({ ...editing, department: event.target.value })} /></label>
+          <label><span>Bộ phận quản lý</span><input value={editing.managingDepartment} onChange={(event) => setEditing({ ...editing, managingDepartment: event.target.value })} /></label>
+          <label><span>Khu vực</span><input value={editing.currentArea} onChange={(event) => setEditing({ ...editing, currentArea: event.target.value })} /></label>
+          <label><span>Line</span><input value={editing.currentLine} onChange={(event) => setEditing({ ...editing, currentLine: event.target.value })} /></label>
+          <label className="wide"><span>Thông số kỹ thuật</span><textarea rows={3} value={editing.technicalSpecification} onChange={(event) => setEditing({ ...editing, technicalSpecification: event.target.value })} /></label>
         </div>
+
+        <fieldset className="equipment-edit-criticality">
+          <legend>Equipment Criticality · tự tính A/B/C/D</legend>
+          <div className="equipment-edit-criticality-grid">
+            <label><span>Trực tiếp tạo/kiểm soát đặc tính chất lượng?</span><select value={booleanSelectValue(editing.controlsProductQuality)} onChange={(event) => setEditing({ ...editing, controlsProductQuality: parseBooleanSelect(event.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
+            <label><span>Liên quan Special Characteristic / Product Safety?</span><select value={booleanSelectValue(editing.specialCharacteristicImpact)} onChange={(event) => setEditing({ ...editing, specialCharacteristicImpact: parseBooleanSelect(event.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
+            <label><span>Mất chức năng làm dừng công đoạn/line?</span><select value={booleanSelectValue(editing.stopsProduction)} onChange={(event) => setEditing({ ...editing, stopsProduction: parseBooleanSelect(event.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
+            <label><span>Có backup dùng ngay?</span><select value={booleanSelectValue(editing.hasBackup)} onChange={(event) => setEditing({ ...editing, hasBackup: parseBooleanSelect(event.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
+            <label><span>Mất chức năng có nguy cơ không đạt sản lượng/giao hàng?</span><select value={booleanSelectValue(editing.capacityImpact)} onChange={(event) => setEditing({ ...editing, capacityImpact: parseBooleanSelect(event.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
+          </div>
+          <div className={`equipment-edit-criticality-result${editCriticality ? ` level-${editCriticality.toLowerCase()}` : ''}`}><span>Mức hệ thống tính</span><strong>{editCriticality ? `Cấp ${editCriticality}` : 'Chưa đủ dữ kiện'}</strong><small>Backend tính lại CEV-ABCD-V2 khi lưu.</small></div>
+        </fieldset>
 
         <footer>
           <button className="equipment-delete" type="button" onClick={() => void handleDelete()} disabled={saving || deleting}>{deleting ? 'Đang kiểm tra…' : 'Xóa thiết bị'}</button>
           <span className="equipment-footer-spacer" />
           <button className="equipment-cancel" type="button" onClick={() => setEditing(null)} disabled={deleting}>Hủy</button>
-          <button className="equipment-primary" type="button" onClick={() => void handleSave()} disabled={saving || deleting}>{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
+          <button className="equipment-primary" type="button" onClick={() => void handleSave()} disabled={saving || deleting || !editCriticality}>{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
         </footer>
       </aside>
     </div> : null}
