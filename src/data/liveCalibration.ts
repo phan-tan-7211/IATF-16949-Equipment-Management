@@ -1,3 +1,4 @@
+import { isClientCacheFresh, readClientCache, writeClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 
 export type CalibrationLinkState = 'LINKED' | 'UNLINKED' | 'ORPHAN' | 'INVALID_TYPE'
@@ -48,7 +49,39 @@ type EquipmentIdentity = {
   sourceData: Record<string, unknown>
 }
 
+type CalibrationLogCacheEntry = { savedAt: number; data: LiveCalibrationLog[] }
+
+const CALIBRATION_CACHE_KEY = 'cev:data:calibration-master'
+const CALIBRATION_CACHE_VERSION = 1
+const CALIBRATION_CACHE_FRESH_MS = 30_000
+const CALIBRATION_LOG_FRESH_MS = 60_000
+const restoredCalibrationCache = readClientCache<LiveCalibration[]>(CALIBRATION_CACHE_KEY, CALIBRATION_CACHE_VERSION)
+let calibrationCache: LiveCalibration[] | null = restoredCalibrationCache?.data || null
+let calibrationCacheSavedAt = restoredCalibrationCache?.savedAt || 0
+const calibrationLogCache = new Map<string, CalibrationLogCacheEntry>()
+
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
+
+function persistCalibrationCache() {
+  if (!calibrationCache) return
+  const saved = writeClientCache(CALIBRATION_CACHE_KEY, CALIBRATION_CACHE_VERSION, calibrationCache)
+  calibrationCacheSavedAt = saved.savedAt
+}
+
+export function getCalibrationCacheSnapshot(): LiveCalibration[] {
+  return calibrationCache ? [...calibrationCache] : []
+}
+
+function patchCalibrationCacheAfterRecord(equipmentId: string, calibrationDate: string, nextDueDate: string, result: string) {
+  if (!calibrationCache) return
+  calibrationCache = calibrationCache.map((row) => row.equipmentId === equipmentId ? {
+    ...row,
+    lastCalibrationDate: calibrationDate,
+    nextDueDate,
+    instrumentStatus: result === 'FAIL' ? 'FAILED' : row.instrumentStatus,
+  } : row)
+  persistCalibrationCache()
+}
 
 function toEquipment(row: Record<string, unknown>): EquipmentIdentity {
   return {
@@ -56,13 +89,20 @@ function toEquipment(row: Record<string, unknown>): EquipmentIdentity {
   }
 }
 
-export async function loadLiveCalibration(): Promise<LiveCalibration[]> {
+export async function loadLiveCalibration(options: { force?: boolean } = {}): Promise<LiveCalibration[]> {
+  if (!options.force && calibrationCache && isClientCacheFresh(calibrationCacheSavedAt, CALIBRATION_CACHE_FRESH_MS)) return calibrationCache
   const [calibrationResult, equipmentResult] = await Promise.all([
     supabase.from('calibration_master').select('*').order('equipment_id'),
     supabase.from('equipment_master').select('*'),
   ])
-  if (calibrationResult.error) throw calibrationResult.error
-  if (equipmentResult.error) throw equipmentResult.error
+  if (calibrationResult.error) {
+    if (calibrationCache) return calibrationCache
+    throw calibrationResult.error
+  }
+  if (equipmentResult.error) {
+    if (calibrationCache) return calibrationCache
+    throw equipmentResult.error
+  }
 
   const equipmentMap = new Map<string, EquipmentIdentity>()
   ;((equipmentResult.data || []) as Array<Record<string, unknown>>).forEach((row) => {
@@ -70,7 +110,7 @@ export async function loadLiveCalibration(): Promise<LiveCalibration[]> {
     if (equipment.equipmentId) equipmentMap.set(equipment.equipmentId, equipment)
   })
 
-  return ((calibrationResult.data || []) as Array<Record<string, unknown>>).map((row) => {
+  calibrationCache = ((calibrationResult.data || []) as Array<Record<string, unknown>>).map((row) => {
     const equipmentId = text(row.equipment_id)
     const equipment = equipmentMap.get(equipmentId)
     const source = ((row.source_data as Record<string, unknown> | null) || {})
@@ -80,13 +120,26 @@ export async function loadLiveCalibration(): Promise<LiveCalibration[]> {
       controlNumber: equipment?.controlNumber || text(source.controlNumber), department: equipment?.department || text(source.department), category: text(equipment?.sourceData.classification || source.category), instrumentName: equipment?.equipmentName || text(source.instrumentName), localName: text(equipment?.sourceData.description || source.localName), specification: text(equipment?.sourceData.specification || source.specification), accuracy: text(equipment?.sourceData.accuracy || source.accuracy), model: equipment?.model || text(source.model), manufacturer: equipment?.manufacturer || text(source.manufacturer), serialNumber: equipment?.serialNumber || text(source.serialNumber), lastCalibrationDate: text(row.last_calibration_date), nextDueDate: text(row.next_due_date), instrumentStatus: text(row.status), active: Boolean(equipment), linkState,
     }
   })
+  persistCalibrationCache()
+  return calibrationCache
 }
 
-export async function loadCalibrationLogs(equipmentId: string): Promise<LiveCalibrationLog[]> {
-  const { data, error } = await supabase.from('calibration_log').select('*').eq('equipment_id', equipmentId).order('calibration_date', { ascending: false }).limit(50)
-  if (error) throw error
+export function invalidateCalibrationLogs(equipmentId: string) {
+  calibrationLogCache.delete(equipmentId.trim())
+}
+
+export async function loadCalibrationLogs(equipmentId: string, options: { force?: boolean } = {}): Promise<LiveCalibrationLog[]> {
+  const id = equipmentId.trim()
+  if (!id) return []
+  const cached = calibrationLogCache.get(id)
+  if (!options.force && cached && isClientCacheFresh(cached.savedAt, CALIBRATION_LOG_FRESH_MS)) return cached.data
+  const { data, error } = await supabase.from('calibration_log').select('*').eq('equipment_id', id).order('calibration_date', { ascending: false }).limit(50)
+  if (error) {
+    if (cached) return cached.data
+    throw error
+  }
   const rows = (data || []) as Array<Record<string, unknown>>
-  return Promise.all(rows.map(async (row) => {
+  const normalized = await Promise.all(rows.map(async (row) => {
     const source = (row.source_data as Record<string, unknown> | null) || {}
     const certificatePath = text(source.certificatePath)
     let certificateUrl = ''
@@ -98,6 +151,8 @@ export async function loadCalibrationLogs(equipmentId: string): Promise<LiveCali
       calibrationLogId: text(row.calibration_log_id), equipmentId: text(row.equipment_id), calibrationDate: text(row.calibration_date), nextDueDate: text(row.next_due_date), result: text(row.result), actorEmail: text(row.actor_email), provider: text(source.provider), note: text(source.note), certificatePath, certificateUrl, createdAt: text(row.created_at),
     }
   }))
+  calibrationLogCache.set(id, { savedAt: Date.now(), data: normalized })
+  return normalized
 }
 
 async function uploadCalibrationCertificate(equipmentId: string, file: File) {
@@ -131,6 +186,8 @@ export async function recordCalibration(input: {
       p_note: input.note.trim(),
     })
     if (error) throw error
+    patchCalibrationCacheAfterRecord(input.equipmentId, input.calibrationDate, input.nextDueDate, input.result)
+    invalidateCalibrationLogs(input.equipmentId)
     return data as Record<string, unknown>
   } catch (cause) {
     if (certificatePath) await supabase.storage.from('calibration-certificates').remove([certificatePath])
