@@ -44,6 +44,7 @@ export function EquipmentLabelPrintWorkspace({ records }: Props) {
       const haystack = normalize([
         text(row, 'equipment_id'), text(row, 'equipment_name'), text(row, 'model'), text(row, 'manufacturer'),
         text(row, 'currentArea'), text(row, 'currentLine'), text(row, 'department'), text(row, 'usingDepartment'),
+        text(row, 'managementResponsiblePrimary'), text(row, 'managementResponsibleSecondary'),
       ].join(' '))
       return words.every((word) => haystack.includes(word))
     })
@@ -53,6 +54,7 @@ export function EquipmentLabelPrintWorkspace({ records }: Props) {
   const selectedRows = useMemo(() => equipmentRows.filter((row) => selectedSet.has(text(row, 'equipment_id'))), [equipmentRows, selectedSet])
   const printableRows = useMemo(() => selectedRows.flatMap((row) => Array.from({ length: copies }, () => row)), [selectedRows, copies])
   const sizeConfig = SIZE_OPTIONS.find((option) => option.id === size) || SIZE_OPTIONS[1]
+  const missingPrimaryCount = selectedRows.filter((row) => !text(row, 'managementResponsiblePrimary')).length
 
   function toggle(id: string) {
     setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
@@ -87,7 +89,7 @@ export function EquipmentLabelPrintWorkspace({ records }: Props) {
   return <div className="equipment-label-workspace">
     <section className="equipment-label-bulk-controls no-print">
       <div className="equipment-label-control-top">
-        <label className="equipment-label-search"><span>Tìm thiết bị</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Mã, tên, model, line, bộ phận…" /></label>
+        <label className="equipment-label-search"><span>Tìm thiết bị</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Mã, tên, model, line, người quản lý…" /></label>
         <label><span>Khổ tem</span><select value={size} onChange={(event) => setSize(event.target.value as EquipmentLabelSize)}>{SIZE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
         <label><span>Số bản / máy</span><input type="number" min={1} max={20} value={copies} onChange={(event) => setCopies(Math.max(1, Math.min(20, Number(event.target.value) || 1)))} /></label>
       </div>
@@ -97,13 +99,16 @@ export function EquipmentLabelPrintWorkspace({ records }: Props) {
         <strong>{selectedRows.length} máy · {printableRows.length} tem</strong>
         <button type="button" className="equipment-label-print-button" onClick={printLabels} disabled={!printableRows.length}>In {printableRows.length || ''} tem · {sizeConfig.width} × {sizeConfig.height} mm</button>
       </div>
+      {missingPrimaryCount ? <div className="equipment-label-manager-warning" role="alert">⚠ {missingPrimaryCount} thiết bị đã chọn chưa có người phụ trách quản lý chính. Tem sẽ hiển thị “CHƯA PHÂN CÔNG”.</div> : null}
       <div className="equipment-label-picker" aria-label="Chọn thiết bị in tem">
         {filtered.map((row) => {
           const id = text(row, 'equipment_id')
           const checked = selectedSet.has(id)
+          const primary = text(row, 'managementResponsiblePrimary')
+          const secondary = text(row, 'managementResponsibleSecondary')
           return <label key={id} className={checked ? 'selected' : ''}>
             <input type="checkbox" checked={checked} onChange={() => toggle(id)} />
-            <span><strong>{id}</strong><b>{text(row, 'equipment_name') || 'Chưa có tên'}</b><small>{[text(row, 'currentArea'), text(row, 'currentLine'), text(row, 'department') || text(row, 'usingDepartment')].filter(Boolean).join(' · ') || 'Chưa có vị trí'}</small></span>
+            <span><strong>{id}</strong><b>{text(row, 'equipment_name') || 'Chưa có tên'}</b><small>QL chính: {primary || 'CHƯA PHÂN CÔNG'}{secondary ? ` · Phụ: ${secondary}` : ''}</small></span>
           </label>
         })}
       </div>
