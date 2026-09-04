@@ -49,6 +49,7 @@ export function EquipmentManagementLabel({ row, size = 'standard' }: Props) {
   const criticality = text(row, 'criticality')
   const status = text(row, 'status')
   const location = [area, line].filter(Boolean).join(' · ')
+  const missingPrimaryLabel = size === 'tiny' ? '—' : 'CHƯA GÁN'
 
   return <section className={`equipment-management-label label-${size}`} aria-label={`Tem quản lý ${equipmentId}`}>
     <header>
@@ -72,7 +73,7 @@ export function EquipmentManagementLabel({ row, size = 'standard' }: Props) {
         <div className="equipment-label-responsible" role="rowgroup">
           <div className="equipment-label-key equipment-label-responsible-title">Người phụ trách quản lý</div>
           <div className="equipment-label-responsible-lines">
-            <div><b>Chính</b><strong className={!primary ? 'is-missing' : ''}>{primary || 'CHƯA PHÂN CÔNG'}</strong></div>
+            <div><b>Chính</b><strong className={!primary ? 'is-missing' : ''}>{primary || missingPrimaryLabel}</strong></div>
             <div><b>Phụ</b><strong>{secondary || '—'}</strong></div>
           </div>
         </div>
