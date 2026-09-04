@@ -13,8 +13,8 @@ export type LiveEquipment = {
   currentArea: string
   currentLine: string
   managingDepartment: string
-  managementResponsiblePrimary: string
-  managementResponsibleSecondary: string
+  managementResponsiblePrimary?: string
+  managementResponsibleSecondary?: string
   usingDepartment: string
   technicalSpecification: string
   description: string
