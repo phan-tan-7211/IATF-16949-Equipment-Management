@@ -2,7 +2,13 @@ import { EquipmentQr } from './EquipmentQr'
 import './EquipmentManagementLabel.css'
 
 type Row = Record<string, unknown>
-export type EquipmentLabelSize = 'compact' | 'standard' | 'large'
+export type EquipmentLabelSize = 'tiny' | 'standard' | 'large'
+
+export const EQUIPMENT_LABEL_SIZES: Array<{ id: EquipmentLabelSize; label: string; stockWidth: number; stockHeight: number; printWidth: number; printHeight: number }> = [
+  { id: 'tiny', label: '15 × 25 mm', stockWidth: 15, stockHeight: 25, printWidth: 25, printHeight: 15 },
+  { id: 'standard', label: '30 × 50 mm', stockWidth: 30, stockHeight: 50, printWidth: 50, printHeight: 30 },
+  { id: 'large', label: '45 × 80 mm', stockWidth: 45, stockHeight: 80, printWidth: 80, printHeight: 45 },
+]
 
 type Props = {
   row: Row
@@ -70,7 +76,7 @@ export function EquipmentManagementLabel({ row, size = 'standard' }: Props) {
             <div><b>Phụ</b><strong>{secondary || '—'}</strong></div>
           </div>
         </div>
-        {size !== 'compact' ? <div className="equipment-label-location">Vị trí: <strong>{location || '—'}</strong></div> : null}
+        {size === 'large' ? <div className="equipment-label-location">Vị trí: <strong>{location || '—'}</strong></div> : null}
       </div>
 
       <div className="equipment-label-qr">
