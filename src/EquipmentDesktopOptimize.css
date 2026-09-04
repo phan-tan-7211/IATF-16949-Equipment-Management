@@ -1,87 +1,76 @@
-/* Equipment desktop workspace: stable full-height layout without overlays or display:contents. */
+/* Equipment desktop workspace: align with the proven Spare Parts page style. */
 @media screen and (min-width:901px){
   .app-body{width:calc(100vw - 196px);max-width:none;overflow:hidden}
   .main-content.equipment-main{width:100%;max-width:none;margin:0;height:100dvh;padding:8px 10px 10px;box-sizing:border-box}
   .equipment-main>.workspace-keepalive-pane:not([hidden]){width:100%;height:100%;min-width:0;min-height:0}
   .equipment-main .maintenance-workspace-stack{width:100%;height:100%;min-width:0;min-height:0;grid-template-rows:auto minmax(0,1fr);gap:8px}
 
-  /* One stable workspace. Never flatten wrappers and never position KPI absolutely. */
+  /* Same visual hierarchy as phase3=spare: compact KPI cards, then one main surface. */
   .equipment-page{
     display:grid;
     grid-template-rows:auto minmax(0,1fr);
-    gap:0;
+    gap:8px;
     width:100%;
     height:100%;
     min-width:0;
     min-height:0;
     overflow:hidden;
-    border:1px solid var(--color-border);
-    border-radius:12px;
-    background:var(--color-surface);
-    box-sizing:border-box;
-  }
-
-  /* KPI is a compact strip inside the same visual frame, not three floating cards. */
-  .equipment-summary{
-    order:0;
-    display:grid;
-    grid-template-columns:repeat(3,minmax(0,1fr));
-    gap:0;
-    width:100%;
-    min-width:0;
-    min-height:38px;
-    border-bottom:1px solid var(--color-border);
-    background:var(--color-surface);
-  }
-  .equipment-summary article{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:7px;
-    min-width:0;
-    min-height:38px;
-    padding:4px 10px;
     border:0;
-    border-left:1px solid var(--color-border);
     border-radius:0;
     background:transparent;
+  }
+
+  .equipment-summary{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px;
+    min-width:0;
+  }
+  .equipment-summary article{
+    min-width:0;
+    min-height:44px;
+    padding:7px 10px;
+    display:grid;
+    align-content:center;
+    gap:2px;
+    border:1px solid var(--color-border);
+    border-radius:10px;
+    background:var(--color-surface);
     box-shadow:none;
     box-sizing:border-box;
   }
-  .equipment-summary article:first-child{border-left:0}
-  .equipment-summary span{font-size:10px;line-height:1.1;color:var(--color-text-muted);white-space:nowrap}
-  .equipment-summary strong{font-size:16px;line-height:1;font-weight:900;color:var(--color-text)}
+  .equipment-summary span{font-size:10px;line-height:1.15;color:var(--color-text-muted)}
+  .equipment-summary strong{font-size:18px;line-height:1;font-weight:900;color:var(--color-text)}
 
   .equipment-surface{
-    order:1;
     height:100%;
     min-width:0;
     min-height:0;
     display:flex;
     flex-direction:column;
     overflow:hidden;
-    border:0;
-    border-radius:0;
-    box-shadow:none;
+    border:1px solid var(--color-border);
+    border-radius:12px;
     background:var(--color-surface);
+    box-shadow:none;
   }
 
   .equipment-page-header{
     flex:0 0 auto;
-    display:grid;
-    grid-template-columns:minmax(210px,1fr) auto;
+    display:flex;
     align-items:center;
+    justify-content:space-between;
     gap:10px;
     min-height:46px;
-    padding:7px 12px;
+    padding:7px 10px;
     border-bottom:1px solid var(--color-border);
     box-sizing:border-box;
   }
   .equipment-page-header>div:first-child{min-width:0;max-width:none}
   .equipment-page-header .eyebrow{display:none}
   .equipment-page-header h2{margin:0;font-size:16px;line-height:1.15}
-  .equipment-page-header p:last-child{margin:2px 0 0;font-size:10px;line-height:1.2;color:var(--color-text-muted)}
-  .equipment-page-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:nowrap;min-width:max-content}
+  .equipment-page-header p:last-child{margin:2px 0 0;font-size:10px;line-height:1.25;color:var(--color-text-muted)}
+  .equipment-page-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;min-width:0}
   .equipment-page-actions button,.equipment-register-header-action{min-height:32px;padding:0 10px;border-radius:7px;font-size:11px;white-space:nowrap}
 
   .equipment-toolbar{
@@ -89,13 +78,13 @@
     display:grid;
     grid-template-columns:minmax(260px,1fr) auto;
     gap:8px;
-    padding:7px 12px;
+    padding:7px 10px;
     border-bottom:1px solid var(--color-border);
-    background:var(--color-surface-subtle);
+    background:var(--color-surface);
     box-sizing:border-box;
   }
   .equipment-toolbar input{min-height:32px;font-size:11px}
-  .equipment-sheet-tools{gap:6px;flex-wrap:nowrap}
+  .equipment-sheet-tools{gap:6px;flex-wrap:wrap;justify-content:flex-end}
   .equipment-sheet-tools>button{min-height:32px;padding:0 10px;font-size:11px;white-space:nowrap}
 
   .equipment-bulk-editor,.equipment-bulk-hint,.equipment-feedback,.equipment-state{flex:0 0 auto}
@@ -137,12 +126,12 @@
   .equipment-filter-option input{width:13px;height:13px;margin:0}
 }
 
-/* Zoom/high density desktop: wrap controls, never split the workspace into KPI columns. */
+/* Browser zoom / narrow desktop: same responsive behavior as Spare Parts, no overlap. */
 @media screen and (min-width:901px) and (max-width:1150px){
-  .equipment-page-header{grid-template-columns:1fr;gap:6px}
-  .equipment-page-actions{justify-content:flex-start;min-width:0;flex-wrap:wrap}
+  .equipment-page-header{align-items:flex-start;flex-direction:column}
+  .equipment-page-actions{width:100%;justify-content:flex-start}
   .equipment-toolbar{grid-template-columns:1fr}
-  .equipment-sheet-tools{flex-wrap:wrap}
-  .equipment-summary span{white-space:normal;text-align:center;font-size:9px}
-  .equipment-summary strong{font-size:15px}
+  .equipment-sheet-tools{justify-content:flex-start}
+  .equipment-summary span{font-size:9px}
+  .equipment-summary strong{font-size:16px}
 }
