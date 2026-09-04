@@ -19,12 +19,12 @@ export function warmInspectionCache(force = false) {
 export function installInspectionWarmup() {
   if (typeof window === 'undefined') return () => undefined
   const schedule = () => {
-    if ('requestIdleCallback' in window) {
+    if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(() => { void warmInspectionCache(false) }, { timeout: 1800 })
       return () => window.cancelIdleCallback(id)
     }
-    const id = window.setTimeout(() => { void warmInspectionCache(false) }, 700)
-    return () => window.clearTimeout(id)
+    const id = globalThis.setTimeout(() => { void warmInspectionCache(false) }, 700)
+    return () => globalThis.clearTimeout(id)
   }
   const cancelScheduled = schedule()
   const onVisibility = () => { if (document.visibilityState === 'visible') void warmInspectionCache(false) }
