@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './EquipmentInventory.css'
 import { LiveQrScannerPanel } from './LiveQrScannerPanel'
+import { getEquipmentPhotoPreviews, type EquipmentPhotoPreview } from './data/supabaseEquipment'
 import {
   closeEquipmentInventorySession,
   createEquipmentInventorySession,
@@ -27,6 +28,79 @@ function searchText(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().trim()
 }
 
+function searchTokens(value: string) {
+  return searchText(value).split(/[^a-z0-9]+/).filter(Boolean)
+}
+
+function editDistance(left: string, right: string) {
+  if (left === right) return 0
+  if (!left.length) return right.length
+  if (!right.length) return left.length
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  const current = new Array<number>(right.length + 1)
+  for (let i = 1; i <= left.length; i += 1) {
+    current[0] = i
+    for (let j = 1; j <= right.length; j += 1) {
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1),
+      )
+    }
+    for (let j = 0; j <= right.length; j += 1) previous[j] = current[j]
+  }
+  return previous[right.length]
+}
+
+function tokenScore(query: string, token: string) {
+  if (!query || !token) return 0
+  if (token === query) return 120
+  if (token.startsWith(query)) return 105
+  if (token.includes(query)) return 95
+  if (query.startsWith(token) && token.length >= 3) return 82
+
+  const maxLength = Math.max(query.length, token.length)
+  if (maxLength >= 3) {
+    const distance = editDistance(query, token)
+    const allowed = Math.max(1, Math.floor(maxLength * 0.34))
+    if (distance <= allowed) return 75 - distance * 8
+  }
+
+  let cursor = 0
+  for (const character of token) {
+    if (character === query[cursor]) cursor += 1
+    if (cursor === query.length) break
+  }
+  if (query.length >= 3 && cursor === query.length) return 52
+  return 0
+}
+
+function equipmentSearchScore(equipment: EquipmentInventoryEquipment, query: string) {
+  const normalizedQuery = searchText(query)
+  if (!normalizedQuery) return 1
+
+  const queryWords = searchTokens(normalizedQuery)
+  const id = searchText(equipment.equipmentId)
+  const name = searchText(equipment.equipmentName)
+  const area = searchText(equipment.area)
+  const line = searchText(equipment.line)
+  const allText = `${id} ${name} ${area} ${line}`
+  const tokens = searchTokens(allText)
+
+  let score = 0
+  for (const word of queryWords) {
+    let best = allText.includes(word) ? 90 : 0
+    for (const token of tokens) best = Math.max(best, tokenScore(word, token))
+    if (best < 45) return 0
+    score += best
+  }
+
+  if (id.includes(normalizedQuery)) score += 80
+  if (name.includes(normalizedQuery)) score += 60
+  if (name.startsWith(normalizedQuery)) score += 30
+  return score
+}
+
 function currentInventoryName() {
   const now = new Date()
   return `Kiểm kê ${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
@@ -51,6 +125,7 @@ export function LiveEquipmentInventoryPanel() {
   const [mode, setMode] = useState<'SCAN' | 'MANUAL'>('SCAN')
   const [scannerKey, setScannerKey] = useState(0)
   const [manualQuery, setManualQuery] = useState('')
+  const [manualPhotos, setManualPhotos] = useState<Record<string, EquipmentPhotoPreview>>({})
   const [selectedId, setSelectedId] = useState('')
   const [selectedSource, setSelectedSource] = useState<EquipmentInventorySource>('MANUAL')
   const [moveOpen, setMoveOpen] = useState(false)
@@ -92,13 +167,40 @@ export function LiveEquipmentInventoryPanel() {
   const pendingCount = Math.max(snapshot.equipment.length - checkedCount, 0)
 
   const manualMatches = useMemo(() => {
-    const words = searchText(manualQuery).split(/\s+/).filter(Boolean)
-    if (!words.length) return snapshot.equipment.filter((item) => !resultByEquipment.has(item.equipmentId)).slice(0, 20)
-    return snapshot.equipment.filter((item) => {
-      const value = searchText(`${item.equipmentId} ${item.equipmentName} ${item.area} ${item.line}`)
-      return words.every((word) => value.includes(word))
-    }).slice(0, 30)
+    const query = manualQuery.trim()
+    if (!query) return snapshot.equipment
+      .filter((item) => !resultByEquipment.has(item.equipmentId))
+      .slice(0, 20)
+
+    return snapshot.equipment
+      .map((equipment) => ({
+        equipment,
+        score: equipmentSearchScore(equipment, query) + (resultByEquipment.has(equipment.equipmentId) ? 0 : 20),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || left.equipment.equipmentId.localeCompare(right.equipment.equipmentId))
+      .slice(0, 30)
+      .map((item) => item.equipment)
   }, [manualQuery, resultByEquipment, snapshot.equipment])
+
+  useEffect(() => {
+    if (mode !== 'MANUAL' || !manualMatches.length) return
+    const missingIds = manualMatches.map((item) => item.equipmentId).filter((id) => !(id in manualPhotos))
+    if (!missingIds.length) return
+    let active = true
+    void getEquipmentPhotoPreviews(missingIds)
+      .then((photos) => {
+        if (active) setManualPhotos((current) => ({ ...current, ...photos }))
+      })
+      .catch(() => {
+        if (!active) return
+        setManualPhotos((current) => ({
+          ...current,
+          ...Object.fromEntries(missingIds.map((id) => [id, { exists: false, path: '', signedUrl: '' }])),
+        }))
+      })
+    return () => { active = false }
+  }, [manualMatches, manualPhotos, mode])
 
   const abnormalResults = useMemo(() => sessionResults.filter((item) => item.status !== 'FOUND_LABEL_OK').slice(0, 50), [sessionResults])
 
@@ -255,18 +357,29 @@ export function LiveEquipmentInventoryPanel() {
             }}/>
           </div> : <div className="inventory-manual-finder">
             <label>
-              <span>Tìm mã / tên / khu vực / dây chuyền</span>
-              <input value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Ví dụ CEV-PR-021, Coil, Line A…" autoFocus />
+              <span>Tìm nhanh · không cần đúng dấu hoặc đúng 100%</span>
+              <input value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Gõ gần đúng mã, tên máy, khu vực hoặc line…" autoFocus autoComplete="off" />
+              <small>Ví dụ: “may nhung”, “nhug”, “coil a”, “pr 21”… hệ thống vẫn ưu tiên kết quả gần nhất.</small>
             </label>
-            <div className="inventory-manual-list">
+            <div className="inventory-manual-list" aria-label="Kết quả tìm thiết bị">
               {manualMatches.length ? manualMatches.map((equipment) => {
                 const existing = resultByEquipment.get(equipment.equipmentId)
+                const photo = manualPhotos[equipment.equipmentId]
                 return <button type="button" key={equipment.equipmentId} onClick={() => chooseEquipment(equipment, 'MANUAL')}>
-                  <strong>{equipment.equipmentId}</strong>
-                  <span>{equipment.equipmentName}</span>
-                  <small>{[equipment.area, equipment.line].filter(Boolean).join(' · ') || 'Chưa có vị trí'}{existing ? ` · ${STATUS_LABEL[existing.status]}` : ''}</small>
+                  <span className="inventory-result-photo" aria-hidden="true">
+                    {photo?.exists && photo.signedUrl
+                      ? <img src={photo.signedUrl} alt="" loading="lazy" />
+                      : <span>Không ảnh</span>}
+                  </span>
+                  <span className="inventory-result-copy">
+                    <strong>{equipment.equipmentId}</strong>
+                    <b>{equipment.equipmentName}</b>
+                    <small>{[equipment.area, equipment.line].filter(Boolean).join(' · ') || 'Chưa có vị trí'}</small>
+                    {existing ? <em>{STATUS_LABEL[existing.status]}</em> : <em>Chưa kiểm trong đợt này</em>}
+                  </span>
+                  <span className="inventory-result-pick">Chọn →</span>
                 </button>
-              }) : <div className="inventory-no-match">Không tìm thấy thiết bị phù hợp.</div>}
+              }) : <div className="inventory-no-match">Không thấy kết quả gần giống. Thử gõ ngắn hơn hoặc bỏ bớt một từ.</div>}
             </div>
           </div>}
         </> : <div className="inventory-confirm-card">
@@ -275,9 +388,16 @@ export function LiveEquipmentInventoryPanel() {
             <span>{selectedSource === 'QR' ? 'ĐÃ QUÉT QR' : 'CHỌN THỦ CÔNG'}</span>
           </header>
           <div className="inventory-equipment-title">
-            <strong>{selectedEquipment.equipmentId}</strong>
-            <h3>{selectedEquipment.equipmentName}</h3>
-            <p>Vị trí hệ thống: {[selectedEquipment.area, selectedEquipment.line].filter(Boolean).join(' · ') || 'Chưa khai báo'}</p>
+            {selectedSource === 'MANUAL' ? <div className="inventory-confirm-photo">
+              {manualPhotos[selectedEquipment.equipmentId]?.exists && manualPhotos[selectedEquipment.equipmentId]?.signedUrl
+                ? <img src={manualPhotos[selectedEquipment.equipmentId].signedUrl} alt={`Ảnh ${selectedEquipment.equipmentName}`} />
+                : <span>Không có ảnh thiết bị</span>}
+            </div> : null}
+            <div>
+              <strong>{selectedEquipment.equipmentId}</strong>
+              <h3>{selectedEquipment.equipmentName}</h3>
+              <p>Vị trí hệ thống: {[selectedEquipment.area, selectedEquipment.line].filter(Boolean).join(' · ') || 'Chưa khai báo'}</p>
+            </div>
           </div>
 
           {selectedSource === 'QR' && !moveOpen ? <div className="inventory-primary-actions">
