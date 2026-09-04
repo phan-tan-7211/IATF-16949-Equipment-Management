@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './SpareParts.css'
 import { useAppRole } from './auth/AppRoleContext'
@@ -43,7 +43,7 @@ export function LiveSparePartsAutoPanel() {
   const canEdit = ['MAINTENANCE','MANAGER','ADMIN'].includes(role)
   const initialParts = getSparePartsCacheSnapshot()
   const initialEquipment = getEquipmentCacheSnapshot()
-  const initialPartsEmpty = useRef(initialParts.length===0).current
+  const [initialPartsEmpty] = useState(()=>initialParts.length===0)
   const [parts,setParts] = useState<LiveSparePart[]>(initialParts)
   const [equipment,setEquipment] = useState<LiveEquipment[]>(initialEquipment)
   const [usage,setUsage] = useState<SpareUsage[]>([])
