@@ -10,13 +10,24 @@ type Props = {
   title?: string
   helper?: string
   disabled?: boolean
+  selectionMode?: 'multiple' | 'single'
+  compact?: boolean
 }
 
 function normalize(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().trim()
 }
 
-export function EquipmentMultiSelect({ equipment, selectedIds, onChange, title = 'Máy sử dụng', helper = 'Có thể chọn nhiều thiết bị cùng lúc.', disabled = false }: Props) {
+export function EquipmentMultiSelect({
+  equipment,
+  selectedIds,
+  onChange,
+  title = 'Máy sử dụng',
+  helper = 'Có thể chọn nhiều thiết bị cùng lúc.',
+  disabled = false,
+  selectionMode = 'multiple',
+  compact = false,
+}: Props) {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
   const [photos, setPhotos] = useState<Record<string, EquipmentPhotoPreview>>({})
@@ -53,12 +64,16 @@ export function EquipmentMultiSelect({ equipment, selectedIds, onChange, title =
 
   function toggle(id: string) {
     if (disabled) return
+    if (selectionMode === 'single') {
+      onChange(selected.has(id) ? [] : [id])
+      return
+    }
     if (selected.has(id)) onChange(selectedIds.filter((value) => value !== id))
     else onChange([...selectedIds, id])
   }
 
   function selectFiltered() {
-    if (disabled) return
+    if (disabled || selectionMode === 'single') return
     const next = new Set(selectedIds)
     filtered.forEach((item) => next.add(item.equipmentId))
     onChange(Array.from(next))
@@ -66,19 +81,20 @@ export function EquipmentMultiSelect({ equipment, selectedIds, onChange, title =
 
   function clearFiltered() {
     if (disabled) return
+    if (selectionMode === 'single') { onChange([]); return }
     const filteredIds = new Set(filtered.map((item) => item.equipmentId))
     onChange(selectedIds.filter((id) => !filteredIds.has(id)))
   }
 
   const filteredSelected = filtered.filter((item) => selected.has(item.equipmentId)).length
 
-  return <section className="equipment-multi-select" aria-label={title}>
+  return <section className={`equipment-multi-select${compact ? ' compact' : ''}`} aria-label={title}>
     <header>
       <div>
         <h4>{title}</h4>
         <p>{helper}</p>
       </div>
-      <strong>{selectedIds.length} đã chọn</strong>
+      <strong>{selectionMode === 'single' ? (selectedIds.length ? 'Đã chọn' : 'Chưa chọn') : `${selectedIds.length} đã chọn`}</strong>
     </header>
 
     <div className="equipment-multi-toolbar">
@@ -94,13 +110,15 @@ export function EquipmentMultiSelect({ equipment, selectedIds, onChange, title =
         <option value="PRODUCTION">Thiết bị sản xuất</option>
         <option value="MEASUREMENT">Thiết bị đo kiểm</option>
       </select>
-      <button type="button" onClick={selectFiltered} disabled={disabled || !filtered.length}>Chọn tất cả kết quả</button>
-      <button type="button" onClick={clearFiltered} disabled={disabled || !filteredSelected}>Bỏ chọn kết quả</button>
+      {selectionMode === 'multiple' ? <>
+        <button type="button" onClick={selectFiltered} disabled={disabled || !filtered.length}>Chọn tất cả kết quả</button>
+        <button type="button" onClick={clearFiltered} disabled={disabled || !filteredSelected}>Bỏ chọn kết quả</button>
+      </> : selectedIds.length ? <button type="button" onClick={() => onChange([])} disabled={disabled}>Bỏ chọn</button> : null}
     </div>
 
     <div className="equipment-multi-summary">
       <span>{filtered.length} thiết bị phù hợp</span>
-      <span>{filteredSelected} đang chọn trong kết quả</span>
+      {selectionMode === 'multiple' ? <span>{filteredSelected} đang chọn trong kết quả</span> : null}
     </div>
 
     <div className="equipment-multi-grid">
@@ -108,7 +126,7 @@ export function EquipmentMultiSelect({ equipment, selectedIds, onChange, title =
         const checked = selected.has(item.equipmentId)
         const photo = photos[item.equipmentId]
         return <label key={item.equipmentId} className={`equipment-multi-card${checked ? ' selected' : ''}`}>
-          <input type="checkbox" checked={checked} onChange={() => toggle(item.equipmentId)} disabled={disabled} />
+          <input type={selectionMode === 'single' ? 'radio' : 'checkbox'} checked={checked} onChange={() => toggle(item.equipmentId)} disabled={disabled} />
           <div className="equipment-multi-photo">
             {photo?.exists && photo.signedUrl
               ? <img src={photo.signedUrl} alt={`Ảnh ${item.equipmentName}`} />
