@@ -133,6 +133,7 @@ function EquipmentA4({ row, photoUrl, relations }: { row: Row; photoUrl: string;
           <div><dt>Dây chuyền</dt><dd>{display(line)}</dd></div>
           <div><dt>Trạng thái</dt><dd>{display(row.status)}</dd></div>
           <div><dt>Cấp độ thiết bị</dt><dd>{criticality ? `Cấp ${criticality}` : '—'}</dd></div>
+          <div className="a4-qr-field"><dt>Mã QR</dt><dd><EquipmentQr value={qrValue} size={82} /></dd></div>
         </dl>
       </section>
       <section className="a4-equipment-info">
@@ -145,7 +146,6 @@ function EquipmentA4({ row, photoUrl, relations }: { row: Row; photoUrl: string;
           <div><dt>Nhà sản xuất</dt><dd>{display(row.manufacturer)}</dd></div>
           <div><dt>Mẫu / Model</dt><dd>{display(row.model)}</dd></div>
           <div><dt>Số sê-ri</dt><dd>{display(row.serial_number)}</dd></div>
-          <div className="a4-qr-field"><dt>Mã QR</dt><dd><EquipmentQr value={qrValue} size={76} /></dd></div>
           <div><dt>Độ chính xác</dt><dd>{display(accuracy)}</dd></div>
           <div><dt>Đang quản lý</dt><dd>{display(row.active)}</dd></div>
         </dl>
