@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import './A4PrintCenter.css'
+import './A4Bm02.css'
 import { EquipmentQr } from './components/EquipmentQr'
 import { fetchSourceRows } from './data/sourceRows'
 import { getEquipmentPhotoPreview } from './data/supabaseEquipment'
 import { loadEquipmentA4Relations, type EquipmentA4Relations } from './data/equipmentA4Data'
 
 type Row = Record<string, unknown>
-type DocType = 'equipment' | 'bm03' | 'bm05' | 'bm08' | 'bm06' | 'calibration'
+type DocType = 'equipment' | 'bm02' | 'bm03' | 'bm05' | 'bm08' | 'bm06' | 'calibration'
 
 const EMPTY_RELATIONS: EquipmentA4Relations = { spares: [], history: [], calibration: null }
 
 const DOCS: Array<{ id: DocType; label: string; code: string; table: string; idKey: string; order: string }> = [
   { id: 'equipment', label: 'Lý lịch thiết bị', code: 'CEV-BM-TBSX-01', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
+  { id: 'bm02', label: 'Danh mục quản lý thiết bị sản xuất', code: 'CEV-BM-TBSX-02', table: 'equipment_master', idKey: 'equipment_id', order: 'equipment_id' },
   { id: 'bm03', label: 'Kế hoạch bảo dưỡng máy', code: 'CEV-BM-TBSX-03', table: 'maintenance_plan', idKey: 'plan_id', order: 'created_at' },
   { id: 'bm05', label: 'Biên bản bàn giao trang thiết bị', code: 'CEV-BM-TBSX-05', table: 'equipment_handover', idKey: 'handover_id', order: 'created_at' },
   { id: 'bm08', label: 'Kết quả bảo dưỡng sửa chữa thiết bị', code: 'CEV-BM-TBSX-08', table: 'maintenance_execution', idKey: 'execution_id', order: 'created_at' },
@@ -78,6 +80,16 @@ function sourceText(row: Row | null, key: string) {
   return value === null || value === undefined ? '' : String(value).trim()
 }
 
+function sourceFirst(row: Row, keys: string[]) {
+  for (const key of keys) {
+    const direct = row[key]
+    if (direct !== null && direct !== undefined && String(direct).trim() !== '') return direct
+    const nested = sourceData(row)[key]
+    if (nested !== null && nested !== undefined && String(nested).trim() !== '') return nested
+  }
+  return ''
+}
+
 function printableFields(row: Row | null) {
   if (!row) return []
   return Object.entries(row)
@@ -99,6 +111,37 @@ function DetailTable({ rows }: { rows: Row[] }) {
   const preferred = ['itemName', 'resultMark', 'item_text', 'item', 'standard_text', 'standard', 'method_text', 'method', 'result_text', 'mark', 'repairContent', 'maintenanceContent', 'inspector']
   const columns = preferred.filter((key) => normalized.some((row) => row[key] !== undefined && row[key] !== null && row[key] !== ''))
   return <table className="a4-table"><thead><tr><th>STT</th>{columns.map((key) => <th key={key}>{LABELS[key]}</th>)}</tr></thead><tbody>{normalized.map((row, index) => <tr key={String(row.maintenance_plan_item_id || row.maintenance_result_item_id || index)}><td>{index + 1}</td>{columns.map((key) => <td key={key}>{display(row[key])}</td>)}</tr>)}</tbody></table>
+}
+
+function EquipmentManagementListA4({ rows }: { rows: Row[] }) {
+  const productionRows = rows
+    .filter((row) => String(row.equipment_type || '').toUpperCase() === 'PRODUCTION')
+    .toSorted((a, b) => String(a.equipment_id || '').localeCompare(String(b.equipment_id || ''), 'vi'))
+  const activeCount = productionRows.filter((row) => Boolean(row.active) && String(row.status || '').toUpperCase() === 'RUNNING').length
+  return <>
+    <div className="bm02-summary"><strong>Tổng số thiết bị: {productionRows.length}</strong><span>Đang hoạt động: {activeCount}</span><span>Phòng quản lý: Phòng Kỹ thuật</span></div>
+    <table className="a4-table bm02-table">
+      <colgroup>
+        <col style={{ width: '3%' }}/><col style={{ width: '7%' }}/><col style={{ width: '9%' }}/><col style={{ width: '6%' }}/><col style={{ width: '7%' }}/><col style={{ width: '7%' }}/><col style={{ width: '4%' }}/><col style={{ width: '7%' }}/><col style={{ width: '7%' }}/><col style={{ width: '7%' }}/><col style={{ width: '9%' }}/><col style={{ width: '6%' }}/><col style={{ width: '6%' }}/><col style={{ width: '7%' }}/><col style={{ width: '6%' }}/><col style={{ width: '6%' }}/><col style={{ width: '6%' }}/>
+      </colgroup>
+      <thead><tr><th>STT</th><th>Mã thiết bị</th><th>Tên thiết bị</th><th>Loại thiết bị</th><th>Kiểu máy (Model)</th><th>Nhà SX/NCC</th><th>Năm SX</th><th>Ngày mua / đưa vào SD</th><th>Vị trí lắp đặt</th><th>Bộ phận quản lý / SD</th><th>Thông số KT chính</th><th>Chu kỳ BD</th><th>Tình trạng</th><th>Ngày cập nhật cuối</th><th>Giá trị ban đầu</th><th>Ghi chú</th><th>Tài liệu liên quan</th></tr></thead>
+      <tbody>{productionRows.map((row, index) => {
+        const manufactureYear = sourceFirst(row, ['manufactureYear', 'manufacture_year', 'yearOfManufacture'])
+        const inServiceDate = sourceFirst(row, ['inServiceDate', 'purchaseDate', 'purchase_date', 'commissioningDate'])
+        const location = sourceFirst(row, ['currentArea', 'location', 'installationLocation']) || sourceFirst(row, ['currentLine'])
+        const department = row.department || sourceFirst(row, ['usingDepartment', 'managingDepartment'])
+        const technical = sourceFirst(row, ['technicalSpecification', 'specification'])
+        const cycle = sourceFirst(row, ['maintenanceCycle', 'maintenanceFrequency', 'pmFrequency'])
+        const initialValue = sourceFirst(row, ['initialValue', 'purchaseValue', 'assetValue'])
+        const note = sourceFirst(row, ['note', 'notes', 'description'])
+        const docs = sourceFirst(row, ['relatedDocuments', 'documents', 'documentRef'])
+        return <tr key={String(row.equipment_id || index)}>
+          <td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{display(row.equipment_name)}</td><td>{display(row.equipment_type)}</td><td>{display(row.model)}</td><td>{display(row.manufacturer)}</td><td className={manufactureYear ? '' : 'bm02-missing'}>{display(manufactureYear)}</td><td className={inServiceDate ? '' : 'bm02-missing'}>{inServiceDate ? dateDisplay(inServiceDate) : '—'}</td><td className={location ? '' : 'bm02-missing'}>{display(location)}</td><td>{display(department)}</td><td>{display(technical)}</td><td>{display(cycle)}</td><td className={row.status ? '' : 'bm02-missing'}>{display(row.status)}</td><td>{dateDisplay(row.updated_at)}</td><td>{display(initialValue)}</td><td>{display(note)}</td><td>{display(docs)}</td>
+        </tr>
+      })}</tbody>
+    </table>
+    {!productionRows.length ? <p className="bm02-empty">Chưa có thiết bị sản xuất trong danh mục.</p> : null}
+  </>
 }
 
 function EquipmentA4({ row, photoUrl, relations }: { row: Row; photoUrl: string; relations: EquipmentA4Relations }) {
@@ -264,6 +307,10 @@ export function A4PrintCenter() {
   useEffect(() => {
     let active = true
     setDetails([])
+    if (docType === 'bm02' || docType === 'bm06') {
+      setDetailsFor(`${docType}:all`)
+      return () => { active = false }
+    }
     if (!selected) return () => { active = false }
     const run = async () => {
       const table = docType === 'bm03' ? 'maintenance_plan_item' : docType === 'bm08' ? 'maintenance_result_item' : null
@@ -280,6 +327,7 @@ export function A4PrintCenter() {
 
   const bm06Rows = docType === 'bm06' ? records.map((row) => ({ ...sourceData(row), ...row })) : []
   const equipmentRelationsReady = docType !== 'equipment' || !selected || relationsFor === String(selected.equipment_id || '')
+  const aggregateDoc = docType === 'bm02' || docType === 'bm06'
 
   function printA4() {
     const previousTitle = document.title
@@ -302,16 +350,17 @@ export function A4PrintCenter() {
       <div><h2>Hồ sơ A4 / PDF</h2><p>Chọn biểu mẫu và hồ sơ cần in.</p></div>
       <div className="print-controls">
         <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
-        {docType !== 'bm06' ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
-        <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (docType === 'bm06' ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button>
+        {!aggregateDoc ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
+        <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (aggregateDoc ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button>
       </div>
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
     </section>
 
-    <article className={`a4-document${docType === 'bm06' ? ' landscape' : ''}${docType === 'equipment' ? ' equipment-sheet' : ''}`}>
+    <article className={`a4-document${docType === 'bm02' || docType === 'bm06' ? ' landscape' : ''}${docType === 'bm02' ? ' bm02-sheet' : ''}${docType === 'equipment' ? ' equipment-sheet' : ''}`}>
       <header className="a4-header"><div><b>CORE ELECTRONICS VIETNAM</b></div><div><strong>{config.code}</strong></div></header>
       <h1>{config.label.toUpperCase()}</h1>
-      {docType === 'bm06' ? <>
+      {docType === 'bm02' ? <EquipmentManagementListA4 rows={records}/>
+      : docType === 'bm06' ? <>
         <div className="a4-meta"><span>Số sự kiện: {bm06Rows.length}</span></div>
         <table className="a4-table"><thead><tr><th>STT</th><th>Thiết bị</th><th>Bắt đầu</th><th>Khôi phục</th><th>Nguyên nhân</th><th>Mô tả / hành động</th></tr></thead><tbody>{bm06Rows.map((row, index) => <tr key={String(row.downtime_id)}><td>{index + 1}</td><td>{display(row.equipment_id)}</td><td>{dateTimeDisplay(row.started_at)}</td><td>{dateTimeDisplay(row.ended_at)}</td><td>{display(row.causeCategory || row.cause)}</td><td>{display(row.detail)} / {display(row.actionTaken || row.recoveryAction)}</td></tr>)}</tbody></table>
       </> : selected ? <>
