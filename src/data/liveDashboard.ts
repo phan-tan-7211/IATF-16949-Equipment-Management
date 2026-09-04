@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { isClientCacheFresh, readClientCache, writeClientCache } from './clientDataCache'
 import { getCalibrationDueStatus } from '../domain/calibration'
 
 export type LiveDashboardSummary = {
@@ -34,6 +35,13 @@ export type LiveDashboardData = {
   actions: LiveDashboardAction[]
 }
 
+const DASHBOARD_CACHE_KEY = 'cev:data:dashboard'
+const DASHBOARD_CACHE_VERSION = 1
+const DASHBOARD_CACHE_FRESH_MS = 30_000
+const restoredDashboardCache = readClientCache<LiveDashboardData>(DASHBOARD_CACHE_KEY, DASHBOARD_CACHE_VERSION)
+let dashboardCache: LiveDashboardData | null = restoredDashboardCache?.data || null
+let dashboardCacheSavedAt = restoredDashboardCache?.savedAt || 0
+
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 
 function sourceValue(row: Record<string, unknown>, key: string) {
@@ -52,7 +60,19 @@ function actionRank(action: LiveDashboardAction) {
   return rank[action.kind]
 }
 
-export async function loadLiveDashboard(asOfDate = new Date().toISOString().slice(0, 10)): Promise<LiveDashboardData> {
+function persistDashboardCache(data: LiveDashboardData) {
+  dashboardCache = data
+  const saved = writeClientCache(DASHBOARD_CACHE_KEY, DASHBOARD_CACHE_VERSION, data)
+  dashboardCacheSavedAt = saved.savedAt
+}
+
+export function getDashboardCacheSnapshot(): LiveDashboardData | null {
+  return dashboardCache ? { summary: { ...dashboardCache.summary }, actions: [...dashboardCache.actions] } : null
+}
+
+export async function loadLiveDashboard(asOfDate = new Date().toISOString().slice(0, 10), options: { force?: boolean } = {}): Promise<LiveDashboardData> {
+  if (!options.force && dashboardCache && isClientCacheFresh(dashboardCacheSavedAt, DASHBOARD_CACHE_FRESH_MS)) return dashboardCache
+
   const [equipmentResult, calibrationResult, planResult, woResult, downtimeResult] = await Promise.all([
     supabase.from('equipment_master').select('equipment_id,equipment_name,equipment_type,status,active').eq('active', true),
     supabase.from('calibration_master').select('calibration_id,equipment_id,next_due_date,status'),
@@ -60,7 +80,11 @@ export async function loadLiveDashboard(asOfDate = new Date().toISOString().slic
     supabase.from('maintenance_work_order').select('work_order_id,equipment_id,status,priority,reason,created_at'),
     supabase.from('downtime_event').select('downtime_id,equipment_id,started_at,ended_at'),
   ])
-  for (const result of [equipmentResult, calibrationResult, planResult, woResult, downtimeResult]) if (result.error) throw result.error
+  const failed = [equipmentResult, calibrationResult, planResult, woResult, downtimeResult].find((result) => result.error)
+  if (failed?.error) {
+    if (dashboardCache) return dashboardCache
+    throw failed.error
+  }
 
   const equipment = (equipmentResult.data || []) as Array<Record<string, unknown>>
   const calibration = (calibrationResult.data || []) as Array<Record<string, unknown>>
@@ -135,5 +159,7 @@ export async function loadLiveDashboard(asOfDate = new Date().toISOString().slic
   })
 
   actions.sort((a, b) => actionRank(a) - actionRank(b) || a.equipmentId.localeCompare(b.equipmentId))
-  return { summary, actions }
+  const result = { summary, actions }
+  persistDashboardCache(result)
+  return result
 }

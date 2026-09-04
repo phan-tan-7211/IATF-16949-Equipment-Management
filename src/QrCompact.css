@@ -1,13 +1,14 @@
-#root:has(.qr-page) {height:100dvh;display:flex;flex-direction:column}
-.app-shell:has(.qr-page) {flex:1;min-height:0}
-#root:has(.qr-page)>.pwa-banner {position:static;inset:auto;flex-shrink:0;margin:0 0 0 236px;border-radius:0;box-shadow:none}
-#root:has(.qr-page)>.pwa-banner span {flex:1;min-width:0}
-#root:has(.qr-page)>.pwa-banner button {flex-shrink:0}
-@media(max-width:900px) {#root:has(.qr-page)>.pwa-banner {margin:0}}
-/* QR owns the available workspace height; other workspaces keep their layout. */
-.app-body:has(.qr-page) {height:100%;min-height:0;display:flex;flex-direction:column}
-.app-body:has(.qr-page) .topbar {flex-shrink:0}
-.main-content:has(.qr-page) {flex:1;min-height:0;width:100%;padding:12px 20px;display:flex}
+#root:has(.workspace-keepalive-pane:not([hidden])>.qr-page) {height:100dvh;display:flex;flex-direction:column}
+.app-shell:has(.workspace-keepalive-pane:not([hidden])>.qr-page) {flex:1;min-height:0}
+#root:has(.workspace-keepalive-pane:not([hidden])>.qr-page)>.pwa-banner {position:static;inset:auto;flex-shrink:0;margin:0 0 0 236px;border-radius:0;box-shadow:none}
+#root:has(.workspace-keepalive-pane:not([hidden])>.qr-page)>.pwa-banner span {flex:1;min-width:0}
+#root:has(.workspace-keepalive-pane:not([hidden])>.qr-page)>.pwa-banner button {flex-shrink:0}
+@media(max-width:900px) {#root:has(.workspace-keepalive-pane:not([hidden])>.qr-page)>.pwa-banner {margin:0}}
+/* QR owns the available workspace height only while its keep-alive pane is active. */
+.app-body:has(.workspace-keepalive-pane:not([hidden])>.qr-page) {height:100%;min-height:0;display:flex;flex-direction:column}
+.app-body:has(.workspace-keepalive-pane:not([hidden])>.qr-page) .topbar {flex-shrink:0}
+.main-content:has(>.workspace-keepalive-pane:not([hidden])>.qr-page) {flex:1;min-height:0;width:100%;padding:12px 20px;display:flex}
+.workspace-keepalive-pane:not([hidden]):has(>.qr-page) {flex:1;min-width:0;min-height:0;display:flex;width:100%}
 .qr-page {flex:1;min-width:0;min-height:0;width:100%;grid-template-rows:minmax(0,1fr) auto;gap:8px}
 .qr-hero {align-items:center;gap:8px}
 .qr-hero h2 {font-size:1.25rem;margin:0}
@@ -34,8 +35,8 @@
 .qr-scan-feedback {padding:12px;gap:5px;max-height:95%;overflow:hidden}
 .qr-feedback-symbol {width:36px;height:36px;font-size:26px}
 @media(max-width:900px) {
-  .main-content:has(.qr-page) {padding:8px 12px calc(72px + env(safe-area-inset-bottom))}
-  .app-body:has(.qr-page) .topbar {min-height:60px;padding:8px 12px;gap:8px}
+  .main-content:has(>.workspace-keepalive-pane:not([hidden])>.qr-page) {padding:8px 12px calc(72px + env(safe-area-inset-bottom))}
+  .app-body:has(.workspace-keepalive-pane:not([hidden])>.qr-page) .topbar {min-height:60px;padding:8px 12px;gap:8px}
 }
 @media(max-height:550px) {
   .qr-hero,.qr-search-hint,.qr-camera-prompt>span {display:none}

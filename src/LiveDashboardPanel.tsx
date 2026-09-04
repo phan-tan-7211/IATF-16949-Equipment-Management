@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import './Dashboard.css'
-import { loadLiveDashboard, type LiveDashboardAction, type LiveDashboardSummary } from './data/liveDashboard'
+import { getDashboardCacheSnapshot, loadLiveDashboard, type LiveDashboardAction, type LiveDashboardSummary } from './data/liveDashboard'
 
 const EMPTY: LiveDashboardSummary = {
   equipmentTotal: 0,
@@ -18,11 +18,17 @@ const EMPTY: LiveDashboardSummary = {
 }
 
 const kindLabel: Record<LiveDashboardAction['kind'], string> = {
-  DOWN: 'DOWN',
-  CRITICAL_WO: 'WO CRITICAL',
+  DOWN: 'DỪNG MÁY',
+  CRITICAL_WO: 'LỆNH KHẨN CẤP',
   CALIBRATION_OVERDUE: 'HIỆU CHUẨN',
-  PM_OVERDUE: 'PM',
-  DOWNTIME_OPEN: 'DOWNTIME',
+  PM_OVERDUE: 'BẢO DƯỠNG ĐỊNH KỲ',
+  DOWNTIME_OPEN: 'DỪNG MÁY',
+}
+
+type DashboardTarget = 'qr' | 'maintenance' | 'equipment' | 'inspection'
+
+type Props = {
+  onNavigate?: (view: DashboardTarget) => void
 }
 
 function dateText(value: string) {
@@ -31,15 +37,22 @@ function dateText(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('vi-VN')
 }
 
-export function LiveDashboardPanel() {
-  const [summary, setSummary] = useState<LiveDashboardSummary>(EMPTY)
-  const [actions, setActions] = useState<LiveDashboardAction[]>([])
-  const [loading, setLoading] = useState(true)
+export function LiveDashboardPanel({ onNavigate }: Props) {
+  const snapshot = getDashboardCacheSnapshot()
+  const [summary, setSummary] = useState<LiveDashboardSummary>(() => snapshot?.summary || EMPTY)
+  const [actions, setActions] = useState<LiveDashboardAction[]>(() => snapshot?.actions || [])
+  const [loading, setLoading] = useState(!snapshot)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    loadLiveDashboard()
+    const cached = getDashboardCacheSnapshot()
+    if (cached) {
+      setSummary(cached.summary)
+      setActions(cached.actions)
+      setLoading(false)
+    }
+    loadLiveDashboard(new Date().toISOString().slice(0, 10), { force: Boolean(cached) })
       .then((result) => {
         if (!active) return
         setSummary(result.summary)
@@ -47,7 +60,7 @@ export function LiveDashboardPanel() {
         setError('')
       })
       .catch((cause: unknown) => {
-        if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải Dashboard')
+        if (active && !cached) setError(cause instanceof Error ? cause.message : 'Không thể tải tổng quan')
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -60,42 +73,49 @@ export function LiveDashboardPanel() {
   return <div className="dashboard-page">
     <section className="dashboard-command" aria-labelledby="live-dashboard-title">
       <div>
-        <p className="eyebrow">IATF 16949 · Equipment control center</p>
+        <p className="eyebrow">IATF 16949 · Trung tâm kiểm soát thiết bị</p>
         <h2 id="live-dashboard-title">Trung tâm điều hành thiết bị</h2>
-        <p>Ưu tiên bất thường cần xử lý trước, sau đó mới đến KPI tổng hợp.</p>
+        <p>Ưu tiên bất thường cần xử lý trước, sau đó mới đến chỉ số tổng hợp.</p>
       </div>
-      <div className="dashboard-live"><span />SUPABASE LIVE</div>
+      <div className="dashboard-live"><span />DỮ LIỆU TRỰC TIẾP</div>
+    </section>
+
+    <section className="dashboard-mobile-actions" aria-label="Thao tác nhanh">
+      <button type="button" className="primary" onClick={() => onNavigate?.('qr')}><span aria-hidden="true">▣</span><strong>Quét QR</strong><small>Mở thiết bị ngay</small></button>
+      <button type="button" onClick={() => onNavigate?.('maintenance')}><span aria-hidden="true">⚒</span><strong>Công việc</strong><small>Lệnh bảo trì & kế hoạch</small></button>
+      <button type="button" onClick={() => onNavigate?.('equipment')}><span aria-hidden="true">▤</span><strong>Thiết bị</strong><small>Danh mục & hồ sơ</small></button>
+      <button type="button" onClick={() => onNavigate?.('inspection')}><span aria-hidden="true">✓</span><strong>Kiểm tra</strong><small>Kiểm tra hằng ngày</small></button>
     </section>
 
     {loading ? <section className="dashboard-state" role="status">Đang tải dữ liệu thiết bị…</section> : null}
-    {error ? <section className="dashboard-state error" role="alert"><b>Không tải được Dashboard</b><span>{error}</span></section> : null}
+    {error ? <section className="dashboard-state error" role="alert"><b>Không tải được tổng quan</b><span>{error}</span></section> : null}
 
     {!loading && !error ? <>
       <section className="dashboard-priority-grid" aria-label="Các chỉ số cần hành động">
         <article className={summary.downCount ? 'needs-action' : ''}>
-          <span>Máy DOWN</span><strong>{summary.downCount}</strong><small>{summary.downCount ? 'Cần xử lý ngay' : 'Không có máy DOWN'}</small>
+          <span>Máy đang dừng</span><strong>{summary.downCount}</strong><small>{summary.downCount ? 'Cần xử lý ngay' : 'Không có máy đang dừng'}</small>
         </article>
         <article className={summary.criticalOpen ? 'needs-action' : ''}>
-          <span>WO CRITICAL</span><strong>{summary.criticalOpen}</strong><small>{summary.workOrderOpen} Work Order đang mở</small>
+          <span>Lệnh khẩn cấp</span><strong>{summary.criticalOpen}</strong><small>{summary.workOrderOpen} lệnh công việc đang mở</small>
         </article>
         <article className={summary.calibrationOverdue ? 'warning' : ''}>
-          <span>Calibration quá hạn</span><strong>{summary.calibrationOverdue}</strong><small>{summary.calibrationTotal} hồ sơ hiệu chuẩn</small>
+          <span>Hiệu chuẩn quá hạn</span><strong>{summary.calibrationOverdue}</strong><small>{summary.calibrationTotal} hồ sơ hiệu chuẩn</small>
         </article>
         <article className={summary.pmOverdue ? 'warning' : ''}>
-          <span>PM quá hạn</span><strong>{summary.pmOverdue}</strong><small>Kế hoạch cần cập nhật</small>
+          <span>Bảo dưỡng định kỳ quá hạn</span><strong>{summary.pmOverdue}</strong><small>Kế hoạch cần cập nhật</small>
         </article>
       </section>
 
       <section className="dashboard-overview-strip" aria-label="Tình trạng hệ thống">
         <div><span>Tổng thiết bị</span><b>{summary.equipmentTotal}</b><small>{summary.productionCount} sản xuất · {summary.measurementCount} đo kiểm</small></div>
-        <div><span>Đang hoạt động</span><b>{summary.runningCount}</b><small>Equipment Master</small></div>
-        <div><span>Downtime mở</span><b>{summary.downtimeOpen}</b><small>{summary.downtimeMinutes.toLocaleString('vi-VN')} phút ghi nhận</small></div>
-        <div><span>Cần chú ý ngay</span><b>{urgentCount}</b><small>DOWN + Critical WO + open downtime</small></div>
+        <div><span>Đang hoạt động</span><b>{summary.runningCount}</b><small>Danh mục thiết bị</small></div>
+        <div><span>Sự kiện dừng máy đang mở</span><b>{summary.downtimeOpen}</b><small>{summary.downtimeMinutes.toLocaleString('vi-VN')} phút ghi nhận</small></div>
+        <div><span>Cần chú ý ngay</span><b>{urgentCount}</b><small>Máy dừng + lệnh khẩn cấp + sự kiện dừng máy đang mở</small></div>
       </section>
 
       <section className="dashboard-action-panel" aria-labelledby="dashboard-actions-title">
         <header>
-          <div><p className="eyebrow">Action queue</p><h3 id="dashboard-actions-title">Việc cần xử lý</h3></div>
+          <div><p className="eyebrow">Danh sách ưu tiên</p><h3 id="dashboard-actions-title">Việc cần xử lý</h3></div>
           <span className={actions.length ? 'dashboard-action-count active' : 'dashboard-action-count'}>{actions.length} mục</span>
         </header>
 
@@ -106,12 +126,12 @@ export function LiveDashboardPanel() {
             <div className="dashboard-action-detail"><b>{action.title}</b><span>{action.detail}</span></div>
             <div className="dashboard-action-source"><b>{action.sourceId || '—'}</b><span>{dateText(action.date)}</span></div>
           </article>)}
-        </div> : <div className="dashboard-clear-state"><strong>Không có cảnh báo ưu tiên.</strong><span>Không có DOWN, Critical WO, overdue calibration/PM hoặc downtime mở.</span></div>}
+        </div> : <div className="dashboard-clear-state"><strong>Không có cảnh báo ưu tiên.</strong><span>Không có máy dừng, lệnh khẩn cấp, hiệu chuẩn/bảo dưỡng quá hạn hoặc sự kiện dừng máy đang mở.</span></div>}
       </section>
 
       <section className="dashboard-workflow">
-        <p className="eyebrow">Controlled workflow</p>
-        <div><span>Kiểm tra ngày</span><b>→</b><span>Work Order</span><b>→</b><span>Phê duyệt</span><b>→</b><span>Thực hiện</span><b>→</b><span>Xác nhận</span><b>→</b><span>BM-05 bàn giao</span><b>→</b><span>KPI</span></div>
+        <p className="eyebrow">Luồng kiểm soát</p>
+        <div><span>Kiểm tra ngày</span><b>→</b><span>Lệnh công việc</span><b>→</b><span>Phê duyệt</span><b>→</b><span>Thực hiện</span><b>→</b><span>Xác nhận</span><b>→</b><span>BM-05 bàn giao</span><b>→</b><span>Chỉ số</span></div>
       </section>
     </> : null}
   </div>

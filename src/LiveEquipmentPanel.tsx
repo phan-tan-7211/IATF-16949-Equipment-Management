@@ -1,431 +1,188 @@
 import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
 import './Equipment.css'
+import './EquipmentSheetView.css'
 import { EquipmentProfile } from './EquipmentProfile'
+import { EquipmentMasterEditFields } from './EquipmentMasterEditFields'
+import { EquipmentBulkEditor } from './components/EquipmentBulkEditor'
+import { canEditEquipment, useAppRole } from './auth/AppRoleContext'
+import { deriveEquipmentCriticality } from './data/autoRegistration'
+import { bulkUpdateEquipment, type EquipmentBulkPatch } from './data/equipmentBulkEdit'
+import { buildEquipmentMasterSuggestions } from './data/equipmentMasterFields'
 import { type LiveEquipment } from './data/liveEquipment'
 import { checkEquipmentDeletion, deleteUnusedEquipment } from './data/equipmentDeletion'
-import {
-  getEquipmentPhotoPreview,
-  getEquipmentPhotoPreviews,
-  loadSupabaseEquipment,
-  updateSupabaseEquipment,
-  uploadEquipmentPhoto,
-  type EquipmentEditInput,
-} from './data/supabaseEquipment'
+import { deleteEquipmentPhotos } from './data/equipmentPhotoDelete'
+import { getEquipmentPhotoCacheSnapshot, invalidateEquipmentPhotoCache, loadCachedEquipmentPhotoPreview, loadCachedEquipmentPhotoPreviews } from './data/equipmentPhotoCache'
+import { updateEquipmentDetails, type EquipmentMasterEditInput } from './data/equipmentMasterEdit'
+import { getEquipmentCacheSnapshot, loadSupabaseEquipment, uploadEquipmentPhoto } from './data/supabaseEquipment'
 
-const statusLabel: Record<string, string> = {
-  RUNNING: 'Hoạt động',
-  DOWN: 'Sự cố',
-  MAINTENANCE: 'Bảo trì',
-  STOPPED: 'Dừng',
-  DISPOSED: 'Thanh lý',
-  UNKNOWN: 'Chưa rõ',
+const statusLabel: Record<string, string> = { RUNNING: 'Hoạt động', DOWN: 'Sự cố', MAINTENANCE: 'Bảo trì', STOPPED: 'Dừng', DISPOSED: 'Thanh lý', UNKNOWN: 'Chưa rõ' }
+type PhotoInfo = { state: 'loading' | 'yes' | 'no' | 'error'; url: string }
+type SortDirection = 'asc' | 'desc'
+type ColumnKey = 'equipmentId'|'equipmentName'|'usingDepartment'|'managingDepartment'|'currentArea'|'currentLine'|'equipmentCategory'|'manufacturer'|'model'|'serialNumber'|'equipmentType'|'status'|'criticality'|'origin'|'accuracy'|'inServiceDate'|'warrantyUntil'|'relatedDocuments'|'updatedAt'
+type ColumnDef = { key: ColumnKey; label: string; defaultVisible?: boolean; group: 'Nhận diện'|'Quản lý'|'Kỹ thuật'|'Vòng đời'|'Tài liệu' }
+type ColumnFilters = Partial<Record<ColumnKey, string[]>>
+
+const COLUMN_STORAGE_KEY = 'cev-equipment-visible-columns-v1'
+const COLUMNS: ColumnDef[] = [
+  { key:'equipmentId',label:'Mã thiết bị',defaultVisible:true,group:'Nhận diện' },
+  { key:'equipmentName',label:'Tên thiết bị',defaultVisible:true,group:'Nhận diện' },
+  { key:'usingDepartment',label:'Bộ phận sử dụng',defaultVisible:true,group:'Quản lý' },
+  { key:'managingDepartment',label:'Bộ phận quản lý',group:'Quản lý' },
+  { key:'currentArea',label:'Khu vực',group:'Quản lý' },
+  { key:'currentLine',label:'Dây chuyền',group:'Quản lý' },
+  { key:'equipmentCategory',label:'Nhóm thiết bị',group:'Nhận diện' },
+  { key:'manufacturer',label:'Hãng / nhà sản xuất',group:'Nhận diện' },
+  { key:'model',label:'Mẫu máy',defaultVisible:true,group:'Nhận diện' },
+  { key:'serialNumber',label:'Số sê-ri',defaultVisible:true,group:'Nhận diện' },
+  { key:'equipmentType',label:'Loại',defaultVisible:true,group:'Nhận diện' },
+  { key:'status',label:'Trạng thái',defaultVisible:true,group:'Quản lý' },
+  { key:'criticality',label:'Cấp độ A/B/C/D',group:'Kỹ thuật' },
+  { key:'origin',label:'Xuất xứ',group:'Nhận diện' },
+  { key:'accuracy',label:'Độ chính xác',group:'Kỹ thuật' },
+  { key:'inServiceDate',label:'Ngày đưa vào sử dụng',group:'Vòng đời' },
+  { key:'warrantyUntil',label:'Bảo hành đến',group:'Vòng đời' },
+  { key:'relatedDocuments',label:'Tài liệu liên quan',group:'Tài liệu' },
+  { key:'updatedAt',label:'Cập nhật gần nhất',group:'Vòng đời' },
+]
+
+function clipboardFileExtension(mimeType: string) { if (mimeType === 'image/png') return 'png'; if (mimeType === 'image/webp') return 'webp'; if (mimeType === 'image/gif') return 'gif'; return 'jpg' }
+function booleanSelectValue(value: boolean | undefined) { return value === true ? 'YES' : value === false ? 'NO' : '' }
+function parseBooleanSelect(value: string) { return value === 'YES' ? true : value === 'NO' ? false : undefined }
+function clean(value: unknown) { return String(value || '').trim() }
+function columnValue(row: LiveEquipment, key: ColumnKey) {
+  if (key === 'equipmentType') return row.equipmentType === 'MEASUREMENT' ? 'Đo kiểm' : 'Sản xuất'
+  if (key === 'status') return statusLabel[row.status] || row.status
+  if (key === 'updatedAt') return row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('vi-VN') : ''
+  return clean(row[key as keyof LiveEquipment])
 }
+function documentLinks(value: string) { return value.split(/[\n;,]+/).map((item) => item.trim()).filter((item) => /^https?:\/\//i.test(item)) }
+function includesQuery(row: LiveEquipment, query: string) { if (!query) return true; return COLUMNS.map((col) => columnValue(row,col.key)).join(' ').toLocaleLowerCase().includes(query) }
+function defaultVisibleColumns() { return COLUMNS.filter((col) => col.defaultVisible).map((col) => col.key) }
+function loadVisibleColumns(): ColumnKey[] { try { const parsed = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || '[]'); const valid = Array.isArray(parsed) ? parsed.filter((key): key is ColumnKey => COLUMNS.some((col) => col.key === key)) : []; return valid.length ? valid : defaultVisibleColumns() } catch { return defaultVisibleColumns() } }
+function photoCacheInitialState(): Record<string, PhotoInfo> { const snapshot=getEquipmentPhotoCacheSnapshot(); return Object.fromEntries(Object.entries(snapshot).map(([id,preview])=>[id,{state:preview.exists?'yes':'no',url:preview.signedUrl} as PhotoInfo])) }
 
-type PhotoInfo = {
-  state: 'loading' | 'yes' | 'no' | 'error'
-  url: string
-}
-
-function clipboardFileExtension(mimeType: string) {
-  if (mimeType === 'image/png') return 'png'
-  if (mimeType === 'image/webp') return 'webp'
-  if (mimeType === 'image/gif') return 'gif'
-  return 'jpg'
-}
-
-function toDraft(row: LiveEquipment): EquipmentEditInput {
+function toDraft(row: LiveEquipment): EquipmentMasterEditInput {
+  const criticalityFacts = row.criticalityFacts
   return {
-    oldEquipmentId: row.equipmentId,
-    equipmentId: row.equipmentId,
-    equipmentType: row.equipmentType,
-    equipmentName: row.equipmentName,
-    department: row.usingDepartment || row.managingDepartment || row.currentArea || '',
-    model: row.model,
-    serialNumber: row.serialNumber,
-    status: row.status || 'RUNNING',
+    equipmentId: row.equipmentId, equipmentType: row.equipmentType, equipmentName: row.equipmentName,
+    equipmentCategory: row.equipmentCategory || '', manufacturer: row.manufacturer || '', model: row.model || '', serialNumber: row.serialNumber || '',
+    department: row.usingDepartment || '', currentArea: row.currentArea || '', currentLine: row.currentLine || '', managingDepartment: row.managingDepartment || '',
+    technicalSpecification: row.technicalSpecification || '', description: row.description || '', accuracy: row.accuracy || '', origin: row.origin || '',
+    manufactureDate: row.manufactureDate || '', inServiceDate: row.inServiceDate || '', warrantyUntil: row.warrantyUntil || '', warrantyContact: row.warrantyContact || '',
+    note: row.note || '', relatedDocuments: row.relatedDocuments || '', status: row.status || 'RUNNING',
+    controlsProductQuality: criticalityFacts?.controlsProductQuality, specialCharacteristicImpact: criticalityFacts?.specialCharacteristicImpact,
+    stopsProduction: criticalityFacts?.stopsProduction, hasBackup: criticalityFacts?.hasBackup, capacityImpact: criticalityFacts?.capacityImpact,
   }
 }
 
-function includesQuery(row: LiveEquipment, query: string) {
-  if (!query) return true
-  const haystack = [
-    row.equipmentId,
-    row.equipmentName,
-    row.serialNumber,
-    row.model,
-    row.manufacturer,
-    row.usingDepartment,
-    row.managingDepartment,
-    row.currentArea,
-  ].join(' ').toLocaleLowerCase()
-  return haystack.includes(query)
+function mergeDraftIntoRow(row: LiveEquipment, draft: EquipmentMasterEditInput, criticality: string): LiveEquipment {
+  if (row.equipmentId !== draft.equipmentId.trim().toUpperCase()) return row
+  return {
+    ...row,
+    equipmentName: draft.equipmentName.trim(),
+    equipmentType: draft.equipmentType,
+    equipmentCategory: draft.equipmentCategory.trim(),
+    manufacturer: draft.manufacturer.trim(),
+    model: draft.model.trim(),
+    serialNumber: draft.serialNumber.trim(),
+    currentArea: draft.currentArea.trim(),
+    currentLine: draft.currentLine.trim(),
+    managingDepartment: draft.managingDepartment.trim(),
+    usingDepartment: draft.department.trim(),
+    technicalSpecification: draft.technicalSpecification.trim(),
+    description: draft.description.trim(),
+    accuracy: draft.accuracy.trim(),
+    origin: draft.origin.trim(),
+    manufactureDate: draft.manufactureDate.trim(),
+    inServiceDate: draft.inServiceDate.trim(),
+    warrantyUntil: draft.warrantyUntil.trim(),
+    warrantyContact: draft.warrantyContact.trim(),
+    note: draft.note.trim(),
+    relatedDocuments: draft.relatedDocuments.trim(),
+    status: draft.status.trim() || 'RUNNING',
+    criticality,
+    criticalityFacts: {
+      controlsProductQuality: draft.controlsProductQuality,
+      specialCharacteristicImpact: draft.specialCharacteristicImpact,
+      stopsProduction: draft.stopsProduction,
+      hasBackup: draft.hasBackup,
+      capacityImpact: draft.capacityImpact,
+    },
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function mergeBulkIntoRow(row: LiveEquipment, ids: Set<string>, patch: EquipmentBulkPatch): LiveEquipment {
+  if (!ids.has(row.equipmentId)) return row
+  return {
+    ...row,
+    usingDepartment: patch.department ?? row.usingDepartment,
+    managingDepartment: patch.managingDepartment ?? row.managingDepartment,
+    currentArea: patch.currentArea ?? row.currentArea,
+    currentLine: patch.currentLine ?? row.currentLine,
+    equipmentCategory: patch.equipmentCategory ?? row.equipmentCategory,
+    status: patch.status ?? row.status,
+    updatedAt: new Date().toISOString(),
+  }
 }
 
 export function LiveEquipmentPanel() {
-  const [rows, setRows] = useState<LiveEquipment[]>([])
-  const [photos, setPhotos] = useState<Record<string, PhotoInfo>>({})
-  const [editing, setEditing] = useState<EquipmentEditInput | null>(null)
-  const [profileId, setProfileId] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-  const [uploadingId, setUploadingId] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [query, setQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
+  const role = useAppRole(); const canBulkEdit = canEditEquipment(role)
+  const [rows,setRows]=useState<LiveEquipment[]>(()=>getEquipmentCacheSnapshot()); const [photos,setPhotos]=useState<Record<string,PhotoInfo>>(photoCacheInitialState); const [editing,setEditing]=useState<EquipmentMasterEditInput|null>(null); const [profileId,setProfileId]=useState('')
+  const [loading,setLoading]=useState(()=>getEquipmentCacheSnapshot().length===0); const [error,setError]=useState(''); const [message,setMessage]=useState(''); const [uploadingId,setUploadingId]=useState(''); const [deletingPhotoId,setDeletingPhotoId]=useState(''); const [saving,setSaving]=useState(false); const [deleting,setDeleting]=useState(false)
+  const [query,setQuery]=useState(''); const [sortKey,setSortKey]=useState<ColumnKey>('equipmentId'); const [sortDirection,setSortDirection]=useState<SortDirection>('asc'); const [bulkMode,setBulkMode]=useState(false); const [bulkSaving,setBulkSaving]=useState(false); const [selectedIds,setSelectedIds]=useState<Set<string>>(()=>new Set())
+  const [visibleColumns,setVisibleColumns]=useState<ColumnKey[]>(loadVisibleColumns); const [columnPickerOpen,setColumnPickerOpen]=useState(false); const [filterColumn,setFilterColumn]=useState<ColumnKey|null>(null); const [filterSearch,setFilterSearch]=useState(''); const [columnFilters,setColumnFilters]=useState<ColumnFilters>({})
 
-  async function refreshOnePhoto(equipmentId: string) {
-    setPhotos((current) => ({ ...current, [equipmentId]: { state: 'loading', url: current[equipmentId]?.url || '' } }))
-    try {
-      const preview = await getEquipmentPhotoPreview(equipmentId)
-      setPhotos((current) => ({
-        ...current,
-        [equipmentId]: { state: preview.exists ? 'yes' : 'no', url: preview.signedUrl },
-      }))
-      return preview.exists
-    } catch {
-      setPhotos((current) => ({ ...current, [equipmentId]: { state: 'error', url: '' } }))
-      return false
-    }
-  }
+  const masterSuggestions=useMemo(()=>buildEquipmentMasterSuggestions(rows.map((row)=>({...row,department:row.usingDepartment}))),[rows])
+  useEffect(()=>{ localStorage.setItem(COLUMN_STORAGE_KEY,JSON.stringify(visibleColumns)) },[visibleColumns])
 
-  async function refreshPhotoStates(result: LiveEquipment[]) {
-    const loadingState = Object.fromEntries(result.map((row) => [row.equipmentId, { state: 'loading', url: '' } as PhotoInfo]))
-    setPhotos(loadingState)
-    try {
-      const previews = await getEquipmentPhotoPreviews(result.map((row) => row.equipmentId))
-      setPhotos(Object.fromEntries(result.map((row) => {
-        const preview = previews[row.equipmentId]
-        return [row.equipmentId, {
-          state: preview?.exists ? 'yes' : 'no',
-          url: preview?.signedUrl || '',
-        } as PhotoInfo]
-      })))
-    } catch {
-      setPhotos(Object.fromEntries(result.map((row) => [row.equipmentId, { state: 'error', url: '' } as PhotoInfo])))
-    }
-  }
+  async function refreshOnePhoto(equipmentId:string,force=false){ setPhotos((current)=>({...current,[equipmentId]:{state:'loading',url:current[equipmentId]?.url||''}})); try{const preview=await loadCachedEquipmentPhotoPreview(equipmentId,force);setPhotos((current)=>({...current,[equipmentId]:{state:preview.exists?'yes':'no',url:preview.signedUrl}}));return preview.exists}catch{setPhotos((current)=>({...current,[equipmentId]:{state:'error',url:current[equipmentId]?.url||''}}));return false} }
+  async function refreshPhotoStates(result:LiveEquipment[]){ setPhotos((current)=>Object.fromEntries(result.map((row)=>[row.equipmentId,current[row.equipmentId]||{state:'loading',url:''} as PhotoInfo]))); try{const previews=await loadCachedEquipmentPhotoPreviews(result.map((row)=>row.equipmentId));setPhotos((current)=>Object.fromEntries(result.map((row)=>{const preview=previews[row.equipmentId];return [row.equipmentId,preview?{state:preview.exists?'yes':'no',url:preview.signedUrl||''} as PhotoInfo:current[row.equipmentId]||{state:'loading',url:''} as PhotoInfo]})))}catch{setPhotos((current)=>Object.fromEntries(result.map((row)=>[row.equipmentId,current[row.equipmentId]||{state:'error',url:''} as PhotoInfo])))} }
+  async function reloadEquipment(force=false){const block=force||rows.length===0;if(block)setLoading(true);try{const result=await loadSupabaseEquipment({force});setRows(result);setError('');void refreshPhotoStates(result)}catch(cause){setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')}finally{if(block)setLoading(false)}}
+  useEffect(()=>{const snapshot=getEquipmentCacheSnapshot();if(snapshot.length){setRows(snapshot);setLoading(false);void refreshPhotoStates(snapshot);void loadSupabaseEquipment({force:true}).then((result)=>{setRows(result);setError('');void refreshPhotoStates(result)}).catch(()=>undefined)}else{setLoading(true);void loadSupabaseEquipment({force:true}).then((result)=>{setRows(result);setError('');void refreshPhotoStates(result)}).catch((cause)=>setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')).finally(()=>setLoading(false))}},[])
+  useEffect(()=>{if(!editing)return;const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape')setEditing(null)};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown)},[editing])
+  const editCriticality=editing?deriveEquipmentCriticality(editing):''
 
-  async function reloadEquipment() {
-    setLoading(true)
-    try {
-      const result = await loadSupabaseEquipment()
-      setRows(result)
-      setError('')
-      void refreshPhotoStates(result)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Không thể tải Equipment Master')
-    } finally {
-      setLoading(false)
-    }
-  }
+  async function handleSave(){if(!editing)return;if(!editing.equipmentName.trim()){setMessage('Tên thiết bị không được để trống.');return}if(!editCriticality){setMessage('Trả lời đủ 5 câu về mức độ quan trọng trước khi lưu.');return}setSaving(true);setMessage('');const draft=editing;try{const result=await updateEquipmentDetails(draft);setRows((current)=>current.map((row)=>mergeDraftIntoRow(row,draft,result.criticality)));setMessage(`Đã lưu ${result.equipmentId} · Cấp ${result.criticality}`);setEditing(null)}catch(cause){setMessage(cause instanceof Error?cause.message:'Không thể lưu thay đổi')}finally{setSaving(false)}}
+  async function handleDelete(){if(!editing||deleting||saving)return;const equipmentId=editing.equipmentId.trim().toUpperCase();setDeleting(true);setMessage('');try{const check=await checkEquipmentDeletion(equipmentId);if(!check.exists){setMessage(`${equipmentId} không còn tồn tại.`);setEditing(null);await reloadEquipment(true);return}if(!check.canDelete){setMessage(`Không thể xóa ${equipmentId} vì đã có dữ liệu liên quan. ${check.blockers.map((item)=>`${item.label}: ${item.count}`).join(' · ')}`);return}if(!window.confirm(`Xóa ${equipmentId} - ${editing.equipmentName}?\n\nThiết bị chưa có dữ liệu nghiệp vụ liên quan nên có thể xóa. Hệ thống cũng sẽ xóa toàn bộ ảnh của mã này. Hành động không thể hoàn tác.`))return;const result=await deleteUnusedEquipment(equipmentId);invalidateEquipmentPhotoCache(equipmentId);setRows((current)=>current.filter((row)=>row.equipmentId!==equipmentId));setPhotos((current)=>{const next={...current};delete next[equipmentId];return next});setProfileId('');setEditing(null);setMessage(`Đã xóa ${equipmentId}${Number(result.removedPhotos||0)>0?` và ${result.removedPhotos} ảnh`:''}.`)}catch(cause){setMessage(cause instanceof Error?cause.message:'Không thể xóa thiết bị')}finally{setDeleting(false)}}
+  async function confirmPhotoReplacement(equipmentId:string){const current=photos[equipmentId];if(current?.state==='yes')return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`);if(!current||current.state==='loading'||current.state==='error'){const exists=await refreshOnePhoto(equipmentId);if(exists)return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`)}return true}
+  async function uploadAndRefresh(equipmentId:string,file:File){setUploadingId(equipmentId);setMessage('');try{await uploadEquipmentPhoto(equipmentId,file);invalidateEquipmentPhotoCache(equipmentId);await refreshOnePhoto(equipmentId,true);setMessage(`Đã cập nhật ảnh ${equipmentId}`)}catch(cause){setMessage(cause instanceof Error?`Không thể tải ảnh: ${cause.message}`:'Không thể tải ảnh')}finally{setUploadingId('')}}
+  async function handlePhotoUpload(equipmentId:string,file:File|undefined){if(!file||!await confirmPhotoReplacement(equipmentId))return;await uploadAndRefresh(equipmentId,file)}
+  async function handlePhotoDelete(equipmentId:string){if(!photos[equipmentId]?.url||uploadingId||deletingPhotoId)return;if(!window.confirm(`Xóa ảnh hiện tại của ${equipmentId}?\n\nChỉ ảnh sẽ bị xóa. Dữ liệu thiết bị và lịch sử không thay đổi.`))return;setDeletingPhotoId(equipmentId);setMessage('');try{const removed=await deleteEquipmentPhotos(equipmentId);invalidateEquipmentPhotoCache(equipmentId);setPhotos((current)=>({...current,[equipmentId]:{state:'no',url:''}}));setMessage(removed>0?`Đã xóa ảnh ${equipmentId}.`:`${equipmentId} không có ảnh để xóa.`)}catch(cause){setMessage(cause instanceof Error?cause.message:'Không thể xóa ảnh')}finally{setDeletingPhotoId('')}}
+  async function handleClipboardUpload(equipmentId:string){if(!navigator.clipboard?.read){setMessage('Trình duyệt không hỗ trợ đọc ảnh từ bộ nhớ tạm.');return}try{for(const item of await navigator.clipboard.read()){const imageType=item.types.find((type)=>type.startsWith('image/'));if(!imageType)continue;if(!await confirmPhotoReplacement(equipmentId))return;const blob=await item.getType(imageType);await uploadAndRefresh(equipmentId,new File([blob],`clipboard.${clipboardFileExtension(imageType)}`,{type:imageType}));return}setMessage('Bộ nhớ tạm không có ảnh.')}catch(cause){setMessage(cause instanceof Error?`Không thể đọc ảnh từ bộ nhớ tạm: ${cause.message}`:'Không thể đọc ảnh từ bộ nhớ tạm')}}
+  async function handleEmptyPhotoCellPaste(equipmentId:string,event:ClipboardEvent<HTMLTableCellElement>){const current=photos[equipmentId];if(current?.state!=='no'||uploadingId)return;const imageItem=Array.from(event.clipboardData.items).find((item)=>item.type.startsWith('image/'));if(!imageItem){setMessage('Bộ nhớ tạm không có ảnh.');return}event.preventDefault();const file=imageItem.getAsFile();if(!file){setMessage('Không đọc được ảnh từ bộ nhớ tạm.');return}await uploadAndRefresh(equipmentId,file)}
 
-  useEffect(() => {
-    void reloadEquipment()
-  }, [])
+  const activeFilterCount=Object.values(columnFilters).filter((value)=>value?.length).length
+  const filteredRows=useMemo(()=>rows.filter((row)=>{if(!includesQuery(row,query.trim().toLocaleLowerCase()))return false;for(const [key,values] of Object.entries(columnFilters) as Array<[ColumnKey,string[]|undefined]>){if(values?.length&&!values.includes(columnValue(row,key)||'—'))return false}return true}),[rows,query,columnFilters])
+  const sortedRows=useMemo(()=>[...filteredRows].sort((a,b)=>{const result=columnValue(a,sortKey).localeCompare(columnValue(b,sortKey),'vi',{numeric:true,sensitivity:'base'});return sortDirection==='asc'?result:-result}),[filteredRows,sortKey,sortDirection])
+  const productionCount=rows.filter((row)=>row.equipmentType==='PRODUCTION').length; const measurementCount=rows.filter((row)=>row.equipmentType==='MEASUREMENT').length
+  const profileEquipment=profileId?rows.find((row)=>row.equipmentId===profileId)||null:null; const allVisibleSelected=sortedRows.length>0&&sortedRows.every((row)=>selectedIds.has(row.equipmentId))
+  function openEdit(row:LiveEquipment){setProfileId('');setEditing(toDraft(row))}
+  function toggleSort(key:ColumnKey){if(sortKey===key)setSortDirection((value)=>value==='asc'?'desc':'asc');else{setSortKey(key);setSortDirection('asc')}}
+  function toggleSelected(equipmentId:string){setSelectedIds((current)=>{const next=new Set(current);if(next.has(equipmentId))next.delete(equipmentId);else next.add(equipmentId);return next})}
+  function toggleAllVisible(){setSelectedIds((current)=>{const next=new Set(current);if(allVisibleSelected)sortedRows.forEach((row)=>next.delete(row.equipmentId));else sortedRows.forEach((row)=>next.add(row.equipmentId));return next})}
+  function exitBulkMode(){setBulkMode(false);setSelectedIds(new Set())}
+  function toggleColumn(key:ColumnKey){setVisibleColumns((current)=>current.includes(key)?current.filter((item)=>item!==key):[...current,key])}
+  function filterOptions(key:ColumnKey){return Array.from(new Set(rows.map((row)=>columnValue(row,key)||'—'))).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true,sensitivity:'base'}))}
+  function toggleFilterValue(key:ColumnKey,value:string){setColumnFilters((current)=>{const selected=current[key]||[];const next=selected.includes(value)?selected.filter((item)=>item!==value):[...selected,value];const result={...current,[key]:next};if(!next.length)delete result[key];return result})}
+  function clearFilter(key:ColumnKey){setColumnFilters((current)=>{const next={...current};delete next[key];return next})}
+  async function applyBulkPatch(patch:EquipmentBulkPatch){if(!canBulkEdit||selectedIds.size===0)return;if(!window.confirm(`Cập nhật ${selectedIds.size} thiết bị đã chọn?\n\nHệ thống sẽ ghi nhật ký riêng cho từng thiết bị.`))return;const ids=new Set(selectedIds);setBulkSaving(true);setError('');setMessage('');try{const result=await bulkUpdateEquipment([...ids],patch);setRows((current)=>current.map((row)=>mergeBulkIntoRow(row,ids,patch)));setMessage(`Đã cập nhật ${result.updatedCount} thiết bị.`)}catch(cause){setError(cause instanceof Error?cause.message:'Không thể cập nhật hàng loạt.')}finally{setBulkSaving(false)}}
 
-  useEffect(() => {
-    if (!editing) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setEditing(null)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [editing])
-
-  async function handleSave() {
-    if (!editing) return
-    if (!editing.equipmentId.trim() || !editing.equipmentName.trim()) {
-      setMessage('Mã thiết bị và tên thiết bị không được để trống.')
-      return
-    }
-
-    const saved = editing
-    const nextEquipmentId = saved.equipmentId.trim()
-    setSaving(true)
-    setMessage('')
-    try {
-      await updateSupabaseEquipment(saved)
-
-      setRows((current) => current.map((row) => row.equipmentId !== saved.oldEquipmentId
-        ? row
-        : {
-            ...row,
-            equipmentId: nextEquipmentId,
-            equipmentName: saved.equipmentName.trim(),
-            equipmentType: saved.equipmentType,
-            model: saved.model.trim(),
-            serialNumber: saved.serialNumber.trim(),
-            usingDepartment: saved.department.trim(),
-            status: saved.status.trim() || 'RUNNING',
-            qrCode: nextEquipmentId,
-            updatedAt: new Date().toISOString(),
-          }))
-
-      if (saved.oldEquipmentId !== nextEquipmentId) {
-        setPhotos((current) => {
-          const next = { ...current, [nextEquipmentId]: { state: 'loading', url: '' } as PhotoInfo }
-          delete next[saved.oldEquipmentId]
-          return next
-        })
-        void refreshOnePhoto(nextEquipmentId)
-      }
-
-      setMessage(`Đã lưu ${nextEquipmentId}`)
-      setEditing(null)
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'SAVE_FAILED')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleDelete() {
-    if (!editing || deleting || saving) return
-    const equipmentId = editing.oldEquipmentId.trim().toUpperCase()
-    setDeleting(true)
-    setMessage('')
-    try {
-      const check = await checkEquipmentDeletion(equipmentId)
-      if (!check.exists) {
-        setMessage(`${equipmentId} không còn tồn tại.`)
-        setEditing(null)
-        await reloadEquipment()
-        return
-      }
-      if (!check.canDelete) {
-        const detail = check.blockers.map((item) => `${item.label}: ${item.count}`).join(' · ')
-        setMessage(`Không thể xóa ${equipmentId} vì đã có dữ liệu liên quan. ${detail}`)
-        return
-      }
-      const confirmed = window.confirm(`Xóa ${equipmentId} - ${editing.equipmentName}?\n\nThiết bị chưa có dữ liệu nghiệp vụ liên quan nên có thể xóa. Hệ thống cũng sẽ xóa toàn bộ ảnh của mã này. Hành động không thể hoàn tác.`)
-      if (!confirmed) return
-
-      const result = await deleteUnusedEquipment(equipmentId)
-      setRows((current) => current.filter((row) => row.equipmentId !== equipmentId))
-      setPhotos((current) => {
-        const next = { ...current }
-        delete next[equipmentId]
-        return next
-      })
-      setProfileId('')
-      setEditing(null)
-      setMessage(`Đã xóa ${equipmentId}${Number(result.removedPhotos || 0) > 0 ? ` và ${result.removedPhotos} ảnh` : ''}.`)
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'EQUIPMENT_DELETE_FAILED')
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  async function confirmPhotoReplacement(equipmentId: string) {
-    const current = photos[equipmentId]
-    if (current?.state === 'yes') {
-      return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`)
-    }
-    if (!current || current.state === 'loading' || current.state === 'error') {
-      const exists = await refreshOnePhoto(equipmentId)
-      if (exists) return window.confirm(`Thiết bị ${equipmentId} đã có ảnh. Thay thế ảnh hiện tại?`)
-    }
-    return true
-  }
-
-  async function uploadAndRefresh(equipmentId: string, file: File) {
-    setUploadingId(equipmentId)
-    setMessage('')
-    try {
-      await uploadEquipmentPhoto(equipmentId, file)
-      await refreshOnePhoto(equipmentId)
-      setMessage(`Đã cập nhật ảnh ${equipmentId}`)
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'UPLOAD_FAILED')
-    } finally {
-      setUploadingId('')
-    }
-  }
-
-  async function handlePhotoUpload(equipmentId: string, file: File | undefined) {
-    if (!file) return
-    if (!await confirmPhotoReplacement(equipmentId)) return
-    await uploadAndRefresh(equipmentId, file)
-  }
-
-  async function handleClipboardUpload(equipmentId: string) {
-    if (!navigator.clipboard?.read) {
-      setMessage('Trình duyệt không hỗ trợ đọc ảnh từ clipboard.')
-      return
-    }
-
-    try {
-      const clipboardItems = await navigator.clipboard.read()
-      for (const item of clipboardItems) {
-        const imageType = item.types.find((type) => type.startsWith('image/'))
-        if (!imageType) continue
-        if (!await confirmPhotoReplacement(equipmentId)) return
-        const blob = await item.getType(imageType)
-        const extension = clipboardFileExtension(imageType)
-        const file = new File([blob], `clipboard.${extension}`, { type: imageType })
-        await uploadAndRefresh(equipmentId, file)
-        return
-      }
-      setMessage('Clipboard không có ảnh.')
-    } catch (cause) {
-      setMessage(cause instanceof Error ? `CLIPBOARD_UPLOAD_FAILED: ${cause.message}` : 'CLIPBOARD_UPLOAD_FAILED')
-    }
-  }
-
-  async function handleEmptyPhotoCellPaste(equipmentId: string, event: ClipboardEvent<HTMLTableCellElement>) {
-    const current = photos[equipmentId]
-    if (current?.state !== 'no' || uploadingId) return
-
-    const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/'))
-    if (!imageItem) {
-      setMessage('Clipboard không có ảnh.')
-      return
-    }
-
-    event.preventDefault()
-    const file = imageItem.getAsFile()
-    if (!file) {
-      setMessage('Không đọc được ảnh từ clipboard.')
-      return
-    }
-
-    await uploadAndRefresh(equipmentId, file)
-  }
-
-  const productionCount = rows.filter((row) => row.equipmentType === 'PRODUCTION').length
-  const measurementCount = rows.filter((row) => row.equipmentType === 'MEASUREMENT').length
-  const normalizedQuery = query.trim().toLocaleLowerCase()
-  const filteredRows = useMemo(
-    () => rows.filter((row) => (typeFilter === 'ALL' || row.equipmentType === typeFilter) && includesQuery(row, normalizedQuery)),
-    [rows, typeFilter, normalizedQuery],
-  )
-  const profileEquipment = profileId ? rows.find((row) => row.equipmentId === profileId) || null : null
-
-  function openEdit(row: LiveEquipment) {
-    setProfileId('')
-    setEditing(toDraft(row))
-  }
+  function renderHeader(column:ColumnDef){const selected=columnFilters[column.key]||[];const options=filterOptions(column.key).filter((value)=>value.toLocaleLowerCase().includes(filterSearch.toLocaleLowerCase()));const active=sortKey===column.key;return <th key={column.key} className="equipment-sheet-head" aria-sort={active?(sortDirection==='asc'?'ascending':'descending'):'none'}><div className="equipment-sheet-head-main"><button className={`equipment-sort${active?' active':''}`} type="button" onClick={()=>toggleSort(column.key)}>{column.label}<span aria-hidden="true">{active?(sortDirection==='asc'?'▲':'▼'):'↕'}</span></button><button className={`equipment-filter-button${selected.length?' active':''}`} type="button" aria-label={`Lọc ${column.label}`} onClick={()=>{setFilterColumn((current)=>current===column.key?null:column.key);setFilterSearch('')}}>▼{selected.length?<span className="equipment-filter-count">{selected.length}</span>:null}</button></div>{filterColumn===column.key?<div className="equipment-filter-popover"><input type="search" value={filterSearch} onChange={(event)=>setFilterSearch(event.target.value)} placeholder={`Tìm trong ${column.label.toLocaleLowerCase()}…`}/><div className="equipment-filter-actions"><button type="button" onClick={()=>clearFilter(column.key)}>Bỏ lọc</button><button type="button" onClick={()=>setColumnFilters((current)=>({...current,[column.key]:filterOptions(column.key)}))}>Chọn tất cả</button></div>{options.map((value)=><label className="equipment-filter-option" key={value}><input type="checkbox" checked={selected.includes(value)} onChange={()=>toggleFilterValue(column.key,value)}/><span>{value}</span></label>)}</div>:null}</th>}
+  function renderCell(equipment:LiveEquipment,key:ColumnKey){if(key==='equipmentId')return <button className="equipment-link" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>{equipment.equipmentId}</button>;if(key==='equipmentName')return <button className="equipment-link equipment-name-link" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>{equipment.equipmentName}</button>;if(key==='status')return <span className={`equipment-status status-${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status]||equipment.status}</span>;if(key==='relatedDocuments'){const links=documentLinks(equipment.relatedDocuments);return links.length?<div className="equipment-doc-links">{links.slice(0,3).map((url,index)=><a key={url} href={url} target="_blank" rel="noreferrer">{index===0?'Mở tài liệu':`Tài liệu ${index+1}`}</a>)}</div>:<span className="equipment-cell-muted">{equipment.relatedDocuments||'—'}</span>}return columnValue(equipment,key)||'—'}
 
   return <div className="equipment-page">
-    <section className="equipment-summary" aria-label="Tổng quan thiết bị">
-      <article><span>Tổng thiết bị</span><strong>{rows.length}</strong></article>
-      <article><span>Thiết bị sản xuất</span><strong>{productionCount}</strong></article>
-      <article><span>Thiết bị đo kiểm</span><strong>{measurementCount}</strong></article>
-    </section>
-
+    <section className="equipment-summary" aria-label="Tổng quan thiết bị"><article><span>Tổng thiết bị</span><strong>{rows.length}</strong></article><article><span>Thiết bị sản xuất</span><strong>{productionCount}</strong></article><article><span>Thiết bị đo kiểm</span><strong>{measurementCount}</strong></article></section>
     <section className="equipment-surface" aria-labelledby="equipment-title">
-      <header className="equipment-page-header">
-        <div>
-          <p className="eyebrow">Equipment Master</p>
-          <h2 id="equipment-title">Danh sách thiết bị</h2>
-          <p>{filteredRows.length} / {rows.length} thiết bị · click mã, tên hoặc ảnh để xem hồ sơ</p>
-        </div>
-        <button className="equipment-refresh" type="button" onClick={() => void reloadEquipment()} disabled={loading}>Làm mới</button>
-      </header>
-
-      <div className="equipment-toolbar" role="search">
-        <label className="equipment-search">
-          <span className="sr-only">Tìm thiết bị</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã, tên, serial, model, bộ phận…" />
-        </label>
-        <label>
-          <span className="sr-only">Lọc loại thiết bị</span>
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}>
-            <option value="ALL">Tất cả loại</option>
-            <option value="PRODUCTION">Sản xuất</option>
-            <option value="MEASUREMENT">Đo kiểm</option>
-          </select>
-        </label>
-      </div>
-
-      {message ? <div className="equipment-feedback" role="status">{message}</div> : null}
-      {loading ? <div className="equipment-state">Đang tải Equipment Master…</div> : null}
-      {error ? <div className="equipment-state error" role="alert">{error}</div> : null}
-
-      {!loading && !error ? <div className="equipment-table-scroll">
-        <table className="equipment-data-table">
-          <caption className="sr-only">Danh sách Equipment Master</caption>
-          <thead>
-            <tr><th>Ảnh</th><th>Mã thiết bị</th><th>Tên thiết bị</th><th>Bộ phận</th><th>Model</th><th>Serial Number</th><th>Loại</th><th>Trạng thái</th><th aria-label="Thao tác" /></tr>
-          </thead>
-          <tbody>
-            {filteredRows.map((equipment) => {
-              const photo = photos[equipment.equipmentId] || { state: 'loading', url: '' }
-              const pasteReady = photo.state === 'no'
-              return <tr key={equipment.equipmentId}>
-                <td
-                  className={`equipment-image-col${pasteReady ? ' paste-ready' : ''}`}
-                  tabIndex={pasteReady ? 0 : undefined}
-                  title={pasteReady ? 'Click ô ảnh rồi Ctrl+V để dán ảnh' : 'Mở hồ sơ thiết bị'}
-                  onPaste={pasteReady ? (event) => void handleEmptyPhotoCellPaste(equipment.equipmentId, event) : undefined}
-                >
-                  {photo.state === 'yes' && photo.url
-                    ? <button className="equipment-thumb-button" type="button" onClick={() => setProfileId(equipment.equipmentId)} aria-label={`Mở hồ sơ ${equipment.equipmentId}`}><img className="equipment-thumb" src={photo.url} alt={`Ảnh ${equipment.equipmentName}`} loading="lazy" /></button>
-                    : <div className={`equipment-thumb-placeholder ${photo.state}`} aria-label="Chưa có ảnh">
-                        {uploadingId === equipment.equipmentId ? 'Đang tải…' : photo.state === 'loading' ? '…' : photo.state === 'no' ? <><span>Chưa có ảnh</span><small>Click + Ctrl+V</small></> : '—'}
-                      </div>}
-                </td>
-                <td><button className="equipment-profile-link equipment-code" type="button" onClick={() => setProfileId(equipment.equipmentId)}>{equipment.equipmentId}</button></td>
-                <td><button className="equipment-profile-link equipment-name" type="button" onClick={() => setProfileId(equipment.equipmentId)}>{equipment.equipmentName}</button></td>
-                <td>{equipment.usingDepartment || equipment.managingDepartment || equipment.currentArea || '—'}</td>
-                <td>{equipment.model || '—'}</td>
-                <td><strong>{equipment.serialNumber || '—'}</strong></td>
-                <td><span className="equipment-type-badge">{equipment.equipmentType === 'MEASUREMENT' ? 'Đo kiểm' : 'Sản xuất'}</span></td>
-                <td><span className={`equipment-status status-${equipment.status.toLowerCase()}`}>{statusLabel[equipment.status] || equipment.status}</span></td>
-                <td className="equipment-row-actions"><button type="button" onClick={() => openEdit(equipment)}>Sửa</button></td>
-              </tr>
-            })}
-          </tbody>
-        </table>
-        {filteredRows.length === 0 ? <div className="equipment-empty">Không tìm thấy thiết bị phù hợp.</div> : null}
-      </div> : null}
+      <header className="equipment-page-header"><div><p className="eyebrow">Danh mục thiết bị</p><h2 id="equipment-title">Danh sách thiết bị</h2><p>{sortedRows.length} / {rows.length} thiết bị · lọc và ẩn/hiện cột như bảng tính</p></div><div className="equipment-page-actions">{canBulkEdit?<button className={`equipment-bulk-mode-toggle${bulkMode?' active':''}`} type="button" onClick={()=>bulkMode?exitBulkMode():setBulkMode(true)}>{bulkMode?'Thoát sửa hàng loạt':'Sửa hàng loạt'}</button>:null}<button className="equipment-refresh" type="button" onClick={()=>void reloadEquipment(true)} disabled={loading}>Làm mới</button></div></header>
+      <div className="equipment-toolbar" role="search"><label className="equipment-search"><span className="sr-only">Tìm thiết bị</span><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Tìm trên toàn bộ dữ liệu thiết bị…"/></label><div className="equipment-sheet-tools"><div className="equipment-column-picker"><button className={columnPickerOpen?'active':''} type="button" onClick={()=>setColumnPickerOpen((value)=>!value)}>Cột hiển thị · {visibleColumns.length}</button>{columnPickerOpen?<div className="equipment-column-menu"><header><strong>Ẩn / hiện cột</strong><button type="button" onClick={()=>setVisibleColumns(defaultVisibleColumns())}>Mặc định</button></header>{(['Nhận diện','Quản lý','Kỹ thuật','Vòng đời','Tài liệu'] as const).map((group)=><div key={group}><small>{group}</small>{COLUMNS.filter((column)=>column.group===group).map((column)=><label key={column.key}><input type="checkbox" checked={visibleColumns.includes(column.key)} onChange={()=>toggleColumn(column.key)}/><span>{column.label}</span></label>)}</div>)}</div>:null}</div><button type="button" className={activeFilterCount?'active':''} onClick={()=>setColumnFilters({})}>Bỏ toàn bộ lọc{activeFilterCount?` · ${activeFilterCount}`:''}</button></div></div>
+      {bulkMode&&canBulkEdit?<EquipmentBulkEditor selectedCount={selectedIds.size} suggestions={masterSuggestions} saving={bulkSaving} onApply={applyBulkPatch} onExit={exitBulkMode}/>:null}
+      {bulkMode&&canBulkEdit?<div className="equipment-bulk-hint"><button type="button" onClick={toggleAllVisible}>{allVisibleSelected?'Bỏ chọn tất cả đang hiển thị':`Chọn tất cả ${sortedRows.length} máy đang hiển thị`}</button><span>Chỉ sửa các trường quản trị. Loại Sản xuất/Đo kiểm không đổi hàng loạt vì mã CEV-PR / CEV-ME gắn với loại thiết bị.</span></div>:null}
+      {message?<div className="equipment-feedback" role="status">{message}</div>:null}{loading&&rows.length===0?<div className="equipment-state">Đang tải danh mục thiết bị…</div>:null}{error&&rows.length===0?<div className="equipment-state error" role="alert">{error}</div>:null}
+      {rows.length>0&&!error||rows.length>0?<div className="equipment-table-scroll"><table className="equipment-data-table"><caption className="sr-only">Danh sách thiết bị</caption><thead><tr>{bulkMode?<th className="equipment-bulk-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Chọn tất cả thiết bị đang hiển thị"/></th>:null}<th>Ảnh</th>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map(renderHeader)}<th aria-label="Thao tác"/></tr></thead><tbody>{sortedRows.map((equipment)=>{const photo=photos[equipment.equipmentId]||{state:'loading',url:''};const pasteReady=photo.state==='no';const selected=selectedIds.has(equipment.equipmentId);return <tr key={equipment.equipmentId} className={bulkMode&&selected?'bulk-selected':''}>{bulkMode?<td className="equipment-bulk-check"><input type="checkbox" checked={selected} onChange={()=>toggleSelected(equipment.equipmentId)} aria-label={`Chọn ${equipment.equipmentId}`}/></td>:null}<td className={`equipment-image-col${pasteReady?' paste-ready':''}`} tabIndex={pasteReady?0:undefined} title={pasteReady?'Chọn ô ảnh rồi nhấn Ctrl+V để dán ảnh':'Mở hồ sơ thiết bị'} onPaste={pasteReady?(event)=>void handleEmptyPhotoCellPaste(equipment.equipmentId,event):undefined}>{photo.state==='yes'&&photo.url?<button className="equipment-image-button" type="button" onClick={()=>setProfileId(equipment.equipmentId)}><img src={photo.url} alt={equipment.equipmentName}/></button>:photo.state==='loading'?<span className="equipment-photo-state">…</span>:<button className="equipment-photo-empty" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>Chưa có ảnh</button>}</td>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map((column)=><td key={column.key}>{renderCell(equipment,column.key)}</td>)}<td><button className="equipment-edit-row" type="button" onClick={()=>openEdit(equipment)} disabled={bulkMode}>Sửa</button></td></tr>})}</tbody></table></div>:null}
     </section>
 
-    {profileEquipment ? <EquipmentProfile
-      equipment={profileEquipment}
-      photoUrl={photos[profileEquipment.equipmentId]?.url || ''}
-      onClose={() => setProfileId('')}
-      onEdit={() => openEdit(profileEquipment)}
-    /> : null}
-
-    {editing ? <div className="equipment-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null) }}>
-      <aside className="equipment-drawer" role="dialog" aria-modal="true" aria-labelledby="equipment-edit-title">
-        <header>
-          <div><p className="eyebrow">Equipment Master</p><h2 id="equipment-edit-title">Chỉnh sửa thiết bị</h2></div>
-          <button className="equipment-close" type="button" aria-label="Đóng" onClick={() => setEditing(null)}>×</button>
-        </header>
-
-        <div className="equipment-edit-photo">
-          {photos[editing.oldEquipmentId]?.state === 'yes' && photos[editing.oldEquipmentId]?.url
-            ? <img src={photos[editing.oldEquipmentId].url} alt={`Ảnh ${editing.equipmentName}`} />
-            : <div className="equipment-edit-photo-empty">Chưa có ảnh</div>}
-          <div>
-            <button type="button" onClick={() => void handleClipboardUpload(editing.oldEquipmentId)} disabled={uploadingId === editing.oldEquipmentId}>{uploadingId === editing.oldEquipmentId ? 'Đang xử lý…' : 'Dán ảnh từ clipboard'}</button>
-            <label className="equipment-upload-label">Chọn ảnh<input type="file" accept="image/*" disabled={uploadingId === editing.oldEquipmentId} onChange={(event) => { const file = event.currentTarget.files?.[0]; void handlePhotoUpload(editing.oldEquipmentId, file); event.currentTarget.value = '' }} /></label>
-            <small>1 thiết bị = 1 ảnh · tự nén trước khi lưu</small>
-          </div>
-        </div>
-
-        <div className="equipment-form-grid">
-          <label><span>Mã thiết bị</span><input value={editing.equipmentId} onChange={(event) => setEditing({ ...editing, equipmentId: event.target.value })} /></label>
-          <label><span>Tên thiết bị</span><input value={editing.equipmentName} onChange={(event) => setEditing({ ...editing, equipmentName: event.target.value })} /></label>
-          <label><span>Loại</span><select value={editing.equipmentType} onChange={(event) => setEditing({ ...editing, equipmentType: event.target.value as EquipmentEditInput['equipmentType'] })}><option value="PRODUCTION">Sản xuất</option><option value="MEASUREMENT">Đo kiểm</option></select></label>
-          <label><span>Bộ phận</span><input value={editing.department} onChange={(event) => setEditing({ ...editing, department: event.target.value })} /></label>
-          <label><span>Model</span><input value={editing.model} onChange={(event) => setEditing({ ...editing, model: event.target.value })} /></label>
-          <label><span>Serial Number</span><input value={editing.serialNumber} onChange={(event) => setEditing({ ...editing, serialNumber: event.target.value })} /></label>
-          <label><span>Trạng thái</span><select value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
-        </div>
-
-        <footer>
-          <button className="equipment-delete" type="button" onClick={() => void handleDelete()} disabled={saving || deleting}>{deleting ? 'Đang kiểm tra…' : 'Xóa thiết bị'}</button>
-          <span className="equipment-footer-spacer" />
-          <button className="equipment-cancel" type="button" onClick={() => setEditing(null)} disabled={deleting}>Hủy</button>
-          <button className="equipment-primary" type="button" onClick={() => void handleSave()} disabled={saving || deleting}>{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
-        </footer>
-      </aside>
-    </div> : null}
+    {profileEquipment?<EquipmentProfile equipment={profileEquipment} photoUrl={photos[profileEquipment.equipmentId]?.url||''} onClose={()=>setProfileId('')} onEdit={()=>openEdit(profileEquipment)}/>:null}
+    {editing?<div className="equipment-drawer-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget&&!saving&&!deleting)setEditing(null)}}><section className="equipment-drawer" role="dialog" aria-modal="true" aria-labelledby="equipment-drawer-title"><header><div><p className="eyebrow">Danh mục thiết bị</p><h2 id="equipment-drawer-title">Chỉnh sửa thiết bị</h2></div><button type="button" onClick={()=>setEditing(null)} disabled={saving||deleting} aria-label="Đóng">×</button></header><div className="equipment-drawer-scroll"><div className="equipment-edit-photo">{photos[editing.equipmentId]?.url?<img src={photos[editing.equipmentId].url} alt={`Ảnh ${editing.equipmentName}`}/>:<div className="equipment-edit-photo-empty">Chưa có ảnh</div>}<div className="equipment-edit-photo-actions"><button type="button" onClick={()=>void handleClipboardUpload(editing.equipmentId)} disabled={!!uploadingId||!!deletingPhotoId}>{uploadingId===editing.equipmentId?'Đang tải…':'Dán ảnh từ bộ nhớ tạm'}</button><label className="equipment-edit-photo-picker">Chọn ảnh<input type="file" accept="image/*" capture="environment" disabled={!!uploadingId||!!deletingPhotoId} onChange={(event)=>void handlePhotoUpload(editing.equipmentId,event.currentTarget.files?.[0])}/></label>{photos[editing.equipmentId]?.url?<button className="equipment-edit-photo-delete" type="button" onClick={()=>void handlePhotoDelete(editing.equipmentId)} disabled={!!uploadingId||!!deletingPhotoId}>{deletingPhotoId===editing.equipmentId?'Đang xóa ảnh…':'Xóa ảnh'}</button>:null}<small>1 thiết bị = 1 ảnh · tự nén trước khi lưu</small></div></div><EquipmentMasterEditFields value={editing} suggestions={masterSuggestions} onChange={setEditing}/><fieldset className="equipment-edit-criticality"><legend>Mức độ quan trọng thiết bị · tự tính A/B/C/D</legend><p>Trả lời 5 sự thật của quá trình. Hệ thống tự tính lại cấp khi lưu.</p><div className="equipment-edit-criticality-grid">{[['controlsProductQuality','1. Thiết bị trực tiếp tạo / kiểm soát đặc tính chất lượng?'],['specialCharacteristicImpact','2. Liên quan đặc tính đặc biệt / an toàn sản phẩm?'],['stopsProduction','3. Mất chức năng có dừng công đoạn / dây chuyền?'],['hasBackup','4. Có thiết bị / phương án dự phòng dùng ngay?'],['capacityImpact','5. Mất chức năng có rủi ro sản lượng / giao hàng?']].map(([key,label])=><label key={key}><span>{label}</span><select value={booleanSelectValue(editing[key as keyof EquipmentMasterEditInput] as boolean|undefined)} onChange={(event)=>setEditing({...editing,[key]:parseBooleanSelect(event.target.value)})}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>)}</div><div className={`equipment-edit-criticality-result${editCriticality?` level-${editCriticality.toLowerCase()}`:''}`}><span>Kết quả tự động</span><strong>{editCriticality?`Cấp ${editCriticality}`:'Trả lời đủ 5 câu'}</strong></div></fieldset></div><footer><button className="equipment-delete" type="button" onClick={()=>void handleDelete()} disabled={saving||deleting}>{deleting?'Đang xóa…':'Xóa thiết bị'}</button><div className="equipment-drawer-footer-actions"><button type="button" onClick={()=>setEditing(null)} disabled={saving||deleting}>Hủy</button><button type="button" onClick={()=>void handleSave()} disabled={saving||deleting||!editCriticality}>{saving?'Đang lưu…':'Lưu thay đổi'}</button></div></footer></section></div>:null}
   </div>
 }

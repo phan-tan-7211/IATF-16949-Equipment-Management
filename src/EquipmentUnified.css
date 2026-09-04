@@ -1,0 +1,41 @@
+.equipment-register-form textarea,.equipment-form-grid textarea,.equipment-edit-criticality select{width:100%;box-sizing:border-box;border:1px solid var(--color-border);border-radius:9px;background:var(--color-surface);padding:9px 11px;font:inherit;color:var(--color-text)}
+.equipment-register-form textarea,.equipment-form-grid textarea{resize:vertical;min-height:84px}
+.equipment-register-photo-box{display:flex;align-items:center;gap:12px;min-height:108px;padding:12px;border:1px dashed var(--color-border);border-radius:12px;background:var(--color-surface-subtle)}
+.equipment-register-photo-box>img,.equipment-register-photo-box>div:first-child{width:120px;height:88px;flex:0 0 auto;border-radius:10px;border:1px solid var(--color-border);object-fit:contain;object-position:center;background:var(--color-surface);display:grid;place-items:center;color:var(--color-text-muted);font-size:12px}
+.equipment-register-photo-pick{display:inline-flex!important;align-items:center;justify-content:center;min-height:38px;padding:0 12px;border-radius:9px;background:var(--color-primary);color:var(--color-surface)!important;font-weight:800;cursor:pointer}
+.equipment-register-photo-pick input{display:none}
+.equipment-register-photo-box>button{min-height:38px;padding:0 12px;border:1px solid var(--color-border);border-radius:9px;background:var(--color-surface);font-weight:700;cursor:pointer}
+.equipment-system-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 22px;border-bottom:1px solid var(--color-border);background:var(--color-surface-subtle)}
+.equipment-system-fields>div{display:grid;gap:4px;padding:12px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface)}
+.equipment-system-fields span,.equipment-system-fields small{font-size:11px;color:var(--color-text-muted)}
+.equipment-system-fields strong{font-size:14px;word-break:break-word}
+.equipment-form-grid-full .wide{grid-column:1/-1}
+
+/* Unified Equipment Edit form: never fall back to browser-default controls. */
+.equipment-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:20px 22px}
+.equipment-edit-grid>label{display:grid;align-content:start;gap:7px;min-width:0}
+.equipment-edit-grid>label.equipment-edit-wide{grid-column:1/-1}
+.equipment-edit-grid>label>span{font-size:11px;line-height:1.3;font-weight:800;letter-spacing:.02em;color:var(--color-text-muted)}
+.equipment-edit-grid input,.equipment-edit-grid select,.equipment-edit-grid textarea{width:100%;box-sizing:border-box;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);color:var(--color-text);font:inherit;font-size:14px;line-height:1.35;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+.equipment-edit-grid input,.equipment-edit-grid select{min-height:42px;padding:0 12px}
+.equipment-edit-grid textarea{min-height:96px;padding:11px 12px;resize:vertical}
+.equipment-edit-grid input:hover,.equipment-edit-grid select:hover,.equipment-edit-grid textarea:hover{border-color:hsl(var(--slate-400))}
+.equipment-edit-grid input:focus,.equipment-edit-grid select:focus,.equipment-edit-grid textarea:focus{outline:0;border-color:hsl(var(--blue-500));box-shadow:0 0 0 3px hsl(var(--blue-500)/.14)}
+.equipment-edit-grid input[readonly]{background:var(--color-surface-subtle);color:var(--color-text-muted);cursor:not-allowed}
+.equipment-edit-grid select{appearance:auto}
+
+.equipment-edit-criticality{margin:0 22px 20px;padding:16px;border:1px solid var(--color-border);border-radius:12px;background:var(--color-surface-subtle)}
+.equipment-edit-criticality legend{padding:0 8px;font-size:13px;font-weight:900;color:var(--color-text)}
+.equipment-edit-criticality-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.equipment-edit-criticality-grid label{display:grid;gap:6px}
+.equipment-edit-criticality-grid span{font-size:12px;font-weight:800;color:var(--color-text-muted)}
+.equipment-edit-criticality select{min-height:40px}
+.equipment-edit-criticality-result{display:grid;gap:4px;margin-top:14px;padding:12px;border-radius:10px;background:var(--color-border)}
+.equipment-edit-criticality-result span,.equipment-edit-criticality-result small{font-size:11px;color:var(--color-text-muted)}
+.equipment-edit-criticality-result strong{font-size:22px}
+.equipment-edit-criticality-result.level-a{background:var(--color-danger-bg);color:var(--color-danger-fg)}
+.equipment-edit-criticality-result.level-b{background:var(--color-warning-bg);color:var(--color-warning-fg)}
+.equipment-edit-criticality-result.level-c,.equipment-edit-criticality-result.level-d{background:var(--color-success-bg);color:var(--color-success-fg)}
+/* Equipment image contract: fill the available viewport while preserving the complete source image. Never crop or distort. */
+.equipment-profile-image-wrap img,.equipment-image-button img,.equipment-thumb,.equipment-edit-photo img,.equipment-register-photo-box>img{width:100%;height:100%;object-fit:contain!important;object-position:center!important;max-width:100%;max-height:100%}
+@media(max-width:640px){.equipment-system-fields,.equipment-edit-criticality-grid{grid-template-columns:1fr}.equipment-register-photo-box{align-items:flex-start;flex-wrap:wrap}.equipment-register-photo-box>img,.equipment-register-photo-box>div:first-child{width:100%;height:180px}.equipment-edit-grid{grid-template-columns:1fr;gap:12px;padding:16px 14px}.equipment-edit-grid>label.equipment-edit-wide{grid-column:auto}.equipment-edit-criticality{margin:0 14px 18px}.equipment-form-grid-full .wide{grid-column:auto}}

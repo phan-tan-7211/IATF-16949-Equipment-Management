@@ -1,3 +1,4 @@
+import { patchMaintenanceHandoverCache } from './liveMaintenance'
 import { supabase } from './supabaseClient'
 
 export type EquipmentHandoverInput = {
@@ -29,10 +30,19 @@ export async function recordEquipmentHandover(input: EquipmentHandoverInput) {
   const { data, error } = await supabase.rpc('rpc_record_equipment_handover', { p_input: input })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return {
+  const normalized = {
     handoverId: text(result.handoverId),
     equipmentId: text(result.equipmentId),
     workOrderId: text(result.workOrderId),
     accepted: result.accepted === true,
   }
+  patchMaintenanceHandoverCache({
+    handoverId: normalized.handoverId,
+    workOrderId: normalized.workOrderId,
+    equipmentId: normalized.equipmentId,
+    accepted: normalized.accepted,
+    condition: input.equipmentCondition,
+    handoverAt: input.handoverAt || new Date().toISOString(),
+  })
+  return normalized
 }

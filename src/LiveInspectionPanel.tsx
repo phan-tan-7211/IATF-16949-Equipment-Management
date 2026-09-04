@@ -18,6 +18,8 @@ const markLabel: Record<string, string> = {
   MAINTENANCE_REQUIRED: '△ · Cần bảo trì',
   STOP_REPAIR: 'X · Dừng máy',
 }
+const shiftLabel: Record<string,string> = { MORNING:'Ca sáng', AFTERNOON:'Ca chiều', NIGHT:'Ca đêm' }
+const roleLabel: Record<string,string> = { MAINTENANCE:'Bảo trì', SUPERVISOR:'Giám sát', QUALITY:'Chất lượng', MANAGER:'Quản lý', ADMIN:'Quản trị hệ thống', UNKNOWN:'Chưa xác định' }
 
 type MarkFilter = 'ALL' | DailyInspectionMark
 
@@ -61,7 +63,7 @@ export function LiveInspectionPanel() {
     let active = true
     loadLiveInspection()
       .then((result) => { if (active) applyResult(result) })
-      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải Daily Inspection') })
+      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải kiểm tra hằng ngày') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
@@ -96,9 +98,9 @@ export function LiveInspectionPanel() {
     event.preventDefault()
     setMessage('')
     setError('')
-    if (!canSubmit) return setError(`Role ${role} không có quyền ghi kiểm tra.`)
+    if (!canSubmit) return setError(`Vai trò ${roleLabel[role] || role} không có quyền ghi kiểm tra.`)
     if (!equipmentId) return setError('Vui lòng chọn thiết bị')
-    if (overallMark === 'STOP_REPAIR' && (!note.trim() || !priority)) return setError('Kết quả X bắt buộc nhập lý do và mức ưu tiên Work Order')
+    if (overallMark === 'STOP_REPAIR' && (!note.trim() || !priority)) return setError('Kết quả X bắt buộc nhập lý do và mức ưu tiên lệnh công việc')
 
     setSubmitting(true)
     try {
@@ -106,7 +108,7 @@ export function LiveInspectionPanel() {
         operationId: operationId(), equipmentId, shift,
         area: selectedEquipment?.currentArea || '', overallMark, note, damagedParts, priority,
       })
-      setMessage(`Đã lưu ${response.result.inspectionId}${response.result.workOrderId ? ` · WO ${response.result.workOrderId}` : ''}`)
+      setMessage(`Đã lưu ${response.result.inspectionId}${response.result.workOrderId ? ` · Lệnh ${response.result.workOrderId}` : ''}`)
       setNote(''); setDamagedParts(''); setPriority(''); setOverallMark('V'); setDrawerOpen(false)
       await refresh()
     } catch (cause: unknown) {
@@ -119,13 +121,13 @@ export function LiveInspectionPanel() {
       <article><span>Thiết bị sản xuất</span><strong>{equipment.length}</strong><small>Đang theo dõi</small></article>
       <article><span>Đã kiểm hôm nay</span><strong>{todayRows.length}</strong><small>{today}</small></article>
       <article><span>Bất thường hôm nay</span><strong>{abnormalCount}</strong><small>○ / △ / X</small></article>
-      <article><span>Dừng máy</span><strong>{stopCount}</strong><small>Tự tạo WO + Downtime</small></article>
+      <article><span>Dừng máy</span><strong>{stopCount}</strong><small>Tự tạo lệnh công việc + sự kiện dừng máy</small></article>
     </section>
 
     <section className="inspection-surface" aria-labelledby="inspection-title">
       <header className="inspection-header">
-        <div><p className="eyebrow">BM-KTTBHN</p><h2 id="inspection-title">Daily Inspection</h2><p>{filtered.length} / {inspections.length} bản ghi gần nhất</p></div>
-        <div className="inspection-header-actions"><button type="button" onClick={() => void refresh()}>Làm mới</button>{canSubmit ? <button className="inspection-primary" type="button" onClick={() => setDrawerOpen(true)}>+ Kiểm tra mới</button> : <span className="inspection-readonly">Chỉ xem · {role}</span>}</div>
+        <div><p className="eyebrow">BM-KTTBHN</p><h2 id="inspection-title">Kiểm tra thiết bị hằng ngày</h2><p>{filtered.length} / {inspections.length} bản ghi gần nhất</p></div>
+        <div className="inspection-header-actions"><button type="button" onClick={() => void refresh()}>Làm mới</button>{canSubmit ? <button className="inspection-primary" type="button" onClick={() => setDrawerOpen(true)}>+ Kiểm tra mới</button> : <span className="inspection-readonly">Chỉ xem · {roleLabel[role] || role}</span>}</div>
       </header>
 
       <div className="inspection-legend"><span className="ok">V · Tốt</span><span>○ · Sửa gấp</span><span>△ · Bảo trì</span><span className="danger">X · Dừng máy</span></div>
@@ -138,14 +140,14 @@ export function LiveInspectionPanel() {
 
       {message ? <div className="inspection-feedback" role="status">{message}</div> : null}
       {error ? <div className="inspection-state error" role="alert">{error}</div> : null}
-      {loading ? <div className="inspection-state" role="status">Đang tải Daily Inspection…</div> : null}
+      {loading ? <div className="inspection-state" role="status">Đang tải kiểm tra hằng ngày…</div> : null}
 
       {!loading && !error ? <div className="inspection-table-scroll"><table className="inspection-table">
         <thead><tr><th>Mã</th><th>Thiết bị</th><th>Ngày / ca</th><th>Kết quả</th><th>Người kiểm</th><th>Ghi chú</th><th /></tr></thead>
         <tbody>{filtered.map((item) => <tr key={item.inspectionId}>
           <td><button className="inspection-link" type="button" onClick={() => setSelectedInspectionId(item.inspectionId)}>{item.inspectionId}</button></td>
           <td><b>{item.equipmentId}</b><small>{item.area || '—'}</small></td>
-          <td>{item.inspectionDate}<small>{item.shift || '—'}</small></td>
+          <td>{item.inspectionDate}<small>{shiftLabel[item.shift] || item.shift || '—'}</small></td>
           <td><span className={`inspection-mark mark-${item.overallMark.toLowerCase()}`}>{markLabel[item.overallMark] || item.overallMark}</span></td>
           <td>{item.inspectorId || '—'}</td><td>{item.note || '—'}</td>
           <td><button className="inspection-row-action" type="button" onClick={() => setSelectedInspectionId(item.inspectionId)}>Xem</button></td>
@@ -155,15 +157,15 @@ export function LiveInspectionPanel() {
 
     {drawerOpen && canSubmit ? <div className="inspection-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDrawerOpen(false) }}>
       <aside className="inspection-drawer" role="dialog" aria-modal="true" aria-labelledby="inspection-create-title">
-        <header><div><p className="eyebrow">Daily Inspection</p><h2 id="inspection-create-title">Kiểm tra thiết bị</h2><p>{selectedEquipment?.equipmentName || 'Chọn thiết bị'}</p></div><button type="button" aria-label="Đóng" onClick={() => setDrawerOpen(false)}>×</button></header>
+        <header><div><p className="eyebrow">Kiểm tra hằng ngày</p><h2 id="inspection-create-title">Kiểm tra thiết bị</h2><p>{selectedEquipment?.equipmentName || 'Chọn thiết bị'}</p></div><button type="button" aria-label="Đóng" onClick={() => setDrawerOpen(false)}>×</button></header>
         <form className="inspection-form" onSubmit={onSubmit}>
           <label><span>Thiết bị</span><select value={equipmentId} onChange={(event) => setEquipmentId(event.target.value)}>{equipment.map((item) => <option key={item.equipmentId} value={item.equipmentId}>{item.equipmentId} · {item.equipmentName}</option>)}</select></label>
           <label><span>Ca kiểm tra</span><select value={shift} onChange={(event) => setShift(event.target.value as DailyInspectionShift)}><option value="MORNING">Ca sáng</option><option value="AFTERNOON">Ca chiều</option><option value="NIGHT">Ca đêm</option></select></label>
           <label><span>Kết quả</span><select value={overallMark} onChange={(event) => { const next = event.target.value as DailyInspectionMark; setOverallMark(next); if (next !== 'STOP_REPAIR') setPriority('') }}><option value="V">V · Tốt</option><option value="URGENT_REPAIR">○ · Sửa gấp</option><option value="MAINTENANCE_REQUIRED">△ · Cần bảo trì</option><option value="STOP_REPAIR">X · Dừng máy</option></select></label>
           <label><span>Ghi chú</span><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Mô tả bất thường nếu có" /></label>
           <label><span>Bộ phận hư hỏng</span><input value={damagedParts} onChange={(event) => setDamagedParts(event.target.value)} /></label>
-          {overallMark === 'STOP_REPAIR' ? <label><span>Mức ưu tiên Work Order</span><select value={priority} onChange={(event) => setPriority(event.target.value as WorkOrderPriority)} required><option value="">Chọn mức ưu tiên</option><option value="LOW">LOW</option><option value="MEDIUM">MEDIUM</option><option value="HIGH">HIGH</option><option value="CRITICAL">CRITICAL</option></select></label> : null}
-          <div className="inspection-warning">Kết quả <b>X</b> sẽ tạo Work Order + Downtime Event và chuyển thiết bị sang DOWN trong cùng RPC transaction.</div>
+          {overallMark === 'STOP_REPAIR' ? <label><span>Mức ưu tiên lệnh công việc</span><select value={priority} onChange={(event) => setPriority(event.target.value as WorkOrderPriority)} required><option value="">Chọn mức ưu tiên</option><option value="LOW">Thấp</option><option value="MEDIUM">Trung bình</option><option value="HIGH">Cao</option><option value="CRITICAL">Khẩn cấp</option></select></label> : null}
+          <div className="inspection-warning">Kết quả <b>X</b> sẽ tự tạo lệnh công việc, sự kiện dừng máy và chuyển trạng thái thiết bị sang <b>Sự cố</b> trong cùng một giao dịch.</div>
           <footer><button type="button" onClick={() => setDrawerOpen(false)}>Hủy</button><button className="inspection-primary" type="submit" disabled={submitting || !equipment.length}>{submitting ? 'Đang lưu…' : 'Lưu kiểm tra'}</button></footer>
         </form>
       </aside>
@@ -171,8 +173,8 @@ export function LiveInspectionPanel() {
 
     {selectedInspection ? <div className="inspection-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedInspectionId('') }}>
       <aside className="inspection-drawer" role="dialog" aria-modal="true" aria-labelledby="inspection-detail-title">
-        <header><div><p className="eyebrow">Inspection Record</p><h2 id="inspection-detail-title">{selectedInspection.inspectionId}</h2><p>{selectedInspection.equipmentId}</p></div><button type="button" aria-label="Đóng" onClick={() => setSelectedInspectionId('')}>×</button></header>
-        <div className="inspection-detail-grid"><div><span>Ngày</span><strong>{selectedInspection.inspectionDate}</strong></div><div><span>Ca</span><strong>{selectedInspection.shift || '—'}</strong></div><div><span>Kết quả</span><strong>{markLabel[selectedInspection.overallMark] || selectedInspection.overallMark}</strong></div><div><span>Người kiểm</span><strong>{selectedInspection.inspectorId || '—'}</strong></div><div><span>Khu vực</span><strong>{selectedInspection.area || '—'}</strong></div><div><span>Bộ phận hư hỏng</span><strong>{selectedInspection.damagedParts || '—'}</strong></div></div>
+        <header><div><p className="eyebrow">Bản ghi kiểm tra</p><h2 id="inspection-detail-title">{selectedInspection.inspectionId}</h2><p>{selectedInspection.equipmentId}</p></div><button type="button" aria-label="Đóng" onClick={() => setSelectedInspectionId('')}>×</button></header>
+        <div className="inspection-detail-grid"><div><span>Ngày</span><strong>{selectedInspection.inspectionDate}</strong></div><div><span>Ca</span><strong>{shiftLabel[selectedInspection.shift] || selectedInspection.shift || '—'}</strong></div><div><span>Kết quả</span><strong>{markLabel[selectedInspection.overallMark] || selectedInspection.overallMark}</strong></div><div><span>Người kiểm</span><strong>{selectedInspection.inspectorId || '—'}</strong></div><div><span>Khu vực</span><strong>{selectedInspection.area || '—'}</strong></div><div><span>Bộ phận hư hỏng</span><strong>{selectedInspection.damagedParts || '—'}</strong></div></div>
         <section className="inspection-detail-section"><span>Ghi chú</span><p>{selectedInspection.note || '—'}</p></section>
       </aside>
     </div> : null}

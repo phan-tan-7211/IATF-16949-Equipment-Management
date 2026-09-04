@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import type { EquipmentMasterTextFields } from './equipmentMasterFields'
 
 export type EquipmentCriticality = 'A' | 'B' | 'C' | 'D'
 
@@ -10,18 +11,9 @@ export type EquipmentCriticalityFacts = {
   capacityImpact?: boolean
 }
 
-export type EquipmentRegistrationInput = EquipmentCriticalityFacts & {
+export type EquipmentRegistrationInput = EquipmentCriticalityFacts & Partial<EquipmentMasterTextFields> & {
   equipmentType: 'PRODUCTION' | 'MEASUREMENT'
   equipmentName: string
-  equipmentCategory?: string
-  manufacturer?: string
-  model?: string
-  serialNumber?: string
-  department?: string
-  currentArea?: string
-  currentLine?: string
-  managingDepartment?: string
-  technicalSpecification?: string
   status?: string
 }
 
@@ -50,8 +42,6 @@ export function deriveEquipmentCriticality(facts: EquipmentCriticalityFacts): Eq
     || typeof capacityImpact !== 'boolean'
   ) return ''
 
-  // CEV-ABCD-V2: classify equipment importance to the manufacturing process,
-  // not the severity of one breakdown event.
   if (specialCharacteristicImpact) return 'A'
   if (!hasBackup && (controlsProductQuality || stopsProduction || capacityImpact)) return 'A'
   if (controlsProductQuality || stopsProduction || capacityImpact) return 'B'

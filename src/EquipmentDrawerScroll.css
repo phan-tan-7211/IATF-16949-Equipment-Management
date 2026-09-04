@@ -1,0 +1,5 @@
+.equipment-drawer-backdrop{overflow:hidden;overscroll-behavior:contain;touch-action:none}
+.equipment-drawer{height:100dvh;max-height:100dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+.equipment-drawer>header{position:sticky;top:0;z-index:3;flex-shrink:0;background:var(--color-surface)}
+.equipment-drawer>footer{position:sticky;bottom:0;z-index:3;flex-shrink:0;margin-top:0;padding-bottom:calc(16px + env(safe-area-inset-bottom));background:var(--color-surface)}
+@media(max-width:640px){.equipment-drawer{width:100vw;height:100dvh;max-height:100dvh}.equipment-form-grid{padding-bottom:18px}}

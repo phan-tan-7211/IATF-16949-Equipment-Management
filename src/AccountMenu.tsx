@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import './AccountMenu.css'
 
+const ROLE_LABEL: Record<string,string> = {
+  MAINTENANCE: 'Bảo trì',
+  SUPERVISOR: 'Giám sát',
+  QUALITY: 'Chất lượng',
+  MANAGER: 'Quản lý',
+  ADMIN: 'Quản trị hệ thống',
+  UNKNOWN: 'Chưa xác định',
+}
+
 export function AccountMenu({ email, role, signOut }: {
   email: string
   role: string
@@ -36,7 +45,7 @@ export function AccountMenu({ email, role, signOut }: {
       </svg>
     </button>
     {open && <section id="account-details" className="account-details" aria-label="Thông tin tài khoản">
-      <strong>{email}</strong><span>{role}</span>
+      <strong>{email}</strong><span>{ROLE_LABEL[role] || role}</span>
       <button className="signout-button" type="button" onClick={() => { setOpen(false); void signOut() }}>Đăng xuất</button>
     </section>}
   </div>
