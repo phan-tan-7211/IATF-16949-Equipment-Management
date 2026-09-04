@@ -13,7 +13,7 @@ import {
 } from './data/autoRegistration'
 
 const EMPTY: EquipmentRegistrationInput = {
-  equipmentType: 'PRODUCTION', equipmentName: '', equipmentCategory: '', manufacturer: '', model: '', serialNumber: '', department: '', currentArea: '', currentLine: '', managingDepartment: '', managementResponsiblePrimary: '', managementResponsibleSecondary: '', technicalSpecification: '', description: '', accuracy: '', origin: '', manufactureDate: '', inServiceDate: '', warrantyUntil: '', warrantyContact: '', note: '', relatedDocuments: '', status: 'RUNNING', controlsProductQuality: undefined, specialCharacteristicImpact: undefined, stopsProduction: undefined, hasBackup: undefined, capacityImpact: undefined,
+  equipmentType: 'PRODUCTION', equipmentName: '', equipmentCategory: '', manufacturer: '', distributor: '', model: '', serialNumber: '', department: '', currentArea: '', currentLine: '', managingDepartment: '', managementResponsiblePrimary: '', managementResponsibleSecondary: '', technicalSpecification: '', description: '', accuracy: '', origin: '', manufactureDate: '', inServiceDate: '', warrantyUntil: '', warrantyContact: '', note: '', relatedDocuments: '', status: 'RUNNING', controlsProductQuality: undefined, specialCharacteristicImpact: undefined, stopsProduction: undefined, hasBackup: undefined, capacityImpact: undefined,
 }
 
 function booleanSelectValue(value: boolean | undefined) { return value === true ? 'YES' : value === false ? 'NO' : '' }
@@ -58,7 +58,7 @@ export function LiveEquipmentRegistrationPanel() {
 
   const canonical = useMemo(() => {
     const next = { ...form }
-    const keys: EquipmentMasterSuggestionKey[] = ['equipmentName','equipmentCategory','manufacturer','model','department','managingDepartment','managementResponsiblePrimary','managementResponsibleSecondary','currentArea','currentLine','technicalSpecification','description','accuracy','origin','warrantyContact','note','relatedDocuments']
+    const keys: EquipmentMasterSuggestionKey[] = ['equipmentName','equipmentCategory','manufacturer','distributor','model','department','managingDepartment','managementResponsiblePrimary','managementResponsibleSecondary','currentArea','currentLine','technicalSpecification','description','accuracy','origin','warrantyContact','note','relatedDocuments']
     for (const key of keys) next[key] = canonicalizeMasterValue(String(next[key] || ''), suggestions[key])
     return next
   }, [form, suggestions])
@@ -95,7 +95,7 @@ export function LiveEquipmentRegistrationPanel() {
       <label><span>Loại thiết bị</span><select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value as EquipmentRegistrationInput['equipmentType'] })}><option value="PRODUCTION">Thiết bị sản xuất → CEV-PR</option><option value="MEASUREMENT">Thiết bị đo/kiểm → CEV-ME</option></select></label>
       <label><span>Trạng thái</span><select value={form.status || 'RUNNING'} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
       <label className="wide"><span>Tên thiết bị *</span><SmartAutocomplete autoFocus required value={form.equipmentName} options={suggestions.equipmentName} onChange={(nextValue) => setForm({ ...form, equipmentName: nextValue })} onBlur={() => setForm((current) => ({ ...current, equipmentName: canonicalizeMasterValue(current.equipmentName, suggestions.equipmentName) }))} placeholder="Chọn tên chuẩn đã có hoặc nhập tên mới" /><small className="equipment-standardize-hint">Nếu đã có “Máy nhúng bể”, chọn đúng tên đó thay vì tạo biến thể mới.</small></label>
-      {textField('equipmentCategory','Nhóm thiết bị','equipmentCategory')}{textField('manufacturer','Hãng / nhà sản xuất','manufacturer')}{textField('model','Mẫu máy','model')}{textField('serialNumber','Số sê-ri')}
+      {textField('equipmentCategory','Nhóm thiết bị','equipmentCategory')}{textField('manufacturer','Hãng / nhà sản xuất','manufacturer')}{textField('distributor','Nhà phân phối','distributor')}{textField('model','Mẫu máy','model')}{textField('serialNumber','Số sê-ri')}
       {textField('department','Bộ phận sử dụng','department')}{textField('managingDepartment','Bộ phận quản lý','managingDepartment')}
       {textField('managementResponsiblePrimary','Người phụ trách quản lý · Chính *','managementResponsiblePrimary',false,'Nhập/chọn người chịu trách nhiệm chính',true)}
       {textField('managementResponsibleSecondary','Người phụ trách quản lý · Phụ','managementResponsibleSecondary',false,'Người thay thế / hỗ trợ')}
