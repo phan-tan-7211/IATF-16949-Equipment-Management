@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { SmartAutocomplete } from './components/SmartAutocomplete'
 import type { EquipmentMasterEditInput } from './data/equipmentMasterEdit'
-import { canonicalizeMasterValue, type EquipmentMasterSuggestionKey, type EquipmentMasterSuggestions } from './data/equipmentMasterFields'
+import { buildEquipmentMasterSuggestions, canonicalizeMasterValue, type EquipmentMasterSuggestionKey, type EquipmentMasterSuggestions } from './data/equipmentMasterFields'
+import { loadLiveEquipment } from './data/liveEquipment'
 
 type Props = {
   value: EquipmentMasterEditInput
@@ -9,11 +11,40 @@ type Props = {
 }
 
 export function EquipmentMasterEditFields({ value, suggestions, onChange }: Props) {
+  const hydratedEquipmentId = useRef('')
+  const [responsibleSuggestions, setResponsibleSuggestions] = useState<string[]>([])
+
+  useEffect(() => {
+    const equipmentId = value.equipmentId.trim()
+    if (!equipmentId || hydratedEquipmentId.current === equipmentId) return
+    hydratedEquipmentId.current = equipmentId
+    let active = true
+    void loadLiveEquipment({ force: true }).then((rows) => {
+      if (!active) return
+      const managerSuggestions = buildEquipmentMasterSuggestions(rows.map((row) => ({ ...row, department: row.usingDepartment })))
+      setResponsibleSuggestions(Array.from(new Set([...managerSuggestions.managementResponsiblePrimary, ...managerSuggestions.managementResponsibleSecondary])))
+      const current = rows.find((row) => row.equipmentId === equipmentId)
+      if (!current) return
+      onChange({
+        ...value,
+        managementResponsiblePrimary: value.managementResponsiblePrimary || current.managementResponsiblePrimary || '',
+        managementResponsibleSecondary: value.managementResponsibleSecondary || current.managementResponsibleSecondary || '',
+      })
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [value.equipmentId])
+
+  const mergedSuggestions = useMemo<EquipmentMasterSuggestions>(() => ({
+    ...suggestions,
+    managementResponsiblePrimary: responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsiblePrimary,
+    managementResponsibleSecondary: responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsibleSecondary,
+  }), [responsibleSuggestions, suggestions])
+
   function setField<K extends keyof EquipmentMasterEditInput>(key: K, nextValue: EquipmentMasterEditInput[K]) {
     onChange({ ...value, [key]: nextValue })
   }
   function textField(key: keyof EquipmentMasterEditInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false, required = false) {
-    return <label className={wide ? 'equipment-edit-wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete required={required} value={String(value[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setField(key, nextValue as never)} onBlur={() => setField(key, canonicalizeMasterValue(String(value[key] || ''), suggestions[suggestionKey]) as never)} /> : <input required={required} value={String(value[key] || '')} onChange={(event) => setField(key, event.target.value as never)} />}</label>
+    return <label className={wide ? 'equipment-edit-wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete required={required} value={String(value[key] || '')} options={mergedSuggestions[suggestionKey]} onChange={(nextValue) => setField(key, nextValue as never)} onBlur={() => setField(key, canonicalizeMasterValue(String(value[key] || ''), mergedSuggestions[suggestionKey]) as never)} /> : <input required={required} value={String(value[key] || '')} onChange={(event) => setField(key, event.target.value as never)} />}</label>
   }
 
   return <div className="equipment-edit-grid">
