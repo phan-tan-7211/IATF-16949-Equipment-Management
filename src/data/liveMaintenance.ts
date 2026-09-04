@@ -1,3 +1,4 @@
+import { isClientCacheFresh, readClientCache, writeClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 import type { MaintenanceWorkflowAction, MaintenanceWorkflowStatus } from '../domain/workflow'
 
@@ -10,6 +11,7 @@ export type LiveMaintenancePlan = {
   planId: string; equipmentId: string; maintenanceType: string; frequency: string; plannedDate: string; responsiblePerson: string; scheduledWindow: string; note: string; status: string; active: boolean; items: LiveMaintenancePlanItem[]
 }
 export type LiveHandover = { handoverId: string; workOrderId: string; equipmentId: string; accepted: boolean; condition: string; handoverAt: string }
+export type LiveMaintenanceSnapshot = { equipment: MaintenanceEquipmentOption[]; plans: LiveMaintenancePlan[]; workOrders: LiveMaintenanceWorkOrder[]; handovers: LiveHandover[] }
 export type MaintenancePlanInput = {
   planId?: string
   equipmentId: string
@@ -23,11 +25,63 @@ export type MaintenancePlanInput = {
   items: Array<{ itemName: string; standard: string; method: string; note?: string }>
 }
 
+const CACHE_KEY = 'cev:data:maintenance'
+const CACHE_VERSION = 1
+const CACHE_FRESH_MS = 30_000
+const restored = readClientCache<LiveMaintenanceSnapshot>(CACHE_KEY, CACHE_VERSION)
+let maintenanceCache: LiveMaintenanceSnapshot | null = restored?.data || null
+let maintenanceCacheSavedAt = restored?.savedAt || 0
+
 function text(value: unknown) { return value == null ? '' : String(value).trim() }
 function bool(value: unknown) { return value === true || ['TRUE', '1', 'YES'].includes(text(value).toUpperCase()) }
 function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 
-export async function loadLiveMaintenance() {
+function persistMaintenanceCache() {
+  if (!maintenanceCache) return
+  const saved = writeClientCache(CACHE_KEY, CACHE_VERSION, maintenanceCache)
+  maintenanceCacheSavedAt = saved.savedAt
+}
+
+export function getMaintenanceCacheSnapshot(): LiveMaintenanceSnapshot | null {
+  if (!maintenanceCache) return null
+  return {
+    equipment: [...maintenanceCache.equipment],
+    plans: [...maintenanceCache.plans],
+    workOrders: [...maintenanceCache.workOrders],
+    handovers: [...maintenanceCache.handovers],
+  }
+}
+
+function patchWorkOrderStatus(workOrderId: string, status: MaintenanceWorkflowStatus) {
+  if (!maintenanceCache) return
+  maintenanceCache = {
+    ...maintenanceCache,
+    workOrders: maintenanceCache.workOrders.map((item) => item.workOrderId === workOrderId ? { ...item, status } : item),
+  }
+  persistMaintenanceCache()
+}
+
+function insertCreatedWorkOrder(input: { workOrderId: string; equipmentId: string; sourceType: string; reason: string; priority: string; status: MaintenanceWorkflowStatus }) {
+  if (!maintenanceCache) return
+  const created: LiveMaintenanceWorkOrder = {
+    workOrderId: input.workOrderId,
+    equipmentId: input.equipmentId,
+    sourceType: input.sourceType,
+    requestedAt: new Date().toISOString(),
+    requestedBy: '',
+    reason: input.reason,
+    priority: input.priority,
+    status: input.status,
+    approvedBy: '',
+    approvedAt: '',
+  }
+  maintenanceCache = { ...maintenanceCache, workOrders: [created, ...maintenanceCache.workOrders.filter((item) => item.workOrderId !== created.workOrderId)] }
+  persistMaintenanceCache()
+}
+
+export async function loadLiveMaintenance(options: { force?: boolean } = {}) {
+  if (!options.force && maintenanceCache && isClientCacheFresh(maintenanceCacheSavedAt, CACHE_FRESH_MS)) return maintenanceCache
+
   const [equipmentResult, planResult, planItemResult, woResult, handoverResult] = await Promise.all([
     supabase.from('equipment_master').select('equipment_id,equipment_name,equipment_type,status,active').eq('active', true),
     supabase.from('maintenance_plan').select('*').order('created_at', { ascending: false }),
@@ -35,7 +89,12 @@ export async function loadLiveMaintenance() {
     supabase.from('maintenance_work_order').select('*').order('created_at', { ascending: false }),
     supabase.from('equipment_handover').select('*').order('created_at', { ascending: false }),
   ])
-  for (const result of [equipmentResult, planResult, planItemResult, woResult, handoverResult]) if (result.error) throw result.error
+  for (const result of [equipmentResult, planResult, planItemResult, woResult, handoverResult]) {
+    if (result.error) {
+      if (maintenanceCache) return maintenanceCache
+      throw result.error
+    }
+  }
 
   const equipment: MaintenanceEquipmentOption[] = ((equipmentResult.data || []) as Array<Record<string, unknown>>)
     .filter((row) => text(row.equipment_id) && text(row.equipment_type) === 'PRODUCTION' && text(row.status) !== 'DISPOSED')
@@ -81,13 +140,16 @@ export async function loadLiveMaintenance() {
     handoverId: text(row.handover_id), workOrderId: text(row.work_order_id), equipmentId: text(row.equipment_id), accepted: bool(row.accepted), condition: text(row.equipment_condition), handoverAt: text(row.created_at),
   }))
 
-  return { equipment, plans, workOrders, handovers }
+  maintenanceCache = { equipment, plans, workOrders, handovers }
+  persistMaintenanceCache()
+  return maintenanceCache
 }
 
 export async function upsertMaintenancePlan(input: MaintenancePlanInput) {
   const { data, error } = await supabase.rpc('rpc_upsert_maintenance_plan', { p_input: input })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
+  void loadLiveMaintenance({ force: true }).catch(() => undefined)
   return { planId: text(result.planId), equipmentId: text(result.equipmentId), itemCount: number(result.itemCount) }
 }
 
@@ -105,7 +167,10 @@ export async function createManualWorkOrder(request: { operationId: string; inpu
   })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return { result: { workOrderId: text(result.workOrderId), status: text(result.status) } }
+  const normalized = { workOrderId: text(result.workOrderId), status: text(result.status) as MaintenanceWorkflowStatus }
+  insertCreatedWorkOrder({ workOrderId: normalized.workOrderId, equipmentId: request.input.equipmentId, sourceType: request.input.sourceType, reason: request.input.reason, priority: request.input.priority, status: normalized.status })
+  void loadLiveMaintenance({ force: true }).catch(() => undefined)
+  return { result: normalized }
 }
 
 export async function transitionLiveMaintenance(request: { workOrderId: string; workflowAction: MaintenanceWorkflowAction; operationId: string }) {
@@ -116,5 +181,8 @@ export async function transitionLiveMaintenance(request: { workOrderId: string; 
   })
   if (error) throw error
   const result = (data || {}) as Record<string, unknown>
-  return { result: { status: text(result.status) as MaintenanceWorkflowStatus } }
+  const status = text(result.status) as MaintenanceWorkflowStatus
+  patchWorkOrderStatus(request.workOrderId, status)
+  void loadLiveMaintenance({ force: true }).catch(() => undefined)
+  return { result: { status } }
 }
