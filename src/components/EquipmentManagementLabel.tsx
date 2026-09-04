@@ -36,36 +36,46 @@ export function EquipmentManagementLabel({ row, size = 'standard' }: Props) {
   const equipmentId = text(row, 'equipment_id')
   const equipmentName = text(row, 'equipment_name')
   const qrValue = text(row, 'qr_code') || equipmentId
+  const primary = text(row, 'managementResponsiblePrimary')
+  const secondary = text(row, 'managementResponsibleSecondary')
   const area = text(row, 'currentArea')
   const line = text(row, 'currentLine')
-  const department = text(row, 'department') || text(row, 'usingDepartment')
   const criticality = text(row, 'criticality')
   const status = text(row, 'status')
   const location = [area, line].filter(Boolean).join(' · ')
 
   return <section className={`equipment-management-label label-${size}`} aria-label={`Tem quản lý ${equipmentId}`}>
     <header>
-      <div>
-        <strong>CORE ELECTRONICS VIETNAM</strong>
-        <span>TEM QUẢN LÝ THIẾT BỊ</span>
+      <div><strong>CORE ELECTRONICS VIETNAM</strong><span>TEM QUẢN LÝ THIẾT BỊ</span></div>
+      <div className="equipment-label-badges">
+        {criticality ? <b>CẤP {criticality}</b> : null}
+        <b>{statusLabel(status)}</b>
       </div>
-      {criticality ? <b className="equipment-label-criticality">CẤP {criticality}</b> : null}
     </header>
 
     <div className="equipment-label-body">
-      <div className="equipment-label-main">
-        <div className="equipment-label-id">{equipmentId || '—'}</div>
-        <div className="equipment-label-name">{equipmentName || 'Chưa có tên thiết bị'}</div>
-        <dl>
-          <div><dt>Vị trí</dt><dd>{location || '—'}</dd></div>
-          <div><dt>Bộ phận</dt><dd>{department || '—'}</dd></div>
-        </dl>
-        <div className="equipment-label-status">{statusLabel(status)}</div>
+      <div className="equipment-label-table" role="table" aria-label="Thông tin quản lý thiết bị">
+        <div className="equipment-label-row" role="row">
+          <div className="equipment-label-key" role="cell">Mã quản lý thiết bị</div>
+          <div className="equipment-label-value equipment-label-code" role="cell">{equipmentId || '—'}</div>
+        </div>
+        <div className="equipment-label-row" role="row">
+          <div className="equipment-label-key" role="cell">Tên thiết bị</div>
+          <div className="equipment-label-value equipment-label-name" role="cell">{equipmentName || '—'}</div>
+        </div>
+        <div className="equipment-label-responsible" role="rowgroup">
+          <div className="equipment-label-key equipment-label-responsible-title">Người phụ trách quản lý</div>
+          <div className="equipment-label-responsible-lines">
+            <div><b>Chính</b><strong className={!primary ? 'is-missing' : ''}>{primary || 'CHƯA PHÂN CÔNG'}</strong></div>
+            <div><b>Phụ</b><strong>{secondary || '—'}</strong></div>
+          </div>
+        </div>
+        {size !== 'compact' ? <div className="equipment-label-location">Vị trí: <strong>{location || '—'}</strong></div> : null}
       </div>
 
       <div className="equipment-label-qr">
         <EquipmentQr value={qrValue} size={150} label="" />
-        <span>QUÉT ĐỂ MỞ HỒ SƠ</span>
+        <span>QUÉT HỒ SƠ / KIỂM KÊ</span>
       </div>
     </div>
   </section>
