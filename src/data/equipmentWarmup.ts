@@ -6,7 +6,7 @@ const MIN_WARMUP_INTERVAL_MS = 30_000
 
 export function warmEquipmentCache(force = false) {
   const now = Date.now()
-  if (!force && now - lastWarmupAt < MIN_WARMUP_INTERVAL_MS) return warmupPromise || Promise.resolve()
+  if (now - lastWarmupAt < MIN_WARMUP_INTERVAL_MS) return warmupPromise || Promise.resolve()
   if (warmupPromise) return warmupPromise
 
   lastWarmupAt = now
