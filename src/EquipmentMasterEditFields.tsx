@@ -1,3 +1,4 @@
+import { SmartAutocomplete } from './components/SmartAutocomplete'
 import type { EquipmentMasterEditInput } from './data/equipmentMasterEdit'
 import { canonicalizeMasterValue, type EquipmentMasterSuggestionKey, type EquipmentMasterSuggestions } from './data/equipmentMasterFields'
 
@@ -12,8 +13,7 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
     onChange({ ...value, [key]: nextValue })
   }
   function textField(key: keyof EquipmentMasterEditInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false) {
-    const listId = suggestionKey ? `edit-master-${suggestionKey}` : undefined
-    return <label className={wide ? 'equipment-edit-wide' : undefined}><span>{label}</span><input list={listId} value={String(value[key] || '')} onChange={(event) => setField(key, event.target.value as never)} onBlur={() => suggestionKey && setField(key, canonicalizeMasterValue(String(value[key] || ''), suggestions[suggestionKey]) as never)} />{suggestionKey ? <datalist id={listId}>{suggestions[suggestionKey].map((option) => <option key={option} value={option} />)}</datalist> : null}</label>
+    return <label className={wide ? 'equipment-edit-wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete value={String(value[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setField(key, nextValue as never)} onBlur={() => setField(key, canonicalizeMasterValue(String(value[key] || ''), suggestions[suggestionKey]) as never)} /> : <input value={String(value[key] || '')} onChange={(event) => setField(key, event.target.value as never)} />}</label>
   }
 
   return <div className="equipment-edit-grid">
