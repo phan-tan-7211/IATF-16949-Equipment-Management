@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './SpareParts.css'
 import { useAppRole } from './auth/AppRoleContext'
+import { EquipmentMultiSelect } from './components/EquipmentMultiSelect'
 import { loadLiveEquipment, type LiveEquipment } from './data/liveEquipment'
 import { loadSpareParts, loadSpareUsage, recordSpareUsage, saveSparePart, type LiveSparePart, type SpareClassification, type SpareUsage } from './data/liveSpareParts'
 
@@ -51,7 +52,6 @@ export function LiveSparePartsAutoPanel() {
   const [selectedId,setSelectedId] = useState('')
   const [formOpen,setFormOpen] = useState(false)
   const [form,setForm] = useState<PartForm>(EMPTY)
-  const [equipmentToAdd,setEquipmentToAdd] = useState('')
   const [usageEquipment,setUsageEquipment] = useState('')
   const [usageQty,setUsageQty] = useState('1')
   const [usageReason,setUsageReason] = useState('')
@@ -73,14 +73,13 @@ export function LiveSparePartsAutoPanel() {
 
   function startNew(){setSelectedId('');setForm(EMPTY);setFormOpen(true);setMessage('');setError('')}
   function startEdit(part:LiveSparePart){setSelectedId(part.partId);setForm(editForm(part));setFormOpen(true);setMessage('');setError('')}
-  function addEquipment(){const id=equipmentToAdd.trim().toUpperCase();if(!id||!equipment.some((row)=>row.equipmentId===id)||form.equipmentIds.includes(id))return;setForm((current)=>({...current,equipmentIds:[...current.equipmentIds,id]}));setEquipmentToAdd('')}
 
   async function submit(event:FormEvent){
     event.preventDefault(); if(!canEdit||!form.partName.trim())return
     setSaving(true);setError('');setMessage('')
     try{
       const saved=await saveSparePart({partId:form.partId,partName:form.partName.trim(),partNumber:form.partNumber.trim(),maker:form.maker.trim(),stockQty:Math.max(0,Number(form.stockQty)||0),minQty:Math.max(0,Number(form.minQty)||0),location:form.location.trim(),leadTimeDays:form.leadTimeDays===''?null:Math.max(0,Number(form.leadTimeDays)||0),stopsProduction:form.stopsProduction,qualitySafetyImpact:form.qualitySafetyImpact,leadTimeExceedsRecovery:form.leadTimeExceedsRecovery,rationaleNote:form.rationaleNote.trim(),equipmentIds:form.equipmentIds})
-      await reload();setSelectedId(saved.partId);setFormOpen(false);setMessage(`Đã lưu ${saved.partId} · ${LABEL[saved.classification]} ${saved.riskScore}/4`)
+      await reload();setSelectedId(saved.partId);setFormOpen(false);setMessage(`Đã lưu ${saved.partId} · ${LABEL[saved.classification]} ${saved.riskScore}/4 · ${saved.equipmentCount} thiết bị`)
     }catch(cause:unknown){const text=cause instanceof Error?cause.message:'Không thể lưu phụ tùng';setError(text.replace('SPARE_PART_POSSIBLE_DUPLICATE:','Có thể đã tồn tại mã '))}finally{setSaving(false)}
   }
 
@@ -100,7 +99,14 @@ export function LiveSparePartsAutoPanel() {
         <div className="spare-detail">{formOpen?<form onSubmit={submit} className="spare-form"><header><div><p className="eyebrow">Flow đăng ký</p><h3>{form.partId||'Linh kiện mới'}</h3><p>{form.partId?'Đang sửa mã hiện có':'Mã SP-xxxxx sẽ tự sinh khi lưu'}</p></div><span className={`spare-badge ${preview.classification.toLowerCase()}`}>{LABEL[preview.classification]} {preview.score}/4</span></header>
           <div className="spare-fields"><label><span>Tên linh kiện *</span><input autoFocus value={form.partName} onChange={(e)=>setForm({...form,partName:e.target.value})} required/></label><label><span>Part No.</span><input value={form.partNumber} onChange={(e)=>setForm({...form,partNumber:e.target.value})}/></label><label><span>Maker</span><input value={form.maker} onChange={(e)=>setForm({...form,maker:e.target.value})}/></label><label><span>Tồn hiện tại</span><input type="number" min="0" value={form.stockQty} onChange={(e)=>setForm({...form,stockQty:e.target.value})}/></label><label><span>Min Qty</span><input type="number" min="0" value={form.minQty} onChange={(e)=>setForm({...form,minQty:e.target.value})}/></label><label><span>Vị trí</span><input value={form.location} onChange={(e)=>setForm({...form,location:e.target.value})}/></label><label><span>Lead time (ngày)</span><input type="number" min="0" value={form.leadTimeDays} onChange={(e)=>setForm({...form,leadTimeDays:e.target.value})}/></label></div>
           <section className="spare-risk"><h4>Hệ thống tự chấm từ 4 yếu tố</h4><label><input type="checkbox" checked={form.stopsProduction} onChange={(e)=>setForm({...form,stopsProduction:e.target.checked})}/><span><b>1. Hỏng part làm máy/line dừng?</b><small>TAN trả lời Có/Không.</small></span></label><label><input type="checkbox" checked={form.qualitySafetyImpact} onChange={(e)=>setForm({...form,qualitySafetyImpact:e.target.checked})}/><span><b>2. Ảnh hưởng chất lượng hoặc an toàn?</b><small>Có → tự Required.</small></span></label><label><input type="checkbox" checked={form.leadTimeExceedsRecovery} onChange={(e)=>setForm({...form,leadTimeExceedsRecovery:e.target.checked})}/><span><b>3. Lead time vượt thời gian dừng chấp nhận?</b><small>TAN xác nhận.</small></span></label><label className="auto"><input type="checkbox" checked={preview.sharedCritical} readOnly/><span><b>4. Dùng chung ≥2 máy A/B?</b><small>Tự tính từ mapping · hiện {preview.criticalCount} máy A/B.</small></span></label></section>
-          <section className="spare-equipment-editor"><h4>Máy sử dụng</h4><div className="spare-add-row"><input list="auto-spare-equipment" value={equipmentToAdd} onChange={(e)=>setEquipmentToAdd(e.target.value)} placeholder="Chọn/nhập mã máy…"/><datalist id="auto-spare-equipment">{equipment.map((row)=><option key={row.equipmentId} value={row.equipmentId}>{row.equipmentName}</option>)}</datalist><button type="button" onClick={addEquipment}>Thêm</button></div><div className="spare-chips">{form.equipmentIds.map((id)=>{const row=equipment.find((item)=>item.equipmentId===id);return <button key={id} type="button" onClick={()=>setForm({...form,equipmentIds:form.equipmentIds.filter((item)=>item!==id)})}>{id} <small>{row?.criticality||'—'}</small> ×</button>})}</div></section>
+          <EquipmentMultiSelect
+            equipment={equipment}
+            selectedIds={form.equipmentIds}
+            onChange={(equipmentIds)=>setForm((current)=>({...current,equipmentIds}))}
+            title="Máy sử dụng"
+            helper="Tìm và check nhiều máy cùng lúc. Mỗi máy hiển thị ảnh, mã, tên và cấp độ."
+            disabled={saving}
+          />
           <label className="spare-note"><span>Căn cứ / ghi chú</span><textarea value={form.rationaleNote} onChange={(e)=>setForm({...form,rationaleNote:e.target.value})}/></label><footer><button type="button" onClick={()=>setFormOpen(false)}>Hủy</button><button className="spare-primary" disabled={saving}>{saving?'Đang lưu…':form.partId?'Lưu thay đổi':'Tạo & tự sinh mã'}</button></footer></form>
         :selected?<><header className="spare-detail-head"><div><p className="eyebrow">{selected.partId}</p><h3>{selected.partName}</h3><p>{selected.partNumber||'Chưa có Part No.'}{selected.maker?` · ${selected.maker}`:''}</p></div><span className={`spare-badge ${selected.classification.toLowerCase()}`}>{LABEL[selected.classification]} {selected.riskScore}/4</span></header><div className="spare-facts"><div><span>Tồn / Min</span><strong>{selected.stockQty} / {selected.minQty}</strong></div><div><span>Vị trí</span><strong>{selected.location||'—'}</strong></div><div><span>Lead time</span><strong>{selected.leadTimeDays===null?'—':`${selected.leadTimeDays} ngày`}</strong></div><div><span>Dùng cho</span><strong>{selected.equipmentCount} máy</strong></div></div><section className="spare-why"><h4>Lý do phân loại</h4><p className={selected.stopsProduction?'yes':''}>{selected.stopsProduction?'✓':'○'} Dừng máy/line</p><p className={selected.qualitySafetyImpact?'yes':''}>{selected.qualitySafetyImpact?'✓':'○'} Chất lượng/an toàn</p><p className={selected.leadTimeExceedsRecovery?'yes':''}>{selected.leadTimeExceedsRecovery?'✓':'○'} Lead time vượt recovery</p><p className={selected.sharedCritical?'yes':''}>{selected.sharedCritical?'✓':'○'} Dùng chung ≥2 máy A/B ({selected.criticalEquipmentCount})</p></section><section><h4>Máy sử dụng</h4><div className="spare-chips">{selected.equipment.map((item)=><span key={item.equipmentId}>{item.equipmentId} <small>{item.criticality||'—'}</small></span>)}</div></section>{canEdit?<><button className="spare-primary" onClick={()=>startEdit(selected)}>Sửa thông tin</button><section><h4>Ghi đã thay linh kiện</h4><form className="spare-usage-form" onSubmit={submitUsage}><select value={usageEquipment} onChange={(e)=>setUsageEquipment(e.target.value)} required><option value="">Chọn máy</option>{selected.equipment.map((item)=><option key={item.equipmentId} value={item.equipmentId}>{item.equipmentId}</option>)}</select><input type="number" min="1" value={usageQty} onChange={(e)=>setUsageQty(e.target.value)}/><input value={usageReason} onChange={(e)=>setUsageReason(e.target.value)} placeholder="Lý do / sự cố"/><button disabled={saving}>Ghi thay & trừ tồn</button></form></section></>:null}<section><h4>Lịch sử thay</h4>{usage.length?usage.map((item)=><p key={item.usageId}><b>{item.equipmentId}</b> ×{item.quantity} · {item.usedAt.slice(0,10)} {item.reason?`· ${item.reason}`:''}</p>):<p>Chưa có lịch sử.</p>}</section></>:<div className="spare-empty"><b>Chọn linh kiện</b><p>Hoặc tạo mới. Mã sẽ được cấp tự động.</p></div>}</div></div>:null}
     </section>
