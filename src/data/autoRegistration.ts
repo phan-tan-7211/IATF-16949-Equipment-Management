@@ -57,8 +57,18 @@ export async function createEquipmentAuto(input: EquipmentRegistrationInput): Pr
   const { data, error } = await supabase.rpc('rpc_create_equipment_auto', { p_input: input })
   if (error) throw error
   const row = (data || {}) as Record<string, unknown>
+  const equipmentId = String(row.equipmentId || row.equipment_id || '')
+
+  if (equipmentId && input.distributor?.trim()) {
+    const { error: distributorError } = await supabase.rpc('rpc_set_equipment_distributor', {
+      p_equipment_id: equipmentId,
+      p_distributor: input.distributor.trim(),
+    })
+    if (distributorError) throw new Error(`Thiết bị đã tạo nhưng chưa lưu được nhà phân phối: ${distributorError.message}`)
+  }
+
   return {
-    equipmentId: String(row.equipmentId || row.equipment_id || ''),
+    equipmentId,
     qrCode: String(row.qrCode || row.qr_code || ''),
     equipmentType: String(row.equipmentType || row.equipment_type || input.equipmentType) as EquipmentRegistrationResult['equipmentType'],
     equipmentName: String(row.equipmentName || row.equipment_name || input.equipmentName),
