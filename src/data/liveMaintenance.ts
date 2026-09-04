@@ -62,6 +62,15 @@ function patchWorkOrderStatus(workOrderId: string, status: MaintenanceWorkflowSt
   persistMaintenanceCache()
 }
 
+export function patchMaintenanceHandoverCache(handover: LiveHandover) {
+  if (!maintenanceCache || !handover.handoverId) return
+  maintenanceCache = {
+    ...maintenanceCache,
+    handovers: [handover, ...maintenanceCache.handovers.filter((item) => item.handoverId !== handover.handoverId)],
+  }
+  persistMaintenanceCache()
+}
+
 function insertCreatedWorkOrder(input: { workOrderId: string; equipmentId: string; sourceType: string; reason: string; priority: string; status: MaintenanceWorkflowStatus }) {
   if (!maintenanceCache) return
   const created: LiveMaintenanceWorkOrder = {
