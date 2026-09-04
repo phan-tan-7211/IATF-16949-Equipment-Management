@@ -1,3 +1,4 @@
+import { removeEquipmentFromCache } from './supabaseEquipment'
 import { supabase } from './supabaseClient'
 
 const PHOTO_BUCKET = 'equipment-photos'
@@ -70,6 +71,7 @@ export async function deleteUnusedEquipment(equipmentId: string) {
 
   // Storage is outside the DB transaction, so clean the whole equipment folder after the guarded DB delete.
   const removedPhotos = await removeEquipmentPhotos(id)
+  removeEquipmentFromCache(id)
   const deleted = data && typeof data === 'object' ? data : {}
   return { ...deleted, removedPhotos }
 }
