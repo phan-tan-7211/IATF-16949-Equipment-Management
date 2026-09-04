@@ -60,6 +60,10 @@ function persistEquipmentCache() {
   equipmentCacheSavedAt = saved.savedAt
 }
 
+export function getEquipmentCacheSnapshot(): LiveEquipment[] {
+  return equipmentCache ? [...equipmentCache] : []
+}
+
 export function patchEquipmentCacheAfterWrite(patch: EquipmentCachePatch) {
   if (!equipmentCache) return
   const equipmentId = patch.equipmentId.trim().toUpperCase()
