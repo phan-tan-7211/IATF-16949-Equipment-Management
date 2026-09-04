@@ -144,8 +144,7 @@ export function SmartAutocomplete({
         onChange(event.target.value)
         setOpen(true)
       }}
-      onBlur={(event) => {
-        inputProps.onBlur?.(event)
+      onBlur={() => {
         setOpen(false)
         setActiveIndex(-1)
         onBlur?.()
