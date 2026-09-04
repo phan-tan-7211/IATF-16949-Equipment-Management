@@ -2,9 +2,11 @@ import { EquipmentQr } from './EquipmentQr'
 import './EquipmentManagementLabel.css'
 
 type Row = Record<string, unknown>
+export type EquipmentLabelSize = 'compact' | 'standard' | 'large'
 
 type Props = {
   row: Row
+  size?: EquipmentLabelSize
 }
 
 function sourceData(row: Row) {
@@ -30,7 +32,7 @@ function statusLabel(value: string) {
   return labels[value.toUpperCase()] || value || 'CHƯA XÁC ĐỊNH'
 }
 
-export function EquipmentManagementLabel({ row }: Props) {
+export function EquipmentManagementLabel({ row, size = 'standard' }: Props) {
   const equipmentId = text(row, 'equipment_id')
   const equipmentName = text(row, 'equipment_name')
   const qrValue = text(row, 'qr_code') || equipmentId
@@ -41,7 +43,7 @@ export function EquipmentManagementLabel({ row }: Props) {
   const status = text(row, 'status')
   const location = [area, line].filter(Boolean).join(' · ')
 
-  return <section className="equipment-management-label" aria-label={`Tem quản lý ${equipmentId}`}>
+  return <section className={`equipment-management-label label-${size}`} aria-label={`Tem quản lý ${equipmentId}`}>
     <header>
       <div>
         <strong>CORE ELECTRONICS VIETNAM</strong>
