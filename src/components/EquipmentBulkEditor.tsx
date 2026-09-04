@@ -9,8 +9,8 @@ const FIELD_OPTIONS: Array<{ value: FieldKey; label: string }> = [
   { value: 'department', label: 'Bộ phận sử dụng' },
   { value: 'managingDepartment', label: 'Bộ phận quản lý' },
   { value: 'currentArea', label: 'Khu vực' },
-  { value: 'currentLine', label: 'Dây chuyền / Line' },
-  { value: 'equipmentCategory', label: 'Nhóm / Category' },
+  { value: 'currentLine', label: 'Dây chuyền' },
+  { value: 'equipmentCategory', label: 'Nhóm thiết bị' },
   { value: 'status', label: 'Trạng thái' },
 ]
 
