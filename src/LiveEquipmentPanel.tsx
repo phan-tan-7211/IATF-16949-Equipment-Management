@@ -4,6 +4,7 @@ import { EquipmentProfile } from './EquipmentProfile'
 import { deriveEquipmentCriticality } from './data/autoRegistration'
 import { type LiveEquipment } from './data/liveEquipment'
 import { checkEquipmentDeletion, deleteUnusedEquipment } from './data/equipmentDeletion'
+import { deleteEquipmentPhotos } from './data/equipmentPhotoDelete'
 import { updateEquipmentDetails, type EquipmentMasterEditInput } from './data/equipmentMasterEdit'
 import {
   getEquipmentPhotoPreview,
@@ -95,6 +96,7 @@ export function LiveEquipmentPanel() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [uploadingId, setUploadingId] = useState('')
+  const [deletingPhotoId, setDeletingPhotoId] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [query, setQuery] = useState('')
@@ -256,6 +258,23 @@ export function LiveEquipmentPanel() {
     await uploadAndRefresh(equipmentId, file)
   }
 
+  async function handlePhotoDelete(equipmentId: string) {
+    if (!photos[equipmentId]?.url || uploadingId || deletingPhotoId) return
+    if (!window.confirm(`Xóa ảnh hiện tại của ${equipmentId}?\n\nChỉ ảnh sẽ bị xóa. Dữ liệu thiết bị và lịch sử không thay đổi.`)) return
+
+    setDeletingPhotoId(equipmentId)
+    setMessage('')
+    try {
+      const removed = await deleteEquipmentPhotos(equipmentId)
+      setPhotos((current) => ({ ...current, [equipmentId]: { state: 'no', url: '' } }))
+      setMessage(removed > 0 ? `Đã xóa ảnh ${equipmentId}.` : `${equipmentId} không có ảnh để xóa.`)
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'SUPABASE_PHOTO_DELETE_FAILED')
+    } finally {
+      setDeletingPhotoId('')
+    }
+  }
+
   async function handleClipboardUpload(equipmentId: string) {
     if (!navigator.clipboard?.read) {
       setMessage('Trình duyệt không hỗ trợ đọc ảnh từ clipboard.')
@@ -406,8 +425,9 @@ export function LiveEquipmentPanel() {
           <div className="equipment-edit-photo">
             {photos[editing.equipmentId]?.url ? <img src={photos[editing.equipmentId].url} alt={`Ảnh ${editing.equipmentName}`} /> : <div className="equipment-edit-photo-empty">Chưa có ảnh</div>}
             <div className="equipment-edit-photo-actions">
-              <button type="button" onClick={() => void handleClipboardUpload(editing.equipmentId)} disabled={!!uploadingId}>{uploadingId === editing.equipmentId ? 'Đang tải…' : 'Dán ảnh từ clipboard'}</button>
-              <label className="equipment-edit-photo-picker">Chọn ảnh<input type="file" accept="image/*" capture="environment" onChange={(event) => void handlePhotoUpload(editing.equipmentId, event.currentTarget.files?.[0])} /></label>
+              <button type="button" onClick={() => void handleClipboardUpload(editing.equipmentId)} disabled={!!uploadingId || !!deletingPhotoId}>{uploadingId === editing.equipmentId ? 'Đang tải…' : 'Dán ảnh từ clipboard'}</button>
+              <label className="equipment-edit-photo-picker">Chọn ảnh<input type="file" accept="image/*" capture="environment" disabled={!!uploadingId || !!deletingPhotoId} onChange={(event) => void handlePhotoUpload(editing.equipmentId, event.currentTarget.files?.[0])} /></label>
+              {photos[editing.equipmentId]?.url ? <button className="equipment-edit-photo-delete" type="button" onClick={() => void handlePhotoDelete(editing.equipmentId)} disabled={!!uploadingId || !!deletingPhotoId}>{deletingPhotoId === editing.equipmentId ? 'Đang xóa ảnh…' : 'Xóa ảnh'}</button> : null}
               <small>1 thiết bị = 1 ảnh · tự nén trước khi lưu</small>
             </div>
           </div>
