@@ -57,6 +57,21 @@ for (const path of equipmentFiles) {
       report(path, 'shared CSS must not contain viewport media queries')
     }
   }
+
+  if (/['"]\.\.\/\.\.\/(?:Equipment|EquipmentSheetView|EquipmentRegistration)\.css['"]/.test(body)) {
+    report(path, 'equipment platform code must import equipment-owned styles directly, never root compatibility CSS')
+  }
+}
+
+const registrationPanel = resolve(root, 'src/LiveEquipmentRegistrationPanel.tsx')
+if (existsSync(registrationPanel)) {
+  const body = text(registrationPanel)
+  if (/import\s+['"]\.\/(?:Equipment|EquipmentRegistration)\.css['"]/.test(body)) {
+    report(registrationPanel, 'registration must import equipment-owned shared styles directly')
+  }
+  if (!body.includes("./equipment/shared/styles/EquipmentPrimitives.css") || !body.includes("./equipment/shared/styles/EquipmentRegistrationPrimitives.css")) {
+    report(registrationPanel, 'registration must consume Equipment shared primitive styles directly')
+  }
 }
 
 const required = [
