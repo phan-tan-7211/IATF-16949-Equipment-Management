@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './Tooling.css'
 import { canCreateToolingMaster, canCreateToolingModification, canCreateToolingPlan, canTransitionTooling, useAppRole } from './auth/AppRoleContext'
@@ -46,13 +46,13 @@ export function LiveToolingPanel() {
   const [beforeAfter, setBeforeAfter] = useState('')
   const [updatedDocs, setUpdatedDocs] = useState<Record<string, string>>({})
 
-  const applyResult = (result: Awaited<ReturnType<typeof loadLiveTooling>>) => {
+  const applyResult = useCallback((result: Awaited<ReturnType<typeof loadLiveTooling>>) => {
     setTooling(result.tooling); setPlans(result.plans); setMods(result.modifications)
     setPlanToolingId((current) => current || result.tooling[0]?.toolingId || '')
     setModToolingId((current) => current || result.tooling[0]?.toolingId || '')
     setError('')
-  }
-  const refresh = async () => applyResult(await loadLiveTooling())
+  }, [])
+  const refresh = useCallback(async () => applyResult(await loadLiveTooling()), [applyResult])
 
   useEffect(() => {
     let active = true
@@ -60,7 +60,7 @@ export function LiveToolingPanel() {
       .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải danh mục jig, gá và dụng cụ') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [applyResult])
 
   useEffect(() => {
     if (!drawer && !selectedModId) return
