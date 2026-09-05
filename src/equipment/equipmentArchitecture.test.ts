@@ -57,7 +57,11 @@ describe('Equipment platform architecture', () => {
   })
 
   it('keeps shared Equipment primitive styles free of viewport page-layout media queries', () => {
-    for (const file of ['src/equipment/shared/styles/EquipmentPrimitives.css', 'src/equipment/shared/styles/EquipmentSheetPrimitives.css']) {
+    for (const file of [
+      'src/equipment/shared/styles/EquipmentPrimitives.css',
+      'src/equipment/shared/styles/EquipmentSheetPrimitives.css',
+      'src/equipment/shared/styles/EquipmentRegistrationPrimitives.css',
+    ]) {
       const content = read(file)
       expect(content, `${file} is shared primitive CSS and must not own viewport layout`).not.toMatch(/@media\s*\(/)
     }
@@ -76,6 +80,12 @@ describe('Equipment platform architecture', () => {
     }
   })
 
+  it('keeps root Equipment styles as thin compatibility wrappers', () => {
+    expect(read('src/Equipment.css')).toContain("@import './equipment/shared/styles/EquipmentPrimitives.css';")
+    expect(read('src/EquipmentSheetView.css')).toContain("@import './equipment/shared/styles/EquipmentSheetPrimitives.css';")
+    expect(read('src/EquipmentRegistration.css')).toContain("@import './equipment/shared/styles/EquipmentRegistrationPrimitives.css';")
+  })
+
   it('keeps the panel controller as an orchestrator of focused shared hooks', () => {
     const controller = read('src/equipment/shared/useEquipmentPanelController.ts')
     for (const hook of ['useEquipmentTableState','useEquipmentPhotos','useEquipmentBulkEdit','useEquipmentEditing']) expect(controller).toContain(hook)
@@ -89,6 +99,13 @@ describe('Equipment platform architecture', () => {
     expect(mobile).toContain('MobileFilterFields')
     expect(mobileCss).toContain('.equipment-mobile-card')
     expect(mobileCss).toContain('.equipment-mobile-filter-fields')
+  })
+
+  it('keeps mobile registration to one scroll owner and above the bottom navigation', () => {
+    const mobileForms = read('src/equipment/mobile/EquipmentMobileForms.css')
+    expect(mobileForms).toContain('body:has(.equipment-register-drawer){overflow:hidden}')
+    expect(mobileForms).toContain('.equipment-drawer-backdrop:has(.equipment-register-drawer){bottom:calc(64px + env(safe-area-inset-bottom))')
+    expect(mobileForms).toContain('.equipment-register-scroll{min-height:0;padding-bottom:12px;overscroll-behavior:contain')
   })
 
   it('uses one explicit 901px platform boundary', () => {
