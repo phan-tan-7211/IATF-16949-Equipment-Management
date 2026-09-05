@@ -58,7 +58,7 @@ function text(value: unknown) {
 }
 
 function unique(values: string[]) {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'vi'))
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).toSorted((a, b) => a.localeCompare(b, 'vi'))
 }
 
 function normalized(value: string) {
