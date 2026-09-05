@@ -85,7 +85,7 @@ export async function createTooling(input: Record<string, unknown>) {
     inspectionCycleDays: inputText(input, 'inspectionCycleDays'),
   }
   if (toolingCache && toolingId) {
-    toolingCache = { ...toolingCache, tooling: [...toolingCache.tooling.filter((item) => item.toolingId !== toolingId), created].sort((a, b) => a.toolingId.localeCompare(b.toolingId)) }
+    toolingCache = { ...toolingCache, tooling: [...toolingCache.tooling.filter((item) => item.toolingId !== toolingId), created].toSorted((a, b) => a.toolingId.localeCompare(b.toolingId)) }
     persistToolingCache()
   }
   return { result: { toolingId } }
