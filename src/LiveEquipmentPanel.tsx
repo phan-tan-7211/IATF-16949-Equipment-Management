@@ -31,24 +31,31 @@ type ColumnDef = { key: ColumnKey; label: string; defaultVisible?: boolean; grou
 type ColumnFilters = Partial<Record<ColumnKey, string[]>>
 type InlineChanges = Record<string, EquipmentRowPatch>
 
-const COLUMN_STORAGE_KEY = 'cev-equipment-visible-columns-v3'
+const COLUMN_STORAGE_KEY = 'cev-equipment-visible-columns-v4'
 const COLUMNS: ColumnDef[] = [
+  // 1. Nhận diện nhanh: máy nào / thuộc loại nào
   { key:'equipmentId',label:'Mã thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentName',label:'Tên thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentType',label:'Loại thiết bị',defaultVisible:true,group:'Nhận diện' },
-  { key:'equipmentCategory',label:'Nhóm thiết bị',group:'Nhận diện' },
-  { key:'manufacturer',label:'Hãng / nhà sản xuất',group:'Nhận diện' },
-  { key:'distributor',label:'Nhà phân phối',group:'Nhận diện' },
-  { key:'model',label:'Mẫu máy',defaultVisible:true,group:'Nhận diện' },
-  { key:'serialNumber',label:'Số sê-ri',defaultVisible:true,group:'Nhận diện' },
-  { key:'usingDepartment',label:'Bộ phận sử dụng',defaultVisible:true,group:'Quản lý' },
+  { key:'equipmentCategory',label:'Nhóm thiết bị',defaultVisible:true,group:'Nhận diện' },
+
+  // 2. Phân cấp trách nhiệm: ai quản lý trước, ai sử dụng sau
   { key:'managingDepartment',label:'Bộ phận quản lý',defaultVisible:true,group:'Quản lý' },
   { key:'managementResponsiblePrimary',label:'Người QL chính',defaultVisible:true,group:'Quản lý' },
   { key:'managementResponsibleSecondary',label:'Người QL phụ',defaultVisible:true,group:'Quản lý' },
+  { key:'usingDepartment',label:'Bộ phận sử dụng',defaultVisible:true,group:'Quản lý' },
   { key:'currentArea',label:'Khu vực',defaultVisible:true,group:'Quản lý' },
   { key:'currentLine',label:'Dây chuyền',defaultVisible:true,group:'Quản lý' },
   { key:'status',label:'Trạng thái',defaultVisible:true,group:'Quản lý' },
   { key:'defaultLabelSize',label:'Khổ tem mặc định',group:'Quản lý' },
+
+  // 3. Nameplate / nguồn gốc nhận diện kỹ thuật
+  { key:'manufacturer',label:'Hãng / nhà sản xuất',group:'Nhận diện' },
+  { key:'distributor',label:'Nhà phân phối',group:'Nhận diện' },
+  { key:'model',label:'Mẫu máy',defaultVisible:true,group:'Nhận diện' },
+  { key:'serialNumber',label:'Số sê-ri',defaultVisible:true,group:'Nhận diện' },
+
+  // 4. Kỹ thuật và cấp độ quan trọng
   { key:'technicalSpecification',label:'Thông số kỹ thuật',group:'Kỹ thuật' },
   { key:'description',label:'Mô tả / chức năng',group:'Kỹ thuật' },
   { key:'accuracy',label:'Độ chính xác',group:'Kỹ thuật' },
@@ -58,6 +65,8 @@ const COLUMNS: ColumnDef[] = [
   { key:'stopsProduction',label:'Mất máy gây dừng SX',group:'Kỹ thuật' },
   { key:'hasBackup',label:'Có thiết bị dự phòng',group:'Kỹ thuật' },
   { key:'capacityImpact',label:'Ảnh hưởng sản lượng / giao hàng',group:'Kỹ thuật' },
+
+  // 5. Vòng đời, tài liệu và trường hệ thống
   { key:'origin',label:'Xuất xứ',group:'Vòng đời' },
   { key:'manufactureDate',label:'Ngày sản xuất',group:'Vòng đời' },
   { key:'inServiceDate',label:'Ngày đưa vào sử dụng',group:'Vòng đời' },
