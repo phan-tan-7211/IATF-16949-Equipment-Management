@@ -17,6 +17,7 @@ export function AuthGate({ children }: { children: (session: LiveSession, signOu
   const [retry, setRetry] = useState(0)
 
   useEffect(() => {
+    void retry
     let active = true
     let resolving = 0
 
