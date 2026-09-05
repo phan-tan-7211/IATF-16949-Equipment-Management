@@ -67,6 +67,7 @@ const required = [
   'src/equipment/mobile/EquipmentMobilePanel.tsx',
   'src/equipment/shared/styles/EquipmentPrimitives.css',
   'src/equipment/shared/styles/EquipmentSheetPrimitives.css',
+  'src/equipment/shared/styles/EquipmentRegistrationPrimitives.css',
 ]
 for (const requiredPath of required) {
   const absolute = resolve(root, requiredPath)
@@ -76,12 +77,18 @@ for (const requiredPath of required) {
 const compatibilityEntrypoints = {
   'src/Equipment.css': "@import './equipment/shared/styles/EquipmentPrimitives.css';",
   'src/EquipmentSheetView.css': "@import './equipment/shared/styles/EquipmentSheetPrimitives.css';",
+  'src/EquipmentRegistration.css': "@import './equipment/shared/styles/EquipmentRegistrationPrimitives.css';",
 }
 for (const [path, expectedImport] of Object.entries(compatibilityEntrypoints)) {
   const absolute = resolve(root, path)
   if (!existsSync(absolute) || !text(absolute).includes(expectedImport)) {
     violations.push(`${path}: must remain a thin compatibility entrypoint until all legacy consumers are migrated`)
   }
+}
+
+const registrationPrimitives = resolve(root, 'src/equipment/shared/styles/EquipmentRegistrationPrimitives.css')
+if (existsSync(registrationPrimitives) && /@media\b/.test(text(registrationPrimitives))) {
+  violations.push('src/equipment/shared/styles/EquipmentRegistrationPrimitives.css: platform responsive rules belong in desktop/mobile CSS')
 }
 
 if (violations.length) {
