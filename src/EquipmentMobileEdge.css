@@ -9,4 +9,11 @@
   .equipment-toolbar{padding-left:16px;padding-right:16px}
   .equipment-feedback{margin-left:16px;margin-right:16px}
   .equipment-table-scroll{width:100%}
+
+  /* Fixed mobile bottom navigation must never cover drawer actions/content. */
+  .equipment-drawer-backdrop{bottom:calc(61px + env(safe-area-inset-bottom));height:auto}
+  .equipment-drawer{height:100%;max-height:calc(100dvh - 61px - env(safe-area-inset-bottom))}
+  .equipment-register-drawer-form{min-height:0}
+  .equipment-register-scroll{padding-bottom:8px}
+  .equipment-drawer>footer,.equipment-register-footer{position:relative;z-index:2}
 }
