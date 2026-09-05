@@ -1,2 +1,0 @@
-/* Compatibility entrypoint. Shared sheet/filter primitives now live with the Equipment module. */
-@import './equipment/shared/styles/EquipmentSheetPrimitives.css';
