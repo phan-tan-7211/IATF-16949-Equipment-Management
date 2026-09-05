@@ -23,16 +23,27 @@ const AUTOCOMPLETE_KEY_MAP: Partial<Record<string, EquipmentMasterSuggestionKey>
   currentLine: 'currentLine',
 }
 
-let cachedRowsRef: LiveEquipment[] | null = null
+let cachedLength = -1
+let cachedFirstRow: LiveEquipment | undefined
+let cachedLastRow: LiveEquipment | undefined
 let cachedSuggestions = buildEquipmentMasterSuggestions([])
 
 function autocompleteOptions(columnKey: string) {
   const suggestionKey = AUTOCOMPLETE_KEY_MAP[columnKey]
   if (!suggestionKey) return []
 
+  // getEquipmentCacheSnapshot() intentionally returns a shallow copy. Comparing the
+  // array reference therefore rebuilt all suggestions once for every editable cell
+  // (hundreds/thousands of times) and could freeze bulk-edit mode. The row object
+  // references stay stable until the equipment cache actually changes, so use an O(1)
+  // signature and rebuild the shared suggestion index only when the cache changes.
   const rows = getEquipmentCacheSnapshot()
-  if (rows !== cachedRowsRef) {
-    cachedRowsRef = rows
+  const firstRow = rows[0]
+  const lastRow = rows[rows.length - 1]
+  if (rows.length !== cachedLength || firstRow !== cachedFirstRow || lastRow !== cachedLastRow) {
+    cachedLength = rows.length
+    cachedFirstRow = firstRow
+    cachedLastRow = lastRow
     cachedSuggestions = buildEquipmentMasterSuggestions(rows.map((row) => ({ ...row, department: row.usingDepartment })))
   }
   return cachedSuggestions[suggestionKey]
