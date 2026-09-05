@@ -22,7 +22,14 @@
 .equipment-sort{display:inline-flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:0;color:inherit;font:inherit;font-weight:800;letter-spacing:inherit;text-transform:inherit;white-space:nowrap;cursor:pointer;text-align:left}.equipment-sort span{font-size:9px;opacity:.45}.equipment-sort:hover,.equipment-sort.active{color:var(--color-primary)}.equipment-sort.active span{opacity:1}.equipment-sort:focus-visible{outline:2px solid hsl(var(--blue-500));outline-offset:3px;border-radius:3px}
 
 @media(max-width:900px){.equipment-summary{grid-template-columns:repeat(3,1fr)}.equipment-toolbar{grid-template-columns:1fr 150px}.equipment-surface{border-radius:12px}.equipment-image-col.paste-ready:hover,.equipment-image-col.paste-ready:focus{box-shadow:none}.equipment-data-table th{top:0}.equipment-table-scroll{overflow:auto}}
-@media(max-width:640px){.equipment-summary{grid-template-columns:1fr}.equipment-page-header{align-items:flex-start}.equipment-toolbar{grid-template-columns:1fr}.equipment-drawer{width:100vw}.equipment-edit-photo{grid-template-columns:100px 1fr}.equipment-edit-photo img,.equipment-edit-photo-empty{width:100px;height:75px;object-fit:contain}.equipment-form-grid{grid-template-columns:1fr}.equipment-form-grid label:nth-child(2){grid-column:auto}}
+@media(max-width:640px){
+  .equipment-page{gap:12px}
+  .equipment-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;padding:13px 14px;border:1px solid var(--color-border);border-radius:14px;background:var(--color-surface);box-shadow:var(--shadow-card)}
+  .equipment-summary article{display:grid;gap:4px;min-width:0;padding:0 4px;border:0;border-radius:0;background:transparent;box-shadow:none}
+  .equipment-summary span{font-size:10px;line-height:1.2;white-space:nowrap}
+  .equipment-summary strong{font-size:22px;line-height:1.1}
+  .equipment-page-header{align-items:flex-start}.equipment-toolbar{grid-template-columns:1fr}.equipment-drawer{width:100vw}.equipment-edit-photo{grid-template-columns:100px 1fr}.equipment-edit-photo img,.equipment-edit-photo-empty{width:100px;height:75px;object-fit:contain}.equipment-form-grid{grid-template-columns:1fr}.equipment-form-grid label:nth-child(2){grid-column:auto}
+}
 
 /* Equipment list header: merge live totals into the title row instead of using a separate summary band. */
 @media screen and (min-width:1181px){
