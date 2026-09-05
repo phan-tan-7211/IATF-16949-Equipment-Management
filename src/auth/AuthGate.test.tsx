@@ -17,7 +17,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.getSession.mockResolvedValue({ data: { session: null }, error: null })
   mocks.loadLiveSession.mockResolvedValue({ role: 'ADMIN', email: 'test@example.com' })
-  mocks.signOut.mockResolvedValue({ error: null })
+  mocks.signOut.mockImplementation(async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null }, error: null })
+    mocks.callback('SIGNED_OUT')
+    return { error: null }
+  })
 })
 afterEach(cleanup)
 describe('Supabase authentication boundary', () => {
@@ -38,7 +42,7 @@ describe('Supabase authentication boundary', () => {
   })
   it('signs in, resolves database role, and unmounts private data on logout', async () => {
     mocks.signInWithPassword.mockImplementation(async () => {
-      mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } })
+      mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } }, error: null })
       mocks.callback('SIGNED_IN')
       return { error: null }
     })
@@ -53,19 +57,19 @@ describe('Supabase authentication boundary', () => {
     expect(screen.queryByText('Workspace ADMIN')).not.toBeInTheDocument()
   })
   it('blocks an authenticated account without an assigned database role', async () => {
-    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } })
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } }, error: null })
     mocks.loadLiveSession.mockRejectedValue(new Error('missing role'))
     mount()
     expect(await screen.findByRole('alert')).toHaveTextContent('Không xác nhận được quyền')
     expect(screen.queryByText(/Workspace/)).not.toBeInTheDocument()
   })
   it('discards an in-flight role response after session sign-out', async () => {
-    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } })
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } }, error: null })
     let finish!: (value: { role: string }) => void
     mocks.loadLiveSession.mockReturnValue(new Promise(resolve => { finish = resolve }))
     mount()
     await waitFor(() => expect(mocks.loadLiveSession).toHaveBeenCalled())
-    mocks.getSession.mockResolvedValue({ data: { session: null } })
+    mocks.getSession.mockResolvedValue({ data: { session: null }, error: null })
     act(() => mocks.callback('SIGNED_OUT'))
     await act(async () => finish({ role: 'ADMIN' }))
     expect(await screen.findByLabelText('Mật khẩu')).toBeInTheDocument()
