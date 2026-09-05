@@ -271,7 +271,6 @@ export function A4PrintCenter() {
 
   useEffect(() => {
     let active = true
-    setLoading(true); setError(''); setSelectedId(''); setSelectedQuery(''); setRecords([]); setDetails([]); setDetailsFor(''); setEquipmentPhotoUrl(''); setEquipmentRelations(EMPTY_RELATIONS); setRelationsFor('')
     const load = async () => {
       try {
         const next = await fetchSourceRows(config.table)
@@ -280,6 +279,7 @@ export function A4PrintCenter() {
         const first = next[0]
         setSelectedId(first ? String(first[config.idKey] || '') : '')
         setSelectedQuery(first ? recordOptionLabel(first, config.idKey) : '')
+        setError('')
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : 'Không tải được hồ sơ')
       } finally {
@@ -292,9 +292,15 @@ export function A4PrintCenter() {
 
   const selected = useMemo(() => records.find((row) => String(row[config.idKey] || '') === selectedId) || null, [records, selectedId, config.idKey])
   const recordOptions = useMemo(() => records.map((row) => recordOptionLabel(row, config.idKey)), [records, config.idKey])
+  const relationKey = docType === 'equipment' && selected?.equipment_id ? String(selected.equipment_id) : ''
+  const displayedPhotoUrl = relationKey && relationsFor === relationKey ? equipmentPhotoUrl : ''
+  const displayedRelations = relationKey && relationsFor === relationKey ? equipmentRelations : EMPTY_RELATIONS
+  const expectedDetailsFor = selected ? `${docType}:${selectedId}` : ''
+  const displayedDetails = expectedDetailsFor && detailsFor === expectedDetailsFor ? details : []
 
   function selectRecord(value: string) {
     setSelectedQuery(value)
+    setError('')
     const normalized = value.trim().toLocaleLowerCase('vi-VN')
     const match = records.find((row) => recordOptionLabel(row, config.idKey).toLocaleLowerCase('vi-VN') === normalized || String(row[config.idKey] || '').toLocaleLowerCase('vi-VN') === normalized)
     if (!match) {
@@ -305,20 +311,31 @@ export function A4PrintCenter() {
     setSelectedQuery(recordOptionLabel(match, config.idKey))
   }
 
-  useEffect(() => {
-    let active = true
+  function changeDocType(nextDocType: DocType) {
+    setLoading(true)
+    setError('')
+    setSelectedId('')
+    setSelectedQuery('')
+    setRecords([])
+    setDetails([])
+    setDetailsFor('')
     setEquipmentPhotoUrl('')
     setEquipmentRelations(EMPTY_RELATIONS)
     setRelationsFor('')
-    if (docType !== 'equipment' || !selected?.equipment_id) return () => { active = false }
-    const equipmentId = String(selected.equipment_id)
+    setDocType(nextDocType)
+  }
+
+  useEffect(() => {
+    if (!relationKey) return
+    let active = true
+    const equipmentId = relationKey
     const run = async () => {
       const [preview, relations] = await Promise.all([
         getEquipmentPhotoPreview(equipmentId),
         loadEquipmentA4Relations(equipmentId),
       ])
       if (!active) return
-      if (preview.exists) setEquipmentPhotoUrl(preview.signedUrl)
+      setEquipmentPhotoUrl(preview.exists ? preview.signedUrl : '')
       setEquipmentRelations(relations)
       setRelationsFor(equipmentId)
     }
@@ -327,35 +344,26 @@ export function A4PrintCenter() {
       setError(cause instanceof Error ? cause.message : 'Không tải được dữ liệu liên quan của thiết bị')
     })
     return () => { active = false }
-  }, [docType, selected])
+  }, [relationKey])
 
   useEffect(() => {
+    if (docType === 'label' || docType === 'bm02' || docType === 'bm06' || !selected) return
     let active = true
-    setDetails([])
-    if (docType === 'label') {
-      setDetailsFor('label:bulk')
-      return () => { active = false }
-    }
-    if (docType === 'bm02' || docType === 'bm06') {
-      setDetailsFor(`${docType}:all`)
-      return () => { active = false }
-    }
-    if (!selected) return () => { active = false }
     const run = async () => {
       const table = docType === 'bm03' ? 'maintenance_plan_item' : docType === 'bm08' ? 'maintenance_result_item' : null
       const data = table ? await fetchSourceRows(table, { column: docType === 'bm03' ? 'plan_id' : 'execution_id', value: selected[config.idKey] }) : []
       if (active) {
         setDetails(data.toSorted((a, b) => Number(sourceData(a).sequence || 0) - Number(sourceData(b).sequence || 0)))
         setDetailsFor(`${docType}:${selectedId}`)
+        setError('')
       }
     }
-    setError(''); setDetailsFor('')
     void run().catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải chi tiết') })
     return () => { active = false }
   }, [docType, selected, selectedId, config.idKey])
 
   const bm06Rows = docType === 'bm06' ? records.map((row) => ({ ...sourceData(row), ...row })) : []
-  const equipmentRelationsReady = docType !== 'equipment' || !selected || relationsFor === String(selected.equipment_id || '')
+  const equipmentRelationsReady = docType !== 'equipment' || !selected || relationsFor === relationKey
   const aggregateDoc = docType === 'bm02' || docType === 'bm06'
 
   function printA4() {
@@ -378,7 +386,7 @@ export function A4PrintCenter() {
     <section className="print-toolbar no-print">
       <div><h2>Hồ sơ / Tem quản lý</h2><p>{docType === 'label' ? 'Chọn nhiều thiết bị, chọn khổ tem và in hàng loạt.' : 'Chọn biểu mẫu và hồ sơ cần in.'}</p></div>
       <div className="print-controls">
-        <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setSelectedQuery(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
+        <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => changeDocType(event.target.value as DocType)}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
         {docType !== 'label' && !aggregateDoc ? <label>Hồ sơ<SmartAutocomplete aria-label="Hồ sơ" value={selectedQuery} options={recordOptions} onChange={selectRecord} disabled={!records.length} placeholder="Nhập mã hoặc tên để tìm nhanh" maxOptions={40} /></label> : null}
         {docType !== 'label' ? <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (aggregateDoc ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button> : null}
       </div>
@@ -396,9 +404,9 @@ export function A4PrintCenter() {
         </> : selected ? <>
           {docType !== 'equipment' ? <div className="a4-meta"><span>Mã hồ sơ: {display(selected[config.idKey])}</span></div> : null}
           {docType === 'equipment'
-            ? <EquipmentA4 row={selected} photoUrl={equipmentPhotoUrl} relations={equipmentRelations} />
+            ? <EquipmentA4 row={selected} photoUrl={displayedPhotoUrl} relations={displayedRelations} />
             : <section className="a4-fields">{printableFields(selected).map(([key, value], index) => <div key={`${key}-${index}`}><span>{LABELS[key]}</span><strong>{key.includes('date') || key.endsWith('_at') || key.endsWith('At') ? dateDisplay(value) : display(value)}</strong></div>)}</section>}
-          {(docType === 'bm03' || docType === 'bm08') ? <section className="a4-detail"><h2>Chi tiết hạng mục</h2>{docType === 'bm08' ? <p>○ Tốt · △ Cảnh báo · × Sửa chữa</p> : null}<DetailTable rows={details} /></section> : null}
+          {(docType === 'bm03' || docType === 'bm08') ? <section className="a4-detail"><h2>Chi tiết hạng mục</h2>{docType === 'bm08' ? <p>○ Tốt · △ Cảnh báo · × Sửa chữa</p> : null}<DetailTable rows={displayedDetails} /></section> : null}
           {docType !== 'equipment' ? <footer className="a4-signatures"><div><span>Người lập / thực hiện</span><b>Ký, ghi rõ họ tên</b></div><div><span>Người kiểm tra / xác nhận</span><b>Ký, ghi rõ họ tên</b></div><div><span>Phê duyệt</span><b>Ký, ghi rõ họ tên</b></div></footer> : null}
         </> : <p className="a4-empty">Chưa có hồ sơ cho biểu mẫu này.</p>}
       </article>}
