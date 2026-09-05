@@ -20,7 +20,7 @@ export function useEquipmentBulkEdit({ rows, setRows, setError, setMessage }: Us
   function setInlineCell(equipment:LiveEquipment,key:ColumnKey,value:string|boolean){
     const patchKey=patchKeyForColumn(key)
     if(!patchKey)return
-    setInlineChanges((current)=>({...current,[equipment.equipmentId]:{...(current[equipment.equipmentId]||{}),[patchKey]:value}}))
+    setInlineChanges((current)=>({...current,[equipment.equipmentId]:{...current[equipment.equipmentId],[patchKey]:value}}))
   }
 
   function exitBulkMode(){
