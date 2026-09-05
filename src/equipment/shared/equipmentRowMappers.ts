@@ -30,7 +30,7 @@ export function mergeInlinePatch(row: LiveEquipment, patch: EquipmentRowPatch): 
   if (patch.note!==undefined) next.note=patch.note
   if (patch.relatedDocuments!==undefined) next.relatedDocuments=patch.relatedDocuments
   if (patch.active!==undefined) next.active=patch.active
-  const facts={...(row.criticalityFacts||{})}
+  const facts={...row.criticalityFacts}
   if (patch.controlsProductQuality!==undefined) facts.controlsProductQuality=patch.controlsProductQuality
   if (patch.specialCharacteristicImpact!==undefined) facts.specialCharacteristicImpact=patch.specialCharacteristicImpact
   if (patch.stopsProduction!==undefined) facts.stopsProduction=patch.stopsProduction
