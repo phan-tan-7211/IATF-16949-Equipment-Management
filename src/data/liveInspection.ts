@@ -58,7 +58,7 @@ export function normalizeInspectionEquipment(rows: Array<Record<string, unknown>
       currentArea: text(row.department),
       currentLine: text((row.source_data as Record<string, unknown> | null)?.currentLine),
     }))
-    .sort((a, b) => a.equipmentId.localeCompare(b.equipmentId))
+    .toSorted((a, b) => a.equipmentId.localeCompare(b.equipmentId))
 }
 
 export function normalizeInspections(rows: Array<Record<string, unknown>>): LiveInspection[] {
@@ -79,7 +79,7 @@ export function normalizeInspections(rows: Array<Record<string, unknown>>): Live
         createdAt: text(row.created_at),
       }
     })
-    .sort((a, b) => (b.createdAt || b.inspectionDate).localeCompare(a.createdAt || a.inspectionDate))
+    .toSorted((a, b) => (b.createdAt || b.inspectionDate).localeCompare(a.createdAt || a.inspectionDate))
 }
 
 export async function loadLiveInspection(options: { force?: boolean } = {}) {
