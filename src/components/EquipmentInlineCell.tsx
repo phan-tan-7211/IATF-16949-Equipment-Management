@@ -19,12 +19,11 @@ const AUTOCOMPLETE_KEY_MAP: Partial<Record<string, EquipmentMasterSuggestionKey>
   managingDepartment: 'managingDepartment',
   managementResponsiblePrimary: 'managementResponsiblePrimary',
   managementResponsibleSecondary: 'managementResponsibleSecondary',
-  usingDepartment: 'department',
   currentArea: 'currentArea',
   currentLine: 'currentLine',
 }
 
-type RowOrgContext = { managingDepartment: string; usingDepartment: string }
+type RowOrgContext = { managingDepartment: string }
 const rowOrgContext = new Map<string, RowOrgContext>()
 
 let cachedLength = -1
@@ -50,11 +49,9 @@ function equipmentSuggestionOptions(columnKey: string) {
 function contextFor(equipment: LiveEquipment, columnKey: string, value: string | boolean | undefined) {
   const existing = rowOrgContext.get(equipment.equipmentId) || {
     managingDepartment: equipment.managingDepartment || '',
-    usingDepartment: equipment.usingDepartment || '',
   }
   const next = { ...existing }
   if (columnKey === 'managingDepartment') next.managingDepartment = String(value ?? '')
-  if (columnKey === 'usingDepartment') next.usingDepartment = String(value ?? '')
   rowOrgContext.set(equipment.equipmentId, next)
   return next
 }
@@ -68,7 +65,7 @@ function autocompleteOptions(columnKey: string, equipment: LiveEquipment, value:
 export function EquipmentInlineCell({ equipment, columnKey, label, value, onChange }: Props) {
   const ariaLabel = `${label} · ${equipment.equipmentId}`
   const handleChange = (nextValue: string | boolean) => {
-    if (columnKey === 'managingDepartment' || columnKey === 'usingDepartment') {
+    if (columnKey === 'managingDepartment') {
       const current = contextFor(equipment, columnKey, nextValue)
       rowOrgContext.set(equipment.equipmentId, current)
     }
