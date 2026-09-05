@@ -55,11 +55,12 @@ export async function createEquipmentAuto(input: EquipmentRegistrationInput): Pr
   if (!input.managementResponsiblePrimary?.trim()) throw new Error('Vui lòng nhập người phụ trách quản lý chính.')
 
   const { data, error } = await supabase.rpc('rpc_create_equipment_auto', { p_input: input })
-  if (error) throw error
+  if (error) throw new Error(error.message || 'Không thể đăng ký thiết bị')
   const row = (data || {}) as Record<string, unknown>
   const equipmentId = String(row.equipmentId || row.equipment_id || '')
+  if (!equipmentId) throw new Error('Đăng ký thiết bị không trả về mã thiết bị. Vui lòng kiểm tra RPC rpc_create_equipment_auto.')
 
-  if (equipmentId && input.distributor?.trim()) {
+  if (input.distributor?.trim()) {
     const { error: distributorError } = await supabase.rpc('rpc_set_equipment_distributor', {
       p_equipment_id: equipmentId,
       p_distributor: input.distributor.trim(),
