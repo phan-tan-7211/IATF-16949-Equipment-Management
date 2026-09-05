@@ -1,4 +1,4 @@
-import { useState, type ClipboardEvent } from 'react'
+import { useCallback, useState, type ClipboardEvent } from 'react'
 import { deleteEquipmentPhotos } from '../../data/equipmentPhotoDelete'
 import {
   getEquipmentPhotoCacheSnapshot,
@@ -50,7 +50,7 @@ export function useEquipmentPhotos(setMessage: (message: string) => void) {
     }
   }
 
-  async function refreshPhotoStates(rows: LiveEquipment[]) {
+  const refreshPhotoStates = useCallback(async (rows: LiveEquipment[]) => {
     setPhotos((current) => Object.fromEntries(
       rows.map((row) => [row.equipmentId, current[row.equipmentId] || { state: 'loading', url: '' } as PhotoInfo]),
     ))
@@ -67,7 +67,7 @@ export function useEquipmentPhotos(setMessage: (message: string) => void) {
         rows.map((row) => [row.equipmentId, current[row.equipmentId] || { state: 'error', url: '' } as PhotoInfo]),
       ))
     }
-  }
+  }, [])
 
   async function confirmPhotoReplacement(equipmentId: string) {
     const current = photos[equipmentId]
