@@ -16,13 +16,10 @@ const prefetchers: Record<string, Prefetcher> = {
     await data.warmEquipmentInventory()
   },
   inspection: () => import('../LiveInspectionPanel'),
-  maintenance: () => Promise.all([
-    import('../LiveMaintenancePlanPanel'),
-    import('../LiveMaintenanceResultPanel'),
-    import('../LiveHandoverPanel'),
-    import('../LiveDowntimePanel'),
-    import('../LiveMaintenancePanel'),
-  ]),
+  maintenance: async () => {
+    const [, data] = await Promise.all([import('../maintenance/MaintenanceWorkspace'), import('./liveMaintenance')])
+    await data.loadLiveMaintenance().then(() => undefined)
+  },
   spare: () => import('../LiveSparePartsAutoPanel'),
   tooling: () => import('../LiveToolingPanel'),
   calibration: () => Promise.all([
