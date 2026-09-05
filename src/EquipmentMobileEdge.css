@@ -1,0 +1,10 @@
+@media (max-width:640px){
+  /* Mobile equipment workspace uses the full available width: no decorative outer frame. */
+  .equipment-page{gap:8px;margin-left:-12px;margin-right:-12px}
+  .equipment-summary{margin:0 12px;padding:12px 14px;border-radius:12px;box-shadow:none}
+  .equipment-surface{width:100%;border-left:0;border-right:0;border-radius:0;box-shadow:none}
+  .equipment-page-header{padding-left:16px;padding-right:16px}
+  .equipment-toolbar{padding-left:16px;padding-right:16px}
+  .equipment-feedback{margin-left:16px;margin-right:16px}
+  .equipment-table-scroll{width:100%}
+}
