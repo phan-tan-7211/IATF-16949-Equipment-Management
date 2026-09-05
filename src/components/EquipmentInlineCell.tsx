@@ -1,4 +1,7 @@
 import type { LiveEquipment } from '../data/liveEquipment'
+import { buildEquipmentMasterSuggestions, type EquipmentMasterSuggestionKey } from '../data/equipmentMasterFields'
+import { getEquipmentCacheSnapshot } from '../data/supabaseEquipment'
+import { SmartAutocomplete } from './SmartAutocomplete'
 
 type Props = {
   equipment: LiveEquipment
@@ -10,6 +13,30 @@ type Props = {
 
 const DATE_KEYS = new Set(['manufactureDate','inServiceDate','warrantyUntil'])
 const BOOLEAN_KEYS = new Set(['controlsProductQuality','specialCharacteristicImpact','stopsProduction','hasBackup','capacityImpact'])
+const AUTOCOMPLETE_KEY_MAP: Partial<Record<string, EquipmentMasterSuggestionKey>> = {
+  equipmentCategory: 'equipmentCategory',
+  managingDepartment: 'managingDepartment',
+  managementResponsiblePrimary: 'managementResponsiblePrimary',
+  managementResponsibleSecondary: 'managementResponsibleSecondary',
+  usingDepartment: 'department',
+  currentArea: 'currentArea',
+  currentLine: 'currentLine',
+}
+
+let cachedRowsRef: LiveEquipment[] | null = null
+let cachedSuggestions = buildEquipmentMasterSuggestions([])
+
+function autocompleteOptions(columnKey: string) {
+  const suggestionKey = AUTOCOMPLETE_KEY_MAP[columnKey]
+  if (!suggestionKey) return []
+
+  const rows = getEquipmentCacheSnapshot()
+  if (rows !== cachedRowsRef) {
+    cachedRowsRef = rows
+    cachedSuggestions = buildEquipmentMasterSuggestions(rows.map((row) => ({ ...row, department: row.usingDepartment })))
+  }
+  return cachedSuggestions[suggestionKey]
+}
 
 export function EquipmentInlineCell({ equipment, columnKey, label, value, onChange }: Props) {
   const ariaLabel = `${label} · ${equipment.equipmentId}`
@@ -46,6 +73,20 @@ export function EquipmentInlineCell({ equipment, columnKey, label, value, onChan
       <option value="true">Có</option>
       <option value="false">Không</option>
     </select>
+  }
+
+  const options = autocompleteOptions(columnKey)
+  if (options.length) {
+    return <SmartAutocomplete
+      className="equipment-inline-input"
+      aria-label={ariaLabel}
+      value={String(value ?? '')}
+      options={options}
+      onChange={onChange}
+      onFocus={(event) => event.currentTarget.select()}
+      autoComplete="off"
+      maxOptions={30}
+    />
   }
 
   return <input
