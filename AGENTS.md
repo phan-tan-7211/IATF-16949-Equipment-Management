@@ -1,6 +1,7 @@
 # Mandatory architecture and release gates
 
-React + Vite + TypeScript on Vercel → Supabase PostgreSQL, Auth/RLS, Storage and RPC.
+React + Vite + TypeScript frontend with Supabase PostgreSQL, Auth/RLS, Storage and RPC.
+Current development and verification workflow is LOCAL. Deployment visibility is not a substitute for local build/test/UI verification.
 Apps Script, Google Sheets and Google Drive are not runtime dependencies.
 
 One equipment → one canonical equipment_id → one equipment_master root record.
@@ -44,21 +45,40 @@ Mutation:
 
 `user action → optimistic UI/cache patch → Supabase RPC/write → confirm` or `rollback affected record + show error`.
 
+## Mandatory platform UI architecture
+
+For Equipment and any future feature where desktop/mobile task flow differs materially:
+
+1. Read `.agents/skills/platform-ui-architecture/SKILL.md` before implementation.
+2. Follow `docs/FRONTEND_PLATFORM_ARCHITECTURE.md`.
+3. Share domain/data/services/controllers; do not duplicate business rules by platform.
+4. Desktop presentation must not import mobile presentation. Mobile presentation must not import desktop presentation.
+5. Shared feature/controller code must not import either platform renderer.
+6. Shared UI primitives may be reused, but they must not own platform page composition or call Supabase directly.
+7. If one DOM requires repeated breakpoint overrides or `!important` chains to behave as two different products, split the renderer instead of adding more patches.
+8. Current Equipment platform boundary is explicit: mobile/tablet `< 901px`; desktop `>= 901px`.
+9. `src/equipment/EquipmentWorkspace.tsx` is the platform selector. Platform selection must not be scattered through feature components.
+10. `src/LiveEquipmentPanel.tsx` is a retired mixed-renderer pattern and must not return.
+11. Architecture guard tests are mandatory: run `npm run test:architecture` after Equipment architecture/layout refactors.
+
+Reference principles are adapted for CEV from Cal.com, create-t3-turbo, Dify, shadcn/ui, Solito and Tamagui. CEV project rules and business requirements take precedence over external examples.
+
 ## Mandatory UI/UX gate
 
 For every UI, responsive, mobile, navigation, form, drawer, modal, profile, work-order, inspection, spare, QR, or dashboard change:
 
 1. Read `.agents/skills/ui-ux-pro-max/SKILL.md` before implementation.
-2. Follow `docs/UI_UX_REFERENCE.md`.
-3. Preserve the same required business actions across desktop/tablet/mobile; breakpoints may rearrange, never hide required capabilities.
-4. Preserve contextual navigation. A drill-down from Equipment Profile to Maintenance / Inspection / Spare / QR must provide `← Trở về <equipment_id>` to the exact source profile.
-5. Do not duplicate the same Equipment ID, Status, Criticality, or equivalent field twice on one screen.
-6. Overlays use one scroll owner: background locked, foreground content scrolls, header/footer actions stay reachable.
-7. Registration and Edit for the same entity must use the same business field model unless a field is explicitly system-managed/read-only.
-8. Verify at 375, 440, 768, 1024 and 1440 px before declaring UI work complete.
-9. Never fix responsive overflow by hiding Delete/Save/Cancel or another required action.
-10. Global bottom navigation does not replace contextual Back navigation.
-11. Equipment images follow the immutable Equipment Image Contract below. Do not change image fit/crop behavior without an explicit product decision and corresponding update to all three UI/UX rule files.
+2. For platform-specific layout changes also read `.agents/skills/platform-ui-architecture/SKILL.md`.
+3. Follow `docs/UI_UX_REFERENCE.md`.
+4. Preserve the same required business actions across desktop/tablet/mobile; breakpoints may rearrange, never hide required capabilities.
+5. Preserve contextual navigation. A drill-down from Equipment Profile to Maintenance / Inspection / Spare / QR must provide `← Trở về <equipment_id>` to the exact source profile.
+6. Do not duplicate the same Equipment ID, Status, Criticality, or equivalent field twice on one screen.
+7. Overlays use one scroll owner: background locked, foreground content scrolls, header/footer actions stay reachable.
+8. Registration and Edit for the same entity must use the same business field model unless a field is explicitly system-managed/read-only.
+9. Verify at 375, 440, 768, 1024 and 1440 px before declaring UI work complete.
+10. Never fix responsive overflow by hiding Delete/Save/Cancel or another required action.
+11. Global bottom navigation does not replace contextual Back navigation.
+12. Equipment images follow the immutable Equipment Image Contract below. Do not change image fit/crop behavior without an explicit product decision and corresponding update to all three UI/UX rule files.
 
 ## Immutable Equipment Image Contract
 
@@ -75,8 +95,7 @@ This rule applies to every equipment image surface: Equipment Profile, Equipment
 - A UI change involving equipment images is not complete until tested with: small source image, very large source image, portrait image, landscape image, and square image.
 
 Work on feature branches / pull requests, not directly on main.
-Before merge: tests, build, lint, Chromium/Pixel 7/WebKit automated smoke,
-Supabase diagnostics when database behavior changed, confirmed Vercel project/deployment visibility,
-production smoke as applicable, and final DB/Storage reconciliation where relevant must pass.
+Before merge: local tests, architecture tests when applicable, build, lint, Chromium/Pixel 7/WebKit automated smoke,
+Supabase diagnostics when database behavior changed, and final DB/Storage reconciliation where relevant must pass.
 Android and iPhone camera scans are separate physical-device gates. Browser emulation
 cannot satisfy them. Do not merge while any required gate is failing or unverified.
