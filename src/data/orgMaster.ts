@@ -48,7 +48,6 @@ export type OrgMasterSnapshot = {
 
 export type OrgAutocompleteContext = {
   managingDepartment?: string
-  usingDepartment?: string
 }
 
 let cache: OrgMasterSnapshot | null = null
@@ -90,22 +89,17 @@ export function getOrgMasterSnapshot() {
 
 export function getOrgAutocompleteOptions(columnKey: string, context: OrgAutocompleteContext = {}) {
   if (!cache) return []
-  if (columnKey === 'managingDepartment' || columnKey === 'usingDepartment') {
+  if (columnKey === 'managingDepartment') {
     return unique(cache.units.filter((unit) => !['COMPANY', 'TEAM'].includes(unit.unitType)).map((unit) => unit.unitName))
   }
   if (columnKey === 'managementResponsiblePrimary' || columnKey === 'managementResponsibleSecondary') {
-    const departmentName = columnKey === 'managementResponsiblePrimary'
-      ? context.managingDepartment
-      : context.usingDepartment || context.managingDepartment
-    const allowedCodes = unitCodesForName(departmentName || '')
+    const allowedCodes = unitCodesForName(context.managingDepartment || '')
     const people = allowedCodes.size ? cache.people.filter((person) => allowedCodes.has(person.unitCode)) : cache.people
     return unique(people.map((person) => person.displayName))
   }
   if (columnKey === 'currentArea' || columnKey === 'currentLine') {
-    const allowedCodes = unitCodesForName(context.usingDepartment || '')
     const type = columnKey === 'currentLine' ? 'LINE' : 'AREA'
-    const locations = cache.locations.filter((location) => location.locationType === type && (!allowedCodes.size || allowedCodes.has(location.unitCode)))
-    return unique(locations.map((location) => location.locationName))
+    return unique(cache.locations.filter((location) => location.locationType === type).map((location) => location.locationName))
   }
   return []
 }
