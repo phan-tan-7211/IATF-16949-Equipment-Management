@@ -3,6 +3,7 @@ import './A4PrintCenter.css'
 import './A4Bm02.css'
 import { EquipmentQr } from './components/EquipmentQr'
 import { EquipmentLabelPrintWorkspace } from './components/EquipmentLabelPrintWorkspace'
+import { SmartAutocomplete } from './components/SmartAutocomplete'
 import { fetchSourceRows } from './data/sourceRows'
 import { getEquipmentPhotoPreview } from './data/supabaseEquipment'
 import { loadEquipmentA4Relations, type EquipmentA4Relations } from './data/equipmentA4Data'
@@ -105,6 +106,12 @@ function safeTitlePart(value: unknown) {
     .replace(/[\\/:*?"<>|]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function recordOptionLabel(row: Row, idKey: string) {
+  const id = String(row[idKey] || '').trim()
+  const subject = String(row.equipment_id || row.equipment_name || '').trim()
+  return [id, subject].filter(Boolean).join(' · ')
 }
 
 function DetailTable({ rows }: { rows: Row[] }) {
@@ -252,6 +259,7 @@ export function A4PrintCenter() {
   const [docType, setDocType] = useState<DocType>('equipment')
   const [records, setRecords] = useState<Row[]>([])
   const [selectedId, setSelectedId] = useState('')
+  const [selectedQuery, setSelectedQuery] = useState('')
   const [details, setDetails] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [detailsFor, setDetailsFor] = useState('')
@@ -263,13 +271,15 @@ export function A4PrintCenter() {
 
   useEffect(() => {
     let active = true
-    setLoading(true); setError(''); setSelectedId(''); setRecords([]); setDetails([]); setDetailsFor(''); setEquipmentPhotoUrl(''); setEquipmentRelations(EMPTY_RELATIONS); setRelationsFor('')
+    setLoading(true); setError(''); setSelectedId(''); setSelectedQuery(''); setRecords([]); setDetails([]); setDetailsFor(''); setEquipmentPhotoUrl(''); setEquipmentRelations(EMPTY_RELATIONS); setRelationsFor('')
     const load = async () => {
       try {
         const next = await fetchSourceRows(config.table)
         if (!active) return
         setRecords(next)
-        setSelectedId(next.length ? String(next[0][config.idKey] || '') : '')
+        const first = next[0]
+        setSelectedId(first ? String(first[config.idKey] || '') : '')
+        setSelectedQuery(first ? recordOptionLabel(first, config.idKey) : '')
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : 'Không tải được hồ sơ')
       } finally {
@@ -281,6 +291,19 @@ export function A4PrintCenter() {
   }, [config])
 
   const selected = useMemo(() => records.find((row) => String(row[config.idKey] || '') === selectedId) || null, [records, selectedId, config.idKey])
+  const recordOptions = useMemo(() => records.map((row) => recordOptionLabel(row, config.idKey)), [records, config.idKey])
+
+  function selectRecord(value: string) {
+    setSelectedQuery(value)
+    const normalized = value.trim().toLocaleLowerCase('vi-VN')
+    const match = records.find((row) => recordOptionLabel(row, config.idKey).toLocaleLowerCase('vi-VN') === normalized || String(row[config.idKey] || '').toLocaleLowerCase('vi-VN') === normalized)
+    if (!match) {
+      setSelectedId('')
+      return
+    }
+    setSelectedId(String(match[config.idKey] || ''))
+    setSelectedQuery(recordOptionLabel(match, config.idKey))
+  }
 
   useEffect(() => {
     let active = true
@@ -355,8 +378,8 @@ export function A4PrintCenter() {
     <section className="print-toolbar no-print">
       <div><h2>Hồ sơ / Tem quản lý</h2><p>{docType === 'label' ? 'Chọn nhiều thiết bị, chọn khổ tem và in hàng loạt.' : 'Chọn biểu mẫu và hồ sơ cần in.'}</p></div>
       <div className="print-controls">
-        <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
-        {docType !== 'label' && !aggregateDoc ? <label>Hồ sơ<select aria-label="Hồ sơ" value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!records.length}>{records.map((row) => <option key={String(row[config.idKey])} value={String(row[config.idKey])}>{String(row[config.idKey])} · {String(row.equipment_id || row.equipment_name || '')}</option>)}</select></label> : null}
+        <label>Biểu mẫu<select aria-label="Biểu mẫu" value={docType} onChange={(event) => { setLoading(true); setRecords([]); setSelectedId(''); setSelectedQuery(''); setDocType(event.target.value as DocType) }}>{DOCS.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.label}</option>)}</select></label>
+        {docType !== 'label' && !aggregateDoc ? <label>Hồ sơ<SmartAutocomplete aria-label="Hồ sơ" value={selectedQuery} options={recordOptions} onChange={selectRecord} disabled={!records.length} placeholder="Nhập mã hoặc tên để tìm nhanh" maxOptions={40} /></label> : null}
         {docType !== 'label' ? <button type="button" disabled={loading || Boolean(error) || !equipmentRelationsReady || (aggregateDoc ? !records.length : !selected || detailsFor !== `${docType}:${selectedId}`)} onClick={printA4}>In / Xuất PDF A4</button> : null}
       </div>
       {loading ? <p>Đang tải hồ sơ…</p> : null}{error ? <p className="print-error">{error}</p> : null}
