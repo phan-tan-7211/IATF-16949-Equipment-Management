@@ -1,6 +1,7 @@
 import { readClientCache } from './clientDataCache'
 import { supabase } from './supabaseClient'
 import type { EquipmentCriticalityFacts } from './autoRegistration'
+import { loadOrgMaster, type OrgResolvedAssignment } from './orgMaster'
 
 export type LiveEquipment = {
   equipmentId: string
@@ -105,12 +106,36 @@ export function normalizeEquipmentRow(row: Record<string, unknown>): LiveEquipme
   }
 }
 
-export async function loadLiveEquipment(options: { force?: boolean } = {}) {
-  if (!options.force) {
-    const cached = readClientCache<LiveEquipment[]>(EQUIPMENT_CACHE_KEY, EQUIPMENT_CACHE_VERSION)
-    if (cached?.data?.length) return cached.data
+function overlayOrgAssignment(row: LiveEquipment, assignment?: OrgResolvedAssignment): LiveEquipment {
+  if (!assignment) return row
+  return {
+    ...row,
+    managementResponsiblePrimary: assignment.primaryPersonName || row.managementResponsiblePrimary,
+    managementResponsibleSecondary: assignment.secondaryPersonName || row.managementResponsibleSecondary,
+    managingDepartment: assignment.managingUnitName || row.managingDepartment,
+    usingDepartment: assignment.usingUnitName || row.usingDepartment,
+    currentArea: assignment.areaName || row.currentArea,
+    currentLine: assignment.lineName || row.currentLine,
   }
-  const { data, error } = await supabase.from('equipment_master').select('*').order('equipment_id')
-  if (error) throw error
-  return ((data || []) as Array<Record<string, unknown>>).map(normalizeEquipmentRow).filter((row): row is LiveEquipment => Boolean(row))
+}
+
+export async function loadLiveEquipment(options: { force?: boolean } = {}) {
+  const cached = !options.force ? readClientCache<LiveEquipment[]>(EQUIPMENT_CACHE_KEY, EQUIPMENT_CACHE_VERSION) : null
+
+  const [org, equipmentResult] = await Promise.all([
+    loadOrgMaster({ force: Boolean(options.force) }).catch(() => null),
+    cached?.data?.length
+      ? Promise.resolve({ data: cached.data as unknown as Array<Record<string, unknown>>, error: null })
+      : supabase.from('equipment_master').select('*').order('equipment_id'),
+  ])
+
+  if (equipmentResult.error) throw equipmentResult.error
+  const rows = (equipmentResult.data || []).map((row) => {
+    if ('equipmentId' in row) return row as unknown as LiveEquipment
+    return normalizeEquipmentRow(row)
+  }).filter((row): row is LiveEquipment => Boolean(row))
+
+  if (!org) return rows
+  const assignmentByEquipment = new Map(org.resolvedAssignments.map((assignment) => [assignment.equipmentId, assignment]))
+  return rows.map((row) => overlayOrgAssignment(row, assignmentByEquipment.get(row.equipmentId)))
 }
