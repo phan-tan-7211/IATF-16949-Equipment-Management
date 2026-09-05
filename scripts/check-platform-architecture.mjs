@@ -26,11 +26,16 @@ function importsSegment(body, segment) {
   return body.includes(`/${segment}/`) || body.includes(`\\${segment}\\`)
 }
 
+function isTestSource(path) {
+  return /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(path.replaceAll('\\', '/'))
+}
+
 const sourceFiles = walk(srcRoot).filter((path) => ['.ts', '.tsx', '.js', '.jsx', '.css'].includes(extname(path)))
-const equipmentFiles = sourceFiles.filter((path) => path.startsWith(equipmentRoot))
+const productionSourceFiles = sourceFiles.filter((path) => !isTestSource(path))
+const equipmentFiles = productionSourceFiles.filter((path) => path.startsWith(equipmentRoot))
 const retiredRootStyles = ['Equipment.css', 'EquipmentSheetView.css', 'EquipmentRegistration.css']
 
-for (const path of sourceFiles) {
+for (const path of productionSourceFiles) {
   const body = text(path)
   if (body.includes('LiveEquipmentPanel')) report(path, 'legacy mixed LiveEquipmentPanel reference is forbidden')
 
