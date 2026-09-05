@@ -38,21 +38,15 @@ function dateText(value: string) {
 }
 
 export function LiveDashboardPanel({ onNavigate }: Props) {
-  const snapshot = getDashboardCacheSnapshot()
-  const [summary, setSummary] = useState<LiveDashboardSummary>(() => snapshot?.summary || EMPTY)
-  const [actions, setActions] = useState<LiveDashboardAction[]>(() => snapshot?.actions || [])
-  const [loading, setLoading] = useState(!snapshot)
+  const [initialSnapshot] = useState(getDashboardCacheSnapshot)
+  const [summary, setSummary] = useState<LiveDashboardSummary>(() => initialSnapshot?.summary || EMPTY)
+  const [actions, setActions] = useState<LiveDashboardAction[]>(() => initialSnapshot?.actions || [])
+  const [loading, setLoading] = useState(!initialSnapshot)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    const cached = getDashboardCacheSnapshot()
-    if (cached) {
-      setSummary(cached.summary)
-      setActions(cached.actions)
-      setLoading(false)
-    }
-    loadLiveDashboard(new Date().toISOString().slice(0, 10), { force: Boolean(cached) })
+    loadLiveDashboard(new Date().toISOString().slice(0, 10), { force: Boolean(initialSnapshot) })
       .then((result) => {
         if (!active) return
         setSummary(result.summary)
@@ -60,13 +54,13 @@ export function LiveDashboardPanel({ onNavigate }: Props) {
         setError('')
       })
       .catch((cause: unknown) => {
-        if (active && !cached) setError(cause instanceof Error ? cause.message : 'Không thể tải tổng quan')
+        if (active && !initialSnapshot) setError(cause instanceof Error ? cause.message : 'Không thể tải tổng quan')
       })
       .finally(() => {
         if (active) setLoading(false)
       })
     return () => { active = false }
-  }, [])
+  }, [initialSnapshot])
 
   const urgentCount = summary.downCount + summary.criticalOpen + summary.downtimeOpen
 
