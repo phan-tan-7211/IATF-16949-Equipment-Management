@@ -65,7 +65,7 @@ export function EquipmentProfileOps({ equipment, history, issueOpen, onIssueOpen
       })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được ngữ cảnh thiết bị') })
     return () => { active = false }
-  }, [equipment.equipmentId])
+  }, [])
 
   const linkedParts = useMemo(() => parts.filter((part) => part.equipment.some((item) => item.equipmentId === equipment.equipmentId)), [parts, equipment.equipmentId])
   const unlinkedParts = useMemo(() => {
@@ -99,7 +99,7 @@ export function EquipmentProfileOps({ equipment, history, issueOpen, onIssueOpen
     history.inspections.forEach((row, index) => events.push({ key:`i-${index}`, time:eventTime(row), type:'Kiểm tra', title:`${String(row.overall_mark || '—')}${row.note ? ` · ${String(row.note)}` : ''}` }))
     history.calibration.forEach((row, index) => events.push({ key:`c-${index}`, time:eventTime(row), type:'Hiệu chuẩn', title: resultLabel[String(row.result || '')] || String(row.result || '—') }))
     history.movements.forEach((row, index) => events.push({ key:`mv-${index}`, time:eventTime(row), type:'Di chuyển', title:`${String(row.from_location || '—')} → ${String(row.to_location || '—')}` }))
-    return events.sort((a,b) => (dateValue(b.time)?.getTime() || 0) - (dateValue(a.time)?.getTime() || 0)).slice(0, 8)
+    return events.toSorted((a,b) => (dateValue(b.time)?.getTime() || 0) - (dateValue(a.time)?.getTime() || 0)).slice(0, 8)
   }, [history])
 
   async function submitIssue(event: FormEvent) {
