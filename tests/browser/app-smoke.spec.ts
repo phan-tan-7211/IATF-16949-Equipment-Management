@@ -76,6 +76,23 @@ test('current navigation surfaces open without browser crash', async ({ page }) 
   if (mobile(page)) await openMore(page)
 })
 
+test('maintenance opens work orders first and can switch record tabs', async ({ page }) => {
+  await openApp(page)
+  await openView(page, 'Bảo trì')
+  const workspace = page.locator('.maintenance-workspace')
+  await expect(workspace.getByRole('heading', { name: 'Bảo trì thiết bị' })).toBeVisible()
+  const workOrdersTab = workspace.getByRole('button', { name: /^Công việc/ })
+  await expect(workOrdersTab).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('#maintenance-tab-work-orders')).toBeVisible()
+
+  const plansTab = workspace.getByRole('button', { name: /^Kế hoạch/ })
+  await plansTab.click()
+  await expect(plansTab).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('#maintenance-tab-plans')).toBeVisible()
+  await expect(page.locator('#maintenance-tab-work-orders')).toBeHidden()
+  await expect(page.locator('.fatal-screen')).toHaveCount(0)
+})
+
 test('QR fallback opens the equipment profile when camera is denied', async ({ page }) => {
   await openApp(page)
   await openView(page, 'Quét QR')
