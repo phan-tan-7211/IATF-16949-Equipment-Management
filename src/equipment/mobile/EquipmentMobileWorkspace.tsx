@@ -1,4 +1,4 @@
-import '../../equipment/mobile/EquipmentMobile.css'
+import './EquipmentMobile.css'
 import { LiveEquipmentRegistrationPanel } from '../../LiveEquipmentRegistrationPanel'
 import { LiveEquipmentPanel } from '../../LiveEquipmentPanel'
 
