@@ -92,10 +92,13 @@ export function getOrgAutocompleteOptions(columnKey: string, context: OrgAutocom
   if (columnKey === 'managingDepartment') {
     return unique(cache.units.filter((unit) => !['COMPANY', 'TEAM'].includes(unit.unitType)).map((unit) => unit.unitName))
   }
-  if (columnKey === 'managementResponsiblePrimary' || columnKey === 'managementResponsibleSecondary') {
+  if (columnKey === 'managementResponsiblePrimary') {
     const allowedCodes = unitCodesForName(context.managingDepartment || '')
     const people = allowedCodes.size ? cache.people.filter((person) => allowedCodes.has(person.unitCode)) : cache.people
     return unique(people.map((person) => person.displayName))
+  }
+  if (columnKey === 'managementResponsibleSecondary') {
+    return unique(cache.people.map((person) => person.displayName))
   }
   if (columnKey === 'currentArea' || columnKey === 'currentLine') {
     const type = columnKey === 'currentLine' ? 'LINE' : 'AREA'
