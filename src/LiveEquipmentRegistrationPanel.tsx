@@ -17,6 +17,7 @@ const EMPTY: EquipmentRegistrationInput = {
 function booleanSelectValue(value: boolean | undefined) { return value === true ? 'YES' : value === false ? 'NO' : '' }
 function parseBooleanSelect(value: string) { return value === 'YES' ? true : value === 'NO' ? false : undefined }
 function clipboardFileExtension(mimeType: string) { if (mimeType === 'image/png') return 'png'; if (mimeType === 'image/webp') return 'webp'; if (mimeType === 'image/gif') return 'gif'; return 'jpg' }
+function cloneOptionLabel(row: LiveEquipment) { return `${row.equipmentId} · ${row.equipmentName}` }
 
 function refreshEquipmentMasterAfterCreate() {
   requestAnimationFrame(() => {
@@ -123,6 +124,8 @@ export function LiveEquipmentRegistrationPanel() {
     return () => URL.revokeObjectURL(url)
   }, [photoFile])
 
+  const cloneOptions = useMemo(() => sourceRows.map(cloneOptionLabel), [sourceRows])
+
   const canonical = useMemo(() => {
     const next = { ...form }
     const keys: EquipmentMasterSuggestionKey[] = ['equipmentName','equipmentCategory','manufacturer','distributor','model','department','managingDepartment','managementResponsiblePrimary','managementResponsibleSecondary','currentArea','currentLine','technicalSpecification','description','accuracy','origin','warrantyContact','note','relatedDocuments']
@@ -164,11 +167,13 @@ export function LiveEquipmentRegistrationPanel() {
     setOpen(true)
   }
 
-  function applyClone(sourceId: string) {
-    setCloneSourceId(sourceId)
-    if (!sourceId) return
-    const source = sourceRows.find((row) => row.equipmentId === sourceId)
+  function applyClone(value: string) {
+    setCloneSourceId(value)
+    const normalized = value.trim().toLocaleLowerCase('vi-VN')
+    if (!normalized) return
+    const source = sourceRows.find((row) => cloneOptionLabel(row).toLocaleLowerCase('vi-VN') === normalized || row.equipmentId.toLocaleLowerCase('vi-VN') === normalized)
     if (!source) return
+    setCloneSourceId(cloneOptionLabel(source))
     setForm(cloneRegistrationInput(source))
     setPhotoFile(null)
     setPhotoPreview('')
@@ -253,7 +258,7 @@ export function LiveEquipmentRegistrationPanel() {
             {message ? <div className="equipment-register-message success">{message}</div> : null}
             {error ? <div className="equipment-register-message error">{error}</div> : null}
             <div className="equipment-register-form">
-              <label className="wide"><span>Sao chép từ mã có sẵn</span><select value={cloneSourceId} onChange={(event) => applyClone(event.target.value)}><option value="">Không sao chép</option>{sourceRows.map((row) => <option key={row.equipmentId} value={row.equipmentId}>{row.equipmentId} · {row.equipmentName}</option>)}</select><small className="equipment-standardize-hint">Mã mới vẫn tự sinh. Số sê-ri, ngày và ảnh được để trống để tránh trùng.</small></label>
+              <label className="wide"><span>Sao chép từ mã có sẵn</span><SmartAutocomplete value={cloneSourceId} options={cloneOptions} onChange={applyClone} placeholder="Nhập mã hoặc tên thiết bị để tìm nhanh" maxOptions={30} /><small className="equipment-standardize-hint">Nhập mã hoặc tên → lọc gợi ý → chọn thiết bị. Mã mới vẫn tự sinh; số sê-ri, ngày và ảnh được để trống để tránh trùng.</small></label>
               <label><span>Loại thiết bị *</span><select required value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value as EquipmentRegistrationInput['equipmentType'] })}><option value="PRODUCTION">Thiết bị sản xuất → CEV-PR</option><option value="MEASUREMENT">Thiết bị đo/kiểm → CEV-ME</option></select></label>
               <label><span>Trạng thái *</span><select required value={form.status || 'RUNNING'} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
               <label className="wide"><span>Tên thiết bị *</span><SmartAutocomplete autoFocus required value={form.equipmentName} options={suggestions.equipmentName} onChange={(nextValue) => setForm({ ...form, equipmentName: nextValue })} onBlur={() => setForm((current) => ({ ...current, equipmentName: canonicalizeMasterValue(current.equipmentName, suggestions.equipmentName) }))} placeholder="Chọn tên chuẩn đã có hoặc nhập tên mới" /><small className="equipment-standardize-hint">Nếu đã có tên chuẩn thì chọn đúng tên đó.</small></label>
