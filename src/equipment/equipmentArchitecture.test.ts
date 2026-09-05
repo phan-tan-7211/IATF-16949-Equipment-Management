@@ -80,7 +80,15 @@ describe('Equipment platform architecture', () => {
     }
   })
 
-  it('keeps root Equipment styles as thin compatibility wrappers', () => {
+  it('keeps registration on equipment-owned styles instead of root compatibility CSS', () => {
+    const registration = read('src/LiveEquipmentRegistrationPanel.tsx')
+    expect(registration).toContain("./equipment/shared/styles/EquipmentPrimitives.css")
+    expect(registration).toContain("./equipment/shared/styles/EquipmentRegistrationPrimitives.css")
+    expect(registration).not.toContain("./Equipment.css")
+    expect(registration).not.toContain("./EquipmentRegistration.css")
+  })
+
+  it('keeps root Equipment styles as thin compatibility wrappers only', () => {
     expect(read('src/Equipment.css')).toContain("@import './equipment/shared/styles/EquipmentPrimitives.css';")
     expect(read('src/EquipmentSheetView.css')).toContain("@import './equipment/shared/styles/EquipmentSheetPrimitives.css';")
     expect(read('src/EquipmentRegistration.css')).toContain("@import './equipment/shared/styles/EquipmentRegistrationPrimitives.css';")
