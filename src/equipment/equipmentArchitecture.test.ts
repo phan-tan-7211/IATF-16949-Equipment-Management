@@ -59,9 +59,22 @@ describe('Equipment platform architecture', () => {
   })
 
   it('keeps shared Equipment primitive styles free of viewport page-layout media queries', () => {
-    for (const file of ['src/Equipment.css', 'src/EquipmentSheetView.css']) {
+    for (const file of ['src/equipment/shared/styles/EquipmentPrimitives.css', 'src/equipment/shared/styles/EquipmentSheetPrimitives.css']) {
       const content = read(file)
       expect(content, `${file} is shared primitive CSS and must not own viewport layout`).not.toMatch(/@media\s*\(/)
+    }
+  })
+
+  it('makes platform panels consume shared primitives directly instead of root compatibility CSS', () => {
+    for (const file of ['src/equipment/desktop/EquipmentDesktopPanel.tsx', 'src/equipment/mobile/EquipmentMobilePanel.tsx']) {
+      const content = read(file)
+      expect(content).toContain("../shared/styles/EquipmentPrimitives.css")
+      expect(content).toContain("../shared/styles/EquipmentSheetPrimitives.css")
+      expect(content).not.toContain("../../Equipment.css")
+      expect(content).not.toContain("../../EquipmentSheetView.css")
+      expect(content).toContain('EquipmentTableHeaderCell')
+      expect(content).toContain('EquipmentTableValue')
+      expect(content).toContain('EquipmentEditFormContent')
     }
   })
 
