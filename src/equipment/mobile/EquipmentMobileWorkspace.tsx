@@ -1,5 +1,6 @@
 import './EquipmentMobile.css'
 import './EquipmentMobileSheet.css'
+import './EquipmentMobileForms.css'
 import { LiveEquipmentRegistrationPanel } from '../../LiveEquipmentRegistrationPanel'
 import { LiveEquipmentPanel } from '../../LiveEquipmentPanel'
 
