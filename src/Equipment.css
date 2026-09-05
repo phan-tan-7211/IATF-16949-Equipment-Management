@@ -1,2 +1,0 @@
-/* Compatibility entrypoint. Shared Equipment primitives now live with the Equipment module. */
-@import './equipment/shared/styles/EquipmentPrimitives.css';
