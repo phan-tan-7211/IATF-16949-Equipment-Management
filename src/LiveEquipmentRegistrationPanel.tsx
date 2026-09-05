@@ -3,14 +3,10 @@ import type { ClipboardEvent, FormEvent } from 'react'
 import './EquipmentRegistration.css'
 import { useAppRole } from './auth/AppRoleContext'
 import { SmartAutocomplete } from './components/SmartAutocomplete'
-import { loadLiveEquipment } from './data/liveEquipment'
+import { loadLiveEquipment, type LiveEquipment } from './data/liveEquipment'
 import { uploadEquipmentPhoto } from './data/supabaseEquipment'
 import { buildEquipmentMasterSuggestions, canonicalizeMasterValue, EMPTY_MASTER_SUGGESTIONS, type EquipmentMasterSuggestionKey } from './data/equipmentMasterFields'
-import {
-  createEquipmentAuto,
-  deriveEquipmentCriticality,
-  type EquipmentRegistrationInput,
-} from './data/autoRegistration'
+import { createEquipmentAuto, deriveEquipmentCriticality, type EquipmentRegistrationInput } from './data/autoRegistration'
 
 const EMPTY: EquipmentRegistrationInput = {
   equipmentType: 'PRODUCTION', equipmentName: '', equipmentCategory: '', manufacturer: '', distributor: '', model: '', serialNumber: '', department: '', currentArea: '', currentLine: '', managingDepartment: '', managementResponsiblePrimary: '', managementResponsibleSecondary: '', technicalSpecification: '', description: '', accuracy: '', origin: '', manufactureDate: '', inServiceDate: '', warrantyUntil: '', warrantyContact: '', note: '', relatedDocuments: '', status: 'RUNNING', controlsProductQuality: undefined, specialCharacteristicImpact: undefined, stopsProduction: undefined, hasBackup: undefined, capacityImpact: undefined,
@@ -27,11 +23,48 @@ function refreshEquipmentMasterAfterCreate() {
   })
 }
 
+function cloneRegistrationInput(row: LiveEquipment): EquipmentRegistrationInput {
+  const facts = row.criticalityFacts || {}
+  return {
+    equipmentType: row.equipmentType,
+    equipmentName: row.equipmentName,
+    equipmentCategory: row.equipmentCategory || '',
+    manufacturer: row.manufacturer || '',
+    distributor: row.distributor || '',
+    model: row.model || '',
+    serialNumber: '',
+    department: row.usingDepartment || '',
+    currentArea: row.currentArea || '',
+    currentLine: row.currentLine || '',
+    managingDepartment: row.managingDepartment || '',
+    managementResponsiblePrimary: row.managementResponsiblePrimary || '',
+    managementResponsibleSecondary: row.managementResponsibleSecondary || '',
+    technicalSpecification: row.technicalSpecification || '',
+    description: row.description || '',
+    accuracy: row.accuracy || '',
+    origin: row.origin || '',
+    manufactureDate: '',
+    inServiceDate: '',
+    warrantyUntil: '',
+    warrantyContact: row.warrantyContact || '',
+    note: row.note || '',
+    relatedDocuments: row.relatedDocuments || '',
+    status: 'RUNNING',
+    controlsProductQuality: facts.controlsProductQuality,
+    specialCharacteristicImpact: facts.specialCharacteristicImpact,
+    stopsProduction: facts.stopsProduction,
+    hasBackup: facts.hasBackup,
+    capacityImpact: facts.capacityImpact,
+  }
+}
+
 export function LiveEquipmentRegistrationPanel() {
   const role = useAppRole()
   const canCreate = ['MAINTENANCE', 'MANAGER', 'ADMIN'].includes(role)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<EquipmentRegistrationInput>(EMPTY)
+  const [cloneSourceId, setCloneSourceId] = useState('')
+  const [sourceRows, setSourceRows] = useState<LiveEquipment[]>([])
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState('')
   const [saving, setSaving] = useState(false)
@@ -45,8 +78,13 @@ export function LiveEquipmentRegistrationPanel() {
     let active = true
     void loadLiveEquipment().then((rows) => {
       if (!active) return
+      setSourceRows(rows)
       setSuggestions(buildEquipmentMasterSuggestions(rows.map((row) => ({ ...row, department: row.usingDepartment }))))
-    }).catch(() => { if (active) setSuggestions(EMPTY_MASTER_SUGGESTIONS) })
+    }).catch(() => {
+      if (!active) return
+      setSourceRows([])
+      setSuggestions(EMPTY_MASTER_SUGGESTIONS)
+    })
     return () => { active = false }
   }, [open])
 
@@ -64,7 +102,25 @@ export function LiveEquipmentRegistrationPanel() {
     return next
   }, [form, suggestions])
 
-  function resetForm() { setForm(EMPTY); setPhotoFile(null); setPhotoPreview('') }
+  function resetForm() {
+    setForm(EMPTY)
+    setCloneSourceId('')
+    setPhotoFile(null)
+    setPhotoPreview('')
+  }
+
+  function applyClone(sourceId: string) {
+    setCloneSourceId(sourceId)
+    if (!sourceId) return
+    const source = sourceRows.find((row) => row.equipmentId === sourceId)
+    if (!source) return
+    setForm(cloneRegistrationInput(source))
+    setPhotoFile(null)
+    setPhotoPreview('')
+    setError('')
+    setMessage(`Đã sao chép dữ liệu từ ${source.equipmentId}. Mã mới sẽ tự sinh; hãy nhập lại Số sê-ri, ngày và ảnh nếu cần.`)
+  }
+
   function textField(key: keyof EquipmentRegistrationInput, label: string, suggestionKey?: EquipmentMasterSuggestionKey, wide = false, placeholder = '', required = false) {
     return <label className={wide ? 'wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete required={required} value={String(form[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setForm({ ...form, [key]: nextValue })} onBlur={() => setForm((current) => ({ ...current, [key]: canonicalizeMasterValue(String(current[key] || ''), suggestions[suggestionKey]) }))} placeholder={placeholder} /> : <input required={required} value={String(form[key] || '')} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={placeholder} />}</label>
   }
@@ -117,24 +173,22 @@ export function LiveEquipmentRegistrationPanel() {
 
   if (!canCreate) return null
   return <section className="equipment-register-card">
-    <div className="equipment-register-intro"><div><p className="eyebrow">Danh mục thiết bị · nhập chuẩn một lần</p><h2>Đăng ký thiết bị mới</h2><p>Các trường lặp lại đều gợi ý từ danh mục hiện có; có sẵn thì chọn chuẩn, chưa có thì nhập mới.</p></div><button type="button" className="equipment-register-toggle" onClick={() => setOpen((value) => !value)}>{open ? 'Đóng' : '+ Đăng ký'}</button></div>
+    <div className="equipment-register-intro"><div><p className="eyebrow">Danh mục thiết bị · nhập chuẩn một lần</p><h2>Đăng ký thiết bị mới</h2><p>Có thể sao chép một thiết bị tương tự rồi chỉ sửa phần khác biệt trước khi tạo mã mới.</p></div><button type="button" className="equipment-register-toggle" onClick={() => setOpen((value) => !value)}>{open ? 'Đóng' : '+ Đăng ký'}</button></div>
     {message ? <div className="equipment-register-message success">{message}</div> : null}{error ? <div className="equipment-register-message error">{error}</div> : null}
     {open ? <form className="equipment-register-form" onSubmit={submit}>
+      <label><span>Sao chép từ mã có sẵn</span><select value={cloneSourceId} onChange={(event) => applyClone(event.target.value)}><option value="">Không sao chép</option>{sourceRows.map((row) => <option key={row.equipmentId} value={row.equipmentId}>{row.equipmentId} · {row.equipmentName}</option>)}</select><small className="equipment-standardize-hint">Sao chép thông tin chung; mã mới vẫn tự sinh. Số sê-ri, ngày và ảnh được để trống để tránh trùng.</small></label>
       <label><span>Loại thiết bị</span><select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value as EquipmentRegistrationInput['equipmentType'] })}><option value="PRODUCTION">Thiết bị sản xuất → CEV-PR</option><option value="MEASUREMENT">Thiết bị đo/kiểm → CEV-ME</option></select></label>
       <label><span>Trạng thái</span><select value={form.status || 'RUNNING'} onChange={(e) => setForm({ ...form, status: e.target.value })}><option value="RUNNING">Hoạt động</option><option value="STOPPED">Dừng</option><option value="MAINTENANCE">Bảo trì</option><option value="DOWN">Sự cố</option><option value="DISPOSED">Thanh lý</option></select></label>
-      <label><span>Tên thiết bị *</span><SmartAutocomplete autoFocus required value={form.equipmentName} options={suggestions.equipmentName} onChange={(nextValue) => setForm({ ...form, equipmentName: nextValue })} onBlur={() => setForm((current) => ({ ...current, equipmentName: canonicalizeMasterValue(current.equipmentName, suggestions.equipmentName) }))} placeholder="Chọn tên chuẩn đã có hoặc nhập tên mới" /><small className="equipment-standardize-hint">Nếu đã có “Máy nhúng bể”, chọn đúng tên đó thay vì tạo biến thể mới.</small></label>
+      <label><span>Tên thiết bị *</span><SmartAutocomplete autoFocus required value={form.equipmentName} options={suggestions.equipmentName} onChange={(nextValue) => setForm({ ...form, equipmentName: nextValue })} onBlur={() => setForm((current) => ({ ...current, equipmentName: canonicalizeMasterValue(current.equipmentName, suggestions.equipmentName) }))} placeholder="Chọn tên chuẩn đã có hoặc nhập tên mới" /><small className="equipment-standardize-hint">Nếu đã có tên chuẩn thì chọn đúng tên đó.</small></label>
       {textField('equipmentCategory','Nhóm thiết bị','equipmentCategory')}{textField('manufacturer','Hãng / nhà sản xuất','manufacturer')}{textField('distributor','Nhà phân phối','distributor')}{textField('model','Mẫu máy','model')}{textField('serialNumber','Số sê-ri')}
       {textField('department','Bộ phận sử dụng','department')}{textField('managingDepartment','Bộ phận quản lý','managingDepartment')}
       {textField('managementResponsiblePrimary','Người phụ trách quản lý · Chính *','managementResponsiblePrimary',false,'Nhập/chọn người chịu trách nhiệm chính',true)}
       {textField('managementResponsibleSecondary','Người phụ trách quản lý · Phụ','managementResponsibleSecondary',false,'Người thay thế / hỗ trợ')}
-      {textField('currentArea','Khu vực','currentArea')}{textField('currentLine','Dây chuyền','currentLine')}
-      {textField('origin','Xuất xứ','origin')}{textField('accuracy','Độ chính xác','accuracy')}
+      {textField('currentArea','Khu vực','currentArea')}{textField('currentLine','Dây chuyền','currentLine')}{textField('origin','Xuất xứ','origin')}{textField('accuracy','Độ chính xác','accuracy')}
       <label><span>Ngày sản xuất</span><input type="date" value={form.manufactureDate || ''} onChange={(e) => setForm({ ...form, manufactureDate: e.target.value })} /></label>
       <label><span>Ngày đưa vào sử dụng</span><input type="date" value={form.inServiceDate || ''} onChange={(e) => setForm({ ...form, inServiceDate: e.target.value })} /></label>
       <label><span>Bảo hành đến ngày</span><input type="date" value={form.warrantyUntil || ''} onChange={(e) => setForm({ ...form, warrantyUntil: e.target.value })} /></label>
-      {textField('warrantyContact','Liên hệ bảo hành','warrantyContact')}
-      {textField('technicalSpecification','Thông số kỹ thuật','technicalSpecification',false,'Chọn thông số đã dùng hoặc nhập thông số mới')}
-      {textField('description','Mô tả / chức năng chính','description')}{textField('note','Ghi chú','note')}{textField('relatedDocuments','Tài liệu liên quan','relatedDocuments')}
+      {textField('warrantyContact','Liên hệ bảo hành','warrantyContact')}{textField('technicalSpecification','Thông số kỹ thuật','technicalSpecification',false,'Chọn thông số đã dùng hoặc nhập thông số mới')}{textField('description','Mô tả / chức năng chính','description')}{textField('note','Ghi chú','note')}{textField('relatedDocuments','Tài liệu liên quan','relatedDocuments')}
       <label className="equipment-register-photo"><span>Ảnh thiết bị</span><div className="equipment-register-photo-box" tabIndex={0} onPaste={handlePhotoPaste} title="Có thể Ctrl+V ảnh trực tiếp vào đây">{photoPreview ? <img src={photoPreview} alt="Ảnh thiết bị chuẩn bị đăng ký" /> : <div>Chưa chọn ảnh · có thể Ctrl+V</div>}<label className="equipment-register-photo-pick">📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.currentTarget.files?.[0] || null)} /></label><button type="button" onClick={() => void pastePhotoFromClipboard()}>📋 Dán ảnh từ clipboard</button>{photoFile ? <button type="button" onClick={() => setPhotoFile(null)}>Bỏ ảnh</button> : null}</div><small>1 thiết bị = 1 ảnh · chọn file hoặc dán trực tiếp từ clipboard bằng Ctrl+V.</small></label>
       <fieldset className="equipment-criticality-auto"><legend>Mức độ quan trọng thiết bị · hệ thống tự xác định</legend><p>Tạo mới và chỉnh sửa dùng cùng quy tắc CEV-ABCD-V2.</p><div className="equipment-criticality-questions">
         <label><span>Thiết bị trực tiếp tạo / kiểm soát đặc tính chất lượng?</span><select required value={booleanSelectValue(form.controlsProductQuality)} onChange={(e) => setForm({ ...form, controlsProductQuality: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
