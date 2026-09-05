@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './Inspection.css'
 import { canSubmitInspection, useAppRole } from './auth/AppRoleContext'
@@ -50,14 +50,14 @@ export function LiveInspectionPanel() {
   const selectedEquipment = useMemo(() => equipment.find((item) => item.equipmentId === equipmentId) || null, [equipment, equipmentId])
   const selectedInspection = selectedInspectionId ? inspections.find((item) => item.inspectionId === selectedInspectionId) || null : null
 
-  const applyResult = (result: Awaited<ReturnType<typeof loadLiveInspection>>) => {
+  const applyResult = useCallback((result: Awaited<ReturnType<typeof loadLiveInspection>>) => {
     setEquipment(result.equipment)
     setInspections(result.inspections)
     setEquipmentId((current) => current || result.equipment[0]?.equipmentId || '')
     setError('')
-  }
+  }, [])
 
-  const refresh = async () => applyResult(await loadLiveInspection())
+  const refresh = useCallback(async () => applyResult(await loadLiveInspection()), [applyResult])
 
   useEffect(() => {
     let active = true
@@ -66,7 +66,7 @@ export function LiveInspectionPanel() {
       .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải kiểm tra hằng ngày') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [applyResult])
 
   useEffect(() => {
     if (!drawerOpen && !selectedInspectionId) return
