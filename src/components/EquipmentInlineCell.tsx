@@ -44,8 +44,11 @@ function equipmentSuggestionOptions(columnKey: string) {
   return cachedSuggestions[suggestionKey]
 }
 
-function autocompleteOptions(columnKey: string) {
-  const orgOptions = getOrgAutocompleteOptions(columnKey)
+function autocompleteOptions(columnKey: string, equipment: LiveEquipment) {
+  const orgOptions = getOrgAutocompleteOptions(columnKey, {
+    managingDepartment: equipment.managingDepartment,
+    usingDepartment: equipment.usingDepartment,
+  })
   if (orgOptions.length) return orgOptions
   return equipmentSuggestionOptions(columnKey)
 }
@@ -87,7 +90,7 @@ export function EquipmentInlineCell({ equipment, columnKey, label, value, onChan
     </select>
   }
 
-  const options = autocompleteOptions(columnKey)
+  const options = autocompleteOptions(columnKey, equipment)
   if (options.length) {
     return <SmartAutocomplete
       className="equipment-inline-input"
