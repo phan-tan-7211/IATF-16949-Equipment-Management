@@ -46,6 +46,11 @@ export type OrgMasterSnapshot = {
   resolvedAssignments: OrgResolvedAssignment[]
 }
 
+export type OrgAutocompleteContext = {
+  managingDepartment?: string
+  usingDepartment?: string
+}
+
 let cache: OrgMasterSnapshot | null = null
 let inFlight: Promise<OrgMasterSnapshot> | null = null
 
@@ -57,23 +62,50 @@ function unique(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'vi'))
 }
 
+function normalized(value: string) {
+  return value.trim().toLocaleLowerCase('vi')
+}
+
+function unitCodesForName(unitName: string) {
+  if (!cache || !unitName.trim()) return new Set<string>()
+  const target = normalized(unitName)
+  const roots = cache.units.filter((unit) => normalized(unit.unitName) === target).map((unit) => unit.unitCode)
+  const codes = new Set(roots)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const unit of cache.units) {
+      if (unit.parentUnitCode && codes.has(unit.parentUnitCode) && !codes.has(unit.unitCode)) {
+        codes.add(unit.unitCode)
+        changed = true
+      }
+    }
+  }
+  return codes
+}
+
 export function getOrgMasterSnapshot() {
   return cache
 }
 
-export function getOrgAutocompleteOptions(columnKey: string) {
+export function getOrgAutocompleteOptions(columnKey: string, context: OrgAutocompleteContext = {}) {
   if (!cache) return []
   if (columnKey === 'managingDepartment' || columnKey === 'usingDepartment') {
     return unique(cache.units.filter((unit) => !['COMPANY', 'TEAM'].includes(unit.unitType)).map((unit) => unit.unitName))
   }
   if (columnKey === 'managementResponsiblePrimary' || columnKey === 'managementResponsibleSecondary') {
-    return unique(cache.people.map((person) => person.displayName))
+    const departmentName = columnKey === 'managementResponsiblePrimary'
+      ? context.managingDepartment
+      : context.usingDepartment || context.managingDepartment
+    const allowedCodes = unitCodesForName(departmentName || '')
+    const people = allowedCodes.size ? cache.people.filter((person) => allowedCodes.has(person.unitCode)) : cache.people
+    return unique(people.map((person) => person.displayName))
   }
-  if (columnKey === 'currentArea') {
-    return unique(cache.locations.filter((location) => location.locationType === 'AREA').map((location) => location.locationName))
-  }
-  if (columnKey === 'currentLine') {
-    return unique(cache.locations.filter((location) => location.locationType === 'LINE').map((location) => location.locationName))
+  if (columnKey === 'currentArea' || columnKey === 'currentLine') {
+    const allowedCodes = unitCodesForName(context.usingDepartment || '')
+    const type = columnKey === 'currentLine' ? 'LINE' : 'AREA'
+    const locations = cache.locations.filter((location) => location.locationType === type && (!allowedCodes.size || allowedCodes.has(location.unitCode)))
+    return unique(locations.map((location) => location.locationName))
   }
   return []
 }
