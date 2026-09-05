@@ -88,7 +88,9 @@ describe('Equipment platform architecture', () => {
 
   it('keeps the panel controller as an orchestrator of focused shared hooks', () => {
     const controller = read('src/equipment/shared/useEquipmentPanelController.ts')
-    for (const hook of ['useEquipmentTableState','useEquipmentPhotos','useEquipmentBulkEdit','useEquipmentEditing']) expect(controller).toContain(hook)
+    for (const hook of ['useEquipmentData','useEquipmentTableState','useEquipmentPhotos','useEquipmentBulkEdit','useEquipmentEditing']) expect(controller).toContain(hook)
+    expect(controller).not.toContain('loadLiveEquipment')
+    expect(controller).not.toContain('getEquipmentCacheSnapshot')
   })
 
   it('renders normal mobile equipment as cards while preserving spreadsheet bulk editing', () => {
