@@ -138,7 +138,7 @@ function upsertSpareCache(part: LiveSparePart) {
   if (!spareCache) spareCache = []
   const index = spareCache.findIndex((item) => item.partId === part.partId)
   if (index >= 0) spareCache = spareCache.map((item, i) => i === index ? part : item)
-  else spareCache = [...spareCache, part].sort((a, b) => a.partId.localeCompare(b.partId, 'vi', { numeric: true }))
+  else spareCache = [...spareCache, part].toSorted((a, b) => a.partId.localeCompare(b.partId, 'vi', { numeric: true }))
   persistSpareCache()
 }
 

@@ -10,8 +10,6 @@
 .equipment-system-fields span,.equipment-system-fields small{font-size:11px;color:var(--color-text-muted)}
 .equipment-system-fields strong{font-size:14px;word-break:break-word}
 .equipment-form-grid-full .wide{grid-column:1/-1}
-
-/* Unified Equipment Edit form: never fall back to browser-default controls. */
 .equipment-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:20px 22px}
 .equipment-edit-grid>label{display:grid;align-content:start;gap:7px;min-width:0}
 .equipment-edit-grid>label.equipment-edit-wide{grid-column:1/-1}
@@ -23,7 +21,6 @@
 .equipment-edit-grid input:focus,.equipment-edit-grid select:focus,.equipment-edit-grid textarea:focus{outline:0;border-color:hsl(var(--blue-500));box-shadow:0 0 0 3px hsl(var(--blue-500)/.14)}
 .equipment-edit-grid input[readonly]{background:var(--color-surface-subtle);color:var(--color-text-muted);cursor:not-allowed}
 .equipment-edit-grid select{appearance:auto}
-
 .equipment-edit-criticality{margin:0 22px 20px;padding:16px;border:1px solid var(--color-border);border-radius:12px;background:var(--color-surface-subtle)}
 .equipment-edit-criticality legend{padding:0 8px;font-size:13px;font-weight:900;color:var(--color-text)}
 .equipment-edit-criticality-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -36,6 +33,4 @@
 .equipment-edit-criticality-result.level-a{background:var(--color-danger-bg);color:var(--color-danger-fg)}
 .equipment-edit-criticality-result.level-b{background:var(--color-warning-bg);color:var(--color-warning-fg)}
 .equipment-edit-criticality-result.level-c,.equipment-edit-criticality-result.level-d{background:var(--color-success-bg);color:var(--color-success-fg)}
-/* Equipment image contract: fill the available viewport while preserving the complete source image. Never crop or distort. */
 .equipment-profile-image-wrap img,.equipment-image-button img,.equipment-thumb,.equipment-edit-photo img,.equipment-register-photo-box>img{width:100%;height:100%;object-fit:contain!important;object-position:center!important;max-width:100%;max-height:100%}
-@media(max-width:640px){.equipment-system-fields,.equipment-edit-criticality-grid{grid-template-columns:1fr}.equipment-register-photo-box{align-items:flex-start;flex-wrap:wrap}.equipment-register-photo-box>img,.equipment-register-photo-box>div:first-child{width:100%;height:180px}.equipment-edit-grid{grid-template-columns:1fr;gap:12px;padding:16px 14px}.equipment-edit-grid>label.equipment-edit-wide{grid-column:auto}.equipment-edit-criticality{margin:0 14px 18px}.equipment-form-grid-full .wide{grid-column:auto}}

@@ -11,16 +11,16 @@ const EQUIPMENT = [{
 }]
 
 async function installMocks(page: Page) {
-  await page.addInitScript(({ token, userId }) => {
+  await page.addInitScript(({ authToken, userId }) => {
     localStorage.setItem('sb-supabase-not-configured-auth-token', JSON.stringify({
-      access_token: token, refresh_token: 'smoke-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800,
+      access_token: authToken, refresh_token: 'smoke-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800,
       user: { id: userId, email: 'smoke@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {} },
     }))
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
       getUserMedia: async () => { throw new DOMException('Camera unavailable in CI', 'NotAllowedError') },
       enumerateDevices: async () => [{ kind: 'videoinput', deviceId: 'ci-camera', label: 'CI camera' }],
     } })
-  }, { token, userId: USER_ID })
+  }, { authToken: token, userId: USER_ID })
 
   await page.route('https://supabase-not-configured.invalid/**', async (route) => {
     const url = new URL(route.request().url())

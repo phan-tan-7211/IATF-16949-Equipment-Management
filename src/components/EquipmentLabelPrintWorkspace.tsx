@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { EQUIPMENT_LABEL_SIZES, EquipmentManagementLabel, type EquipmentLabelSize } from './EquipmentManagementLabel'
 import { normalizeEquipmentLabelSize, setEquipmentDefaultLabelSize } from '../data/equipmentLabelPreference'
 import './EquipmentLabelPrintWorkspace.css'
@@ -32,26 +32,19 @@ function initialSizeMap(records: Row[]) {
   ])) as Record<string, EquipmentLabelSize>
 }
 
+function setDocumentTitle(title: string) {
+  document.title = title
+}
+
 export function EquipmentLabelPrintWorkspace({ records }: Props) {
   const equipmentRows = useMemo(() => records.filter((row) => text(row, 'equipment_id')), [records])
   const [query, setQuery] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [copies, setCopies] = useState(1)
-  const [sizeById, setSizeById] = useState<Record<string, EquipmentLabelSize>>(() => initialSizeMap(records))
+  const [sizeOverrides, setSizeOverrides] = useState<Record<string, EquipmentLabelSize>>({})
   const [savingSizeId, setSavingSizeId] = useState('')
   const [sizeMessage, setSizeMessage] = useState('')
-
-  useEffect(() => {
-    setSizeById((current) => {
-      const next = { ...current }
-      for (const row of equipmentRows) {
-        const id = text(row, 'equipment_id')
-        if (!id || next[id]) continue
-        next[id] = normalizeEquipmentLabelSize(text(row, 'defaultLabelSize'))
-      }
-      return next
-    })
-  }, [equipmentRows])
+  const sizeById = useMemo(() => ({ ...initialSizeMap(records), ...sizeOverrides }), [records, sizeOverrides])
 
   const filtered = useMemo(() => {
     const words = normalize(query).split(/\s+/).filter(Boolean)
@@ -96,7 +89,7 @@ export function EquipmentLabelPrintWorkspace({ records }: Props) {
 
   async function changeDefaultSize(equipmentId: string, nextSize: EquipmentLabelSize) {
     const previous = sizeById[equipmentId] || 'standard'
-    setSizeById((current) => ({ ...current, [equipmentId]: nextSize }))
+    setSizeOverrides((current) => ({ ...current, [equipmentId]: nextSize }))
     setSavingSizeId(equipmentId)
     setSizeMessage('')
     try {
@@ -104,7 +97,7 @@ export function EquipmentLabelPrintWorkspace({ records }: Props) {
       const label = EQUIPMENT_LABEL_SIZES.find((option) => option.id === nextSize)?.label || nextSize
       setSizeMessage(`Đã nhớ ${equipmentId}: ${label}`)
     } catch (cause) {
-      setSizeById((current) => ({ ...current, [equipmentId]: previous }))
+      setSizeOverrides((current) => ({ ...current, [equipmentId]: previous }))
       setSizeMessage(cause instanceof Error ? cause.message : 'Không thể lưu khổ tem mặc định')
     } finally {
       setSavingSizeId('')
@@ -115,14 +108,14 @@ export function EquipmentLabelPrintWorkspace({ records }: Props) {
     const group = groups.find((item) => item.id === size)
     if (!group?.printableRows.length) return
     const previousTitle = document.title
-    document.title = `CEV Labels · ${group.rows.length} thiết bị · ${group.label}`
+    setDocumentTitle(`CEV Labels · ${group.rows.length} thiết bị · ${group.label}`)
     const style = document.createElement('style')
     style.id = 'equipment-label-page-size'
     style.textContent = `@media print { @page { size: ${group.printWidth}mm ${group.printHeight}mm; margin: 0; } .equipment-label-print-page:not(.print-size-${size}) { display:none!important; } }`
     document.head.appendChild(style)
     const restore = () => {
       style.remove()
-      document.title = previousTitle
+      setDocumentTitle(previousTitle)
       window.removeEventListener('afterprint', restore)
     }
     window.addEventListener('afterprint', restore, { once: true })

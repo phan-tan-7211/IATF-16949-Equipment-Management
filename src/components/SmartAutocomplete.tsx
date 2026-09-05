@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { InputHTMLAttributes, KeyboardEvent } from 'react'
 import './SmartAutocomplete.css'
 
@@ -47,7 +47,8 @@ export function SmartAutocomplete({
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const [placement, setPlacement] = useState<Placement>({ openUp: false, maxHeight: MAX_MENU_HEIGHT })
-  const menuId = useRef(`smart-autocomplete-${Math.random().toString(36).slice(2)}`)
+  const reactId = useId()
+  const menuId = `smart-autocomplete-${reactId.replaceAll(':', '')}`
 
   const filteredOptions = useMemo(() => {
     const query = value.trim().toLocaleLowerCase('vi-VN')
@@ -81,11 +82,6 @@ export function SmartAutocomplete({
       viewport?.removeEventListener('scroll', update)
     }
   }, [open, updatePlacement])
-
-  useEffect(() => {
-    setActiveIndex(-1)
-    if (open) requestAnimationFrame(updatePlacement)
-  }, [open, updatePlacement, value])
 
   function selectOption(option: string) {
     onChange(option)
@@ -133,14 +129,16 @@ export function SmartAutocomplete({
       role="combobox"
       aria-autocomplete="list"
       aria-expanded={showMenu}
-      aria-controls={showMenu ? menuId.current : undefined}
-      aria-activedescendant={showMenu && activeIndex >= 0 ? `${menuId.current}-${activeIndex}` : undefined}
+      aria-controls={showMenu ? menuId : undefined}
+      aria-activedescendant={showMenu && activeIndex >= 0 ? `${menuId}-${activeIndex}` : undefined}
       onFocus={(event) => {
         inputProps.onFocus?.(event)
+        setActiveIndex(-1)
         setOpen(true)
         requestAnimationFrame(updatePlacement)
       }}
       onChange={(event) => {
+        setActiveIndex(-1)
         onChange(event.target.value)
         setOpen(true)
       }}
@@ -152,13 +150,13 @@ export function SmartAutocomplete({
       onKeyDown={handleKeyDown}
     />
     {showMenu ? <div
-      id={menuId.current}
+      id={menuId}
       className={`smart-autocomplete-menu ${placement.openUp ? 'open-up' : 'open-down'}`}
       role="listbox"
       style={{ maxHeight: placement.maxHeight }}
     >
       {filteredOptions.map((option, index) => <button
-        id={`${menuId.current}-${index}`}
+        id={`${menuId}-${index}`}
         key={option}
         type="button"
         role="option"

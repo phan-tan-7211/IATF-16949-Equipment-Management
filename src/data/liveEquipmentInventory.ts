@@ -60,12 +60,12 @@ function nullableBoolean(primary: unknown, fallback: unknown) {
 }
 
 function normalizeBounded(snapshot: EquipmentInventorySnapshot): EquipmentInventorySnapshot {
-  const sessions = [...snapshot.sessions]
-    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+  const sessions = snapshot.sessions
+    .toSorted((a, b) => b.startedAt.localeCompare(a.startedAt))
     .slice(0, MAX_SESSIONS)
   const allowedSessions = new Set(sessions.map((item) => item.sessionId))
   return {
-    equipment: [...snapshot.equipment].sort((a, b) => a.equipmentId.localeCompare(b.equipmentId)),
+    equipment: snapshot.equipment.toSorted((a, b) => a.equipmentId.localeCompare(b.equipmentId)),
     sessions,
     results: snapshot.results.filter((item) => allowedSessions.has(item.sessionId)),
   }

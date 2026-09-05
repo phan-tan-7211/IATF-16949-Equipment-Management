@@ -19,7 +19,7 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
 
   useEffect(() => {
     let active = true
-    void loadOrgMaster().then(() => { if (active) setOrgReady((value) => value + 1) }).catch(() => undefined)
+    void loadOrgMaster().then(() => { if (active) setOrgReady((currentCount) => currentCount + 1) }).catch(() => undefined)
     return () => { active = false }
   }, [])
 
@@ -43,7 +43,7 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
       })
     }).catch(() => undefined)
     return () => { active = false }
-  }, [value.equipmentId])
+  }, [onChange, value])
 
   const mergedSuggestions = useMemo<EquipmentMasterSuggestions>(() => {
     const context = { managingDepartment: value.managingDepartment }

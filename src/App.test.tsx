@@ -11,7 +11,7 @@ vi.mock('./data/liveAudit', () => ({
   loadLiveAudit: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('./LiveDashboardPanel', () => ({ LiveDashboardPanel: () => <h2>Tổng quan trực tiếp</h2> }))
-vi.mock('./LiveEquipmentPanel', () => ({ LiveEquipmentPanel: () => <h2>Thiết bị trực tiếp</h2> }))
+vi.mock('./equipment/EquipmentWorkspace', () => ({ EquipmentWorkspace: () => <h2>Thiết bị trực tiếp</h2> }))
 vi.mock('./LiveEquipmentInventoryPanel', () => ({ LiveEquipmentInventoryPanel: () => <h2>Kiểm kê thiết bị trực tiếp</h2> }))
 vi.mock('./LiveInspectionPanel', () => ({ LiveInspectionPanel: () => <h2>Kiểm tra trực tiếp</h2> }))
 vi.mock('./LiveMaintenancePanel', () => ({ LiveMaintenancePanel: () => <h2>Bảo trì trực tiếp</h2> }))

@@ -68,7 +68,14 @@ export function LiveSparePartsAutoPanel() {
       .finally(()=>{if(active)setLoading(false)})
     return()=>{active=false}
   },[initialPartsEmpty])
-  useEffect(()=>{if(!selectedId){setUsage([]);return}void loadSpareUsage(selectedId).then(setUsage).catch(()=>setUsage([]))},[selectedId])
+  useEffect(()=>{
+    if(!selectedId)return
+    let active=true
+    void loadSpareUsage(selectedId)
+      .then((rows)=>{if(active)setUsage(rows)})
+      .catch(()=>{if(active)setUsage([])})
+    return()=>{active=false}
+  },[selectedId])
 
   const selected = parts.find((part)=>part.partId===selectedId) || null
   const preview = classify(form,equipment)

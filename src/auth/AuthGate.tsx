@@ -49,7 +49,7 @@ export function AuthGate({ children }: { children: (session: LiveSession, signOu
       }
     }
 
-    void resolveSession(true)
+    void resolveSession(retry >= 0)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         markPasswordReset()

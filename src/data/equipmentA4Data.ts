@@ -61,6 +61,10 @@ function first(...values: unknown[]) {
   return ''
 }
 
+function spareClassificationWeight(value: string) {
+  return value === 'REQUIRED' ? 0 : value === 'RECOMMENDED' ? 1 : 2
+}
+
 function normalizeSpare(row: Row): EquipmentA4Spare {
   return {
     partId: text(row.part_id),
@@ -178,10 +182,7 @@ export async function loadEquipmentA4Relations(equipmentId: string, options: { f
     const spares = ((sparesResult.data || []) as Row[])
       .filter((row) => equipmentLinked(row, id))
       .map(normalizeSpare)
-      .sort((a, b) => {
-        const weight = (value: string) => value === 'REQUIRED' ? 0 : value === 'RECOMMENDED' ? 1 : 2
-        return weight(a.classification) - weight(b.classification) || a.partId.localeCompare(b.partId)
-      })
+      .toSorted((a, b) => spareClassificationWeight(a.classification) - spareClassificationWeight(b.classification) || a.partId.localeCompare(b.partId))
       .slice(0, 5)
 
     const history = [
@@ -192,7 +193,7 @@ export async function loadEquipmentA4Relations(equipmentId: string, options: { f
       ...((movementResult.data || []) as Row[]).map(normalizeMovement),
     ]
       .filter((item) => item.date)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 6)
 
     const latestCalibration = ((calibrationResult.data || []) as Row[])[0]

@@ -37,7 +37,7 @@ function editDistance(left: string, right: string) {
   if (!left.length) return right.length
   if (!right.length) return left.length
   const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
-  const current = new Array<number>(right.length + 1)
+  const current = Array.from<number>({ length: right.length + 1 })
   for (let i = 1; i <= left.length; i += 1) {
     current[0] = i
     for (let j = 1; j <= right.length; j += 1) {
@@ -137,10 +137,6 @@ export function LiveEquipmentInventoryPanel() {
   useEffect(() => {
     let active = true
     const existing = getEquipmentInventoryCacheSnapshot()
-    if (existing) {
-      setSnapshot(existing)
-      setLoading(false)
-    }
     void loadEquipmentInventory({ force: Boolean(existing) })
       .then((result) => {
         if (!active) return
@@ -178,7 +174,7 @@ export function LiveEquipmentInventoryPanel() {
         score: equipmentSearchScore(equipment, query) + (resultByEquipment.has(equipment.equipmentId) ? 0 : 20),
       }))
       .filter((item) => item.score > 0)
-      .sort((left, right) => right.score - left.score || left.equipment.equipmentId.localeCompare(right.equipment.equipmentId))
+      .toSorted((left, right) => right.score - left.score || left.equipment.equipmentId.localeCompare(right.equipment.equipmentId))
       .slice(0, 30)
       .map((item) => item.equipment)
   }, [manualQuery, resultByEquipment, snapshot.equipment])
@@ -209,19 +205,7 @@ export function LiveEquipmentInventoryPanel() {
     if (next) setSnapshot(next)
   }
 
-  function resetSelection(nextMode = mode) {
-    setSelectedId('')
-    setMoveOpen(false)
-    setActualArea('')
-    setActualLine('')
-    setMoveLabelOk(null)
-    setNote('')
-    setMode(nextMode)
-    if (nextMode === 'SCAN') setScannerKey((value) => value + 1)
-  }
-
   async function createSession() {
-    if (creating) return
     setCreating(true)
     setError('')
     setMessage('')
@@ -229,220 +213,141 @@ export function LiveEquipmentInventoryPanel() {
       const session = await createEquipmentInventorySession(currentInventoryName())
       refreshFromCache()
       setSessionId(session.sessionId)
-      resetSelection('SCAN')
-      setMessage(`Đã mở ${session.name}.`)
+      setMessage(`Đã tạo ${session.sessionId}.`)
     } catch (cause) {
-      refreshFromCache()
-      setError(cause instanceof Error ? cause.message : 'Không tạo được đợt kiểm kê')
+      setError(cause instanceof Error ? cause.message : 'Không thể tạo kỳ kiểm kê')
     } finally {
       setCreating(false)
     }
   }
 
-  async function saveStatus(status: EquipmentInventoryStatus, options: { labelOk?: boolean | null; actualArea?: string; actualLine?: string } = {}) {
-    if (!activeSession || activeSession.status !== 'OPEN' || !selectedEquipment || saving) return
-    if (status === 'MOVED' && !options.actualArea?.trim() && !options.actualLine?.trim()) {
-      setError('Nhập khu vực hoặc dây chuyền thực tế trước khi lưu.')
-      return
-    }
-    if (status === 'MOVED' && options.labelOk == null) {
-      setError('Xác nhận tem QR hiện còn hay đã mất.')
-      return
-    }
-    setSaving(true)
+  async function closeSession() {
+    if (!activeSession || activeSession.status !== 'OPEN') return
+    if (!window.confirm(`Đóng kỳ kiểm kê ${activeSession.sessionId}? Sau khi đóng không thể ghi thêm kết quả.`)) return
+    setClosing(true)
     setError('')
     setMessage('')
     try {
-      const result = await recordEquipmentInventory({
-        sessionId: activeSession.sessionId,
-        equipmentId: selectedEquipment.equipmentId,
-        status,
-        labelOk: options.labelOk,
-        actualArea: options.actualArea,
-        actualLine: options.actualLine,
-        note,
-        source: selectedSource,
-      })
-      refreshFromCache()
-      setMessage(`${result.equipmentId} · ${STATUS_LABEL[result.status]} · đã lưu.`)
-      resetSelection(selectedSource === 'QR' ? 'SCAN' : 'MANUAL')
-    } catch (cause) {
-      refreshFromCache()
-      setError(cause instanceof Error ? cause.message : 'Không lưu được kết quả kiểm kê')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function closeSession() {
-    if (!activeSession || activeSession.status !== 'OPEN' || closing) return
-    if (!window.confirm(`Kết thúc ${activeSession.name}?\n\nCòn ${pendingCount} thiết bị chưa kiểm. Hệ thống sẽ giữ nguyên chúng ở trạng thái chưa kiểm, không tự đánh dấu thất lạc.`)) return
-    setClosing(true)
-    setError('')
-    try {
       await closeEquipmentInventorySession(activeSession.sessionId)
       refreshFromCache()
-      setMessage(`Đã kết thúc ${activeSession.name}.`)
-      resetSelection('MANUAL')
+      setMessage(`Đã đóng ${activeSession.sessionId}.`)
     } catch (cause) {
-      refreshFromCache()
-      setError(cause instanceof Error ? cause.message : 'Không kết thúc được đợt kiểm kê')
+      setError(cause instanceof Error ? cause.message : 'Không thể đóng kỳ kiểm kê')
     } finally {
       setClosing(false)
     }
   }
 
-  function chooseEquipment(equipment: EquipmentInventoryEquipment, source: EquipmentInventorySource) {
-    setSelectedId(equipment.equipmentId)
-    setSelectedSource(source)
+  function resetFinding() {
+    setSelectedId('')
+    setSelectedSource('MANUAL')
     setMoveOpen(false)
-    setActualArea(equipment.area)
-    setActualLine(equipment.line)
-    setMoveLabelOk(source === 'QR' ? true : null)
+    setActualArea('')
+    setActualLine('')
+    setMoveLabelOk(null)
     setNote('')
-    setError('')
   }
 
-  if (loading && !snapshot.equipment.length) return <div className="inventory-state" role="status">Đang tải dữ liệu kiểm kê…</div>
+  function selectEquipment(equipmentId: string, source: EquipmentInventorySource) {
+    setSelectedId(equipmentId)
+    setSelectedSource(source)
+    setMoveOpen(false)
+    setActualArea('')
+    setActualLine('')
+    setMoveLabelOk(null)
+    setNote('')
+  }
 
-  return <div className="inventory-page">
-    <section className="inventory-header">
-      <div>
-        <p className="eyebrow">Equipment Inventory</p>
-        <h2>Kiểm kê thiết bị</h2>
-        <p>Đi hiện trường → quét tem QR → xác nhận. Chỉ nhập thêm khi thiếu tem, sai vị trí, thất lạc hoặc data rác.</p>
-      </div>
-      <div className="inventory-session-controls">
-        {snapshot.sessions.length ? <select value={sessionId} onChange={(event) => { setSessionId(event.target.value); resetSelection('MANUAL') }} aria-label="Đợt kiểm kê">
-          {snapshot.sessions.map((session) => <option key={session.sessionId} value={session.sessionId}>{session.name} · {session.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}</option>)}
-        </select> : null}
-        <button type="button" onClick={() => void createSession()} disabled={creating}>{creating ? 'Đang tạo…' : '+ Đợt kiểm kê mới'}</button>
-      </div>
-    </section>
+  async function saveStatus(status: EquipmentInventoryStatus, labelOk?: boolean | null, area?: string, line?: string) {
+    if (!activeSession || activeSession.status !== 'OPEN' || !selectedEquipment) return
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      await recordEquipmentInventory({
+        sessionId: activeSession.sessionId,
+        equipmentId: selectedEquipment.equipmentId,
+        status,
+        source: selectedSource,
+        labelOk: labelOk ?? null,
+        actualArea: area || undefined,
+        actualLine: line || undefined,
+        note: note.trim() || undefined,
+      })
+      refreshFromCache()
+      setMessage(`Đã ghi ${selectedEquipment.equipmentId}: ${STATUS_LABEL[status]}.`)
+      resetFinding()
+      if (mode === 'SCAN') setScannerKey((current) => current + 1)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể lưu kết quả kiểm kê')
+    } finally {
+      setSaving(false)
+    }
+  }
 
-    {error ? <div className="inventory-feedback error" role="alert">{error}</div> : null}
-    {message ? <div className="inventory-feedback" role="status">{message}</div> : null}
+  if (loading && !snapshot.equipment.length) return <div className="workspace-loading">Đang tải kiểm kê thiết bị…</div>
 
-    {!activeSession ? <section className="inventory-empty">
-      <strong>Chưa có đợt kiểm kê.</strong>
-      <span>Tạo đợt kiểm kê rồi bắt đầu quét QR ngoài hiện trường.</span>
-      <button type="button" onClick={() => void createSession()} disabled={creating}>{creating ? 'Đang tạo…' : `Bắt đầu ${currentInventoryName()}`}</button>
-    </section> : <>
-      <section className="inventory-session-bar">
-        <div><span>Đợt kiểm kê</span><strong>{activeSession.name}</strong><small>{activeSession.status === 'OPEN' ? `Bắt đầu ${formatDate(activeSession.startedAt)}` : `Đã đóng ${formatDate(activeSession.closedAt)}`}</small></div>
-        {activeSession.status === 'OPEN' ? <button type="button" onClick={() => void closeSession()} disabled={closing}>{closing ? 'Đang kết thúc…' : 'Kết thúc đợt'}</button> : <span className="inventory-closed-badge">ĐÃ ĐÓNG</span>}
-      </section>
+  return <section className="equipment-inventory-page">
+    <header className="equipment-inventory-header">
+      <div><p className="equipment-inventory-eyebrow">BM10B · Kiểm kê thiết bị</p><h2>Kiểm kê thiết bị thực tế</h2><p>Quét QR để xác nhận máy + tem. Nếu thiếu tem hoặc máy đã di chuyển, ghi nhận ngay tại hiện trường.</p></div>
+      <div className="equipment-inventory-header-actions"><button type="button" onClick={() => void loadEquipmentInventory({ force: true }).then((result) => { setSnapshot(result); setMessage('Đã làm mới kiểm kê.') }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Không thể làm mới'))}>↻ Làm mới</button>{activeSession?.status === 'OPEN' ? <button type="button" onClick={() => void closeSession()} disabled={closing}>{closing ? 'Đang đóng…' : 'Đóng kỳ'}</button> : <button type="button" onClick={() => void createSession()} disabled={creating}>{creating ? 'Đang tạo…' : '+ Kỳ kiểm kê'}</button>}</div>
+    </header>
 
-      <section className="inventory-summary" aria-label="Tổng hợp kiểm kê">
-        <article><span>Đã kiểm</span><strong>{checkedCount}</strong><small>/ {snapshot.equipment.length}</small></article>
-        <article className={missingLabelCount ? 'warning' : ''}><span>Thiếu tem QR</span><strong>{missingLabelCount}</strong></article>
-        <article className={movedCount ? 'warning' : ''}><span>Sai vị trí</span><strong>{movedCount}</strong></article>
-        <article className={notFoundCount ? 'danger' : ''}><span>Không tìm thấy</span><strong>{notFoundCount}</strong></article>
-        <article className={invalidCount ? 'danger' : ''}><span>Data rác</span><strong>{invalidCount}</strong></article>
-        <article><span>Chưa kiểm</span><strong>{pendingCount}</strong></article>
-      </section>
+    {error ? <div className="equipment-inventory-message error">{error}</div> : null}
+    {message ? <div className="equipment-inventory-message success">{message}</div> : null}
 
-      {activeSession.status === 'OPEN' ? <section className="inventory-workspace">
-        {!selectedEquipment ? <>
-          <div className="inventory-mode-tabs" role="tablist" aria-label="Cách kiểm kê">
-            <button type="button" className={mode === 'SCAN' ? 'active' : ''} onClick={() => setMode('SCAN')}>▣ Quét QR</button>
-            <button type="button" className={mode === 'MANUAL' ? 'active' : ''} onClick={() => setMode('MANUAL')}>⌕ Tìm thiết bị không có tem</button>
-          </div>
+    <div className="equipment-inventory-session-row">
+      <label><span>Kỳ kiểm kê</span><select value={sessionId} onChange={(event) => { setSessionId(event.target.value); resetFinding() }}>{snapshot.sessions.map((item) => <option key={item.sessionId} value={item.sessionId}>{item.name} · {item.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}</option>)}</select></label>
+      {activeSession ? <div className="equipment-inventory-session-meta"><span>{activeSession.sessionId}</span><span>{formatDate(activeSession.startedAt)}</span>{activeSession.closedAt ? <span>Đóng {formatDate(activeSession.closedAt)}</span> : null}</div> : null}
+    </div>
 
-          {mode === 'SCAN' ? <div className="equipment-inventory-scanner">
-            <div className="inventory-scan-note"><strong>Tem quản lý = QR.</strong><span>Quét được QR nghĩa là tem đang có. Sau khi quét chỉ cần xác nhận máy còn đúng vị trí.</span></div>
-            <LiveQrScannerPanel key={scannerKey} onOpenEquipment={(equipmentId) => {
-              const equipment = snapshot.equipment.find((item) => item.equipmentId === equipmentId)
-              if (equipment) chooseEquipment(equipment, 'QR')
-            }}/>
-          </div> : <div className="inventory-manual-finder">
-            <label>
-              <span>Tìm nhanh · không cần đúng dấu hoặc đúng 100%</span>
-              <input value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Gõ gần đúng mã, tên máy, khu vực hoặc line…" autoFocus autoComplete="off" />
-              <small>Ví dụ: “may nhung”, “nhug”, “coil a”, “pr 21”… hệ thống vẫn ưu tiên kết quả gần nhất.</small>
-            </label>
-            <div className="inventory-manual-list" aria-label="Kết quả tìm thiết bị">
-              {manualMatches.length ? manualMatches.map((equipment) => {
-                const existing = resultByEquipment.get(equipment.equipmentId)
-                const photo = manualPhotos[equipment.equipmentId]
-                return <button type="button" key={equipment.equipmentId} onClick={() => chooseEquipment(equipment, 'MANUAL')}>
-                  <span className="inventory-result-photo" aria-hidden="true">
-                    {photo?.exists && photo.signedUrl
-                      ? <img src={photo.signedUrl} alt="" loading="lazy" />
-                      : <span>Không ảnh</span>}
-                  </span>
-                  <span className="inventory-result-copy">
-                    <strong>{equipment.equipmentId}</strong>
-                    <b>{equipment.equipmentName}</b>
-                    <small>{[equipment.area, equipment.line].filter(Boolean).join(' · ') || 'Chưa có vị trí'}</small>
-                    {existing ? <em>{STATUS_LABEL[existing.status]}</em> : <em>Chưa kiểm trong đợt này</em>}
-                  </span>
-                  <span className="inventory-result-pick">Chọn →</span>
-                </button>
-              }) : <div className="inventory-no-match">Không thấy kết quả gần giống. Thử gõ ngắn hơn hoặc bỏ bớt một từ.</div>}
-            </div>
-          </div>}
-        </> : <div className="inventory-confirm-card">
-          <header>
-            <button type="button" className="inventory-back" onClick={() => resetSelection(selectedSource === 'QR' ? 'SCAN' : 'MANUAL')}>← Quay lại</button>
-            <span>{selectedSource === 'QR' ? 'ĐÃ QUÉT QR' : 'CHỌN THỦ CÔNG'}</span>
-          </header>
-          <div className="inventory-equipment-title">
-            {selectedSource === 'MANUAL' ? <div className="inventory-confirm-photo">
-              {manualPhotos[selectedEquipment.equipmentId]?.exists && manualPhotos[selectedEquipment.equipmentId]?.signedUrl
-                ? <img src={manualPhotos[selectedEquipment.equipmentId].signedUrl} alt={`Ảnh ${selectedEquipment.equipmentName}`} />
-                : <span>Không có ảnh thiết bị</span>}
-            </div> : null}
-            <div>
-              <strong>{selectedEquipment.equipmentId}</strong>
-              <h3>{selectedEquipment.equipmentName}</h3>
-              <p>Vị trí hệ thống: {[selectedEquipment.area, selectedEquipment.line].filter(Boolean).join(' · ') || 'Chưa khai báo'}</p>
-            </div>
-          </div>
+    <div className="equipment-inventory-summary">
+      <div><span>Tổng master</span><strong>{snapshot.equipment.length}</strong></div>
+      <div><span>Đã kiểm</span><strong>{checkedCount}</strong></div>
+      <div><span>Còn lại</span><strong>{pendingCount}</strong></div>
+      <div><span>Thiếu tem</span><strong>{missingLabelCount}</strong></div>
+      <div><span>Sai vị trí</span><strong>{movedCount}</strong></div>
+      <div><span>Không thấy</span><strong>{notFoundCount}</strong></div>
+      <div><span>Data sai</span><strong>{invalidCount}</strong></div>
+    </div>
 
-          {selectedSource === 'QR' && !moveOpen ? <div className="inventory-primary-actions">
-            <button type="button" className="confirm" onClick={() => void saveStatus('FOUND_LABEL_OK')} disabled={saving}>{saving ? 'Đang lưu…' : '✓ XÁC NHẬN ĐÃ KIỂM KÊ'}</button>
-            <button type="button" onClick={() => { setMoveOpen(true); setMoveLabelOk(true) }} disabled={saving}>↔ Máy đang ở sai vị trí</button>
-          </div> : null}
+    <div className="equipment-inventory-mode-tabs">
+      <button type="button" className={mode === 'SCAN' ? 'active' : ''} onClick={() => { setMode('SCAN'); resetFinding() }}>Quét QR</button>
+      <button type="button" className={mode === 'MANUAL' ? 'active' : ''} onClick={() => { setMode('MANUAL'); resetFinding() }}>Tìm thủ công</button>
+    </div>
 
-          {selectedSource === 'MANUAL' && !moveOpen ? <div className="inventory-status-actions">
-            <button type="button" className="warning" onClick={() => void saveStatus('FOUND_NO_LABEL')} disabled={saving}>Có máy · thiếu/mất tem QR</button>
-            <button type="button" onClick={() => { setMoveOpen(true); setMoveLabelOk(null) }} disabled={saving}>Sai vị trí</button>
-            <button type="button" className="danger" onClick={() => void saveStatus('NOT_FOUND')} disabled={saving}>Không tìm thấy</button>
-            <button type="button" className="danger" onClick={() => void saveStatus('DATA_INVALID')} disabled={saving}>Data rác / sai master</button>
-            <button type="button" onClick={() => void saveStatus('FOUND_LABEL_OK')} disabled={saving}>Có máy + có tem QR</button>
-          </div> : null}
+    {activeSession?.status === 'OPEN' ? <div className="equipment-inventory-workspace">
+      {mode === 'SCAN' ? <div className="equipment-inventory-scanner"><LiveQrScannerPanel key={scannerKey} onOpenEquipment={(equipmentId: string) => selectEquipment(equipmentId, 'QR')} /></div> : <div className="equipment-inventory-manual">
+        <input type="search" value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Tìm gần đúng: mã, tên máy, khu vực, line…" autoFocus />
+        <div className="equipment-inventory-manual-results">
+          {manualMatches.map((equipment) => {
+            const preview = manualPhotos[equipment.equipmentId]
+            const done = resultByEquipment.has(equipment.equipmentId)
+            return <button type="button" key={equipment.equipmentId} className={done ? 'done' : ''} onClick={() => selectEquipment(equipment.equipmentId, 'MANUAL')}>
+              <span className="equipment-inventory-manual-photo">{preview?.signedUrl ? <img src={preview.signedUrl} alt="" /> : <span>📷</span>}</span>
+              <span><strong>{equipment.equipmentId}</strong><b>{equipment.equipmentName}</b><small>{equipment.area || '—'} · {equipment.line || '—'}{done ? ' · Đã kiểm' : ''}</small></span>
+            </button>
+          })}
+        </div>
+      </div>}
 
-          {moveOpen ? <div className="inventory-move-form">
-            <h4>Vị trí thực tế</h4>
-            <div className="inventory-location-grid">
-              <label><span>Khu vực</span><input value={actualArea} onChange={(event) => setActualArea(event.target.value)} placeholder="Khu vực thực tế" /></label>
-              <label><span>Dây chuyền</span><input value={actualLine} onChange={(event) => setActualLine(event.target.value)} placeholder="Dây chuyền thực tế" /></label>
-            </div>
-            <fieldset>
-              <legend>Tem QR hiện tại</legend>
-              <label><input type="radio" name="move-label" checked={moveLabelOk === true} onChange={() => setMoveLabelOk(true)} /> Còn tem QR</label>
-              <label><input type="radio" name="move-label" checked={moveLabelOk === false} onChange={() => setMoveLabelOk(false)} /> Thiếu / mất tem QR</label>
-            </fieldset>
-            <label className="inventory-note"><span>Ghi chú (nếu cần)</span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ví dụ chuyển sang Line B…" /></label>
-            <div className="inventory-move-actions"><button type="button" onClick={() => setMoveOpen(false)} disabled={saving}>Hủy</button><button type="button" className="confirm" onClick={() => void saveStatus('MOVED', { actualArea, actualLine, labelOk: moveLabelOk })} disabled={saving || moveLabelOk == null}>{saving ? 'Đang lưu…' : 'Lưu sai vị trí'}</button></div>
-          </div> : null}
-
-          {!moveOpen && selectedSource === 'MANUAL' ? <label className="inventory-note"><span>Ghi chú cho bất thường (không bắt buộc)</span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Lý do / thông tin kiểm tra thêm…" /></label> : null}
+      {selectedEquipment ? <aside className="equipment-inventory-found-card">
+        <h3>{selectedEquipment.equipmentId}</h3><strong>{selectedEquipment.equipmentName}</strong><p>Master: {selectedEquipment.area || '—'} · {selectedEquipment.line || '—'}</p>
+        {!moveOpen ? <div className="equipment-inventory-status-actions">
+          <button type="button" disabled={saving} onClick={() => void saveStatus('FOUND_LABEL_OK', true)}>✓ Có máy + tem QR</button>
+          <button type="button" disabled={saving} onClick={() => void saveStatus('FOUND_NO_LABEL', false)}>⚠ Có máy · thiếu tem</button>
+          <button type="button" disabled={saving} onClick={() => setMoveOpen(true)}>↔ Sai vị trí</button>
+          <button type="button" disabled={saving} onClick={() => void saveStatus('NOT_FOUND', null)}>✕ Không tìm thấy</button>
+        </div> : <div className="equipment-inventory-move-form">
+          <label><span>Khu vực thực tế</span><input value={actualArea} onChange={(event) => setActualArea(event.target.value)} /></label>
+          <label><span>Line thực tế</span><input value={actualLine} onChange={(event) => setActualLine(event.target.value)} /></label>
+          <label><span>Tem QR</span><select value={moveLabelOk === null ? '' : moveLabelOk ? 'yes' : 'no'} onChange={(event) => setMoveLabelOk(event.target.value === '' ? null : event.target.value === 'yes')}><option value="">Chọn…</option><option value="yes">Có tem</option><option value="no">Thiếu tem</option></select></label>
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú di chuyển…" />
+          <div><button type="button" onClick={() => setMoveOpen(false)}>Hủy</button><button type="button" disabled={saving || (!actualArea.trim() && !actualLine.trim()) || moveLabelOk === null} onClick={() => void saveStatus('MOVED', moveLabelOk, actualArea.trim(), actualLine.trim())}>{saving ? 'Đang lưu…' : 'Lưu sai vị trí'}</button></div>
         </div>}
-      </section> : null}
+      </aside> : null}
+    </div> : <div className="equipment-inventory-closed-note">Kỳ này đã đóng. Chọn kỳ đang mở hoặc tạo kỳ mới để tiếp tục kiểm kê.</div>}
 
-      <section className="inventory-exceptions">
-        <header><div><p className="eyebrow">Ngoại lệ</p><h3>Cần xử lý sau kiểm kê</h3></div><span>{abnormalResults.length}</span></header>
-        {abnormalResults.length ? <div className="inventory-exception-list">{abnormalResults.map((result) => {
-          const equipment = snapshot.equipment.find((item) => item.equipmentId === result.equipmentId)
-          return <article key={`${result.sessionId}-${result.equipmentId}`}>
-            <div><strong>{result.equipmentId}</strong><span>{equipment?.equipmentName || 'Thiết bị không còn trong master'}</span></div>
-            <b className={`status-${result.status.toLowerCase()}`}>{STATUS_LABEL[result.status]}</b>
-            <small>{result.status === 'MOVED' ? `Thực tế: ${[result.actualArea, result.actualLine].filter(Boolean).join(' · ')} · ${result.labelOk ? 'Tem QR còn' : 'Thiếu tem QR'}` : result.note || formatDate(result.checkedAt)}</small>
-          </article>
-        })}</div> : <div className="inventory-clean-state">Chưa có bất thường trong đợt này.</div>}
-      </section>
-    </>}
-  </div>
+    {abnormalResults.length ? <section className="equipment-inventory-abnormal"><h3>Bất thường gần nhất</h3><div>{abnormalResults.map((item) => <article key={`${item.sessionId}:${item.equipmentId}`}><strong>{item.equipmentId}</strong><span>{STATUS_LABEL[item.status]}</span><small>{item.actualArea || item.actualLine ? `${item.actualArea || '—'} · ${item.actualLine || '—'}` : formatDate(item.checkedAt)}</small></article>)}</div></section> : null}
+  </section>
 }

@@ -14,9 +14,10 @@ const roleLabel:Record<string,string>={MAINTENANCE:'Bảo trì',SUPERVISOR:'Giá
 export function LiveCalibrationPanel() {
   const role = useAppRole()
   const canRecord = canRecordCalibration(role)
-  const initialRows = getCalibrationCacheSnapshot()
+  const [initialRows] = useState(getCalibrationCacheSnapshot)
   const [rows, setRows] = useState<LiveCalibration[]>(initialRows)
   const [logs, setLogs] = useState<LiveCalibrationLog[]>([])
+  const [logsFor, setLogsFor] = useState('')
   const [loading, setLoading] = useState(initialRows.length === 0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -37,16 +38,19 @@ export function LiveCalibrationPanel() {
   const reload = async (force=false) => { if(force && rows.length===0)setLoading(true); try{setRows(await loadLiveCalibration({force}));setError('')} finally{setLoading(false)} }
   useEffect(() => {
     let active=true
-    const snapshot=getCalibrationCacheSnapshot()
-    if(snapshot.length){setRows(snapshot);setLoading(false)}
-    loadLiveCalibration({force:true}).then((r)=>{if(active){setRows(r);setError('')}}).catch((c:unknown)=>{if(active&&snapshot.length===0)setError(c instanceof Error?c.message:'Không thể tải danh mục hiệu chuẩn')}).finally(()=>{if(active)setLoading(false)})
+    loadLiveCalibration({force:true}).then((r)=>{if(active){setRows(r);setError('')}}).catch((c:unknown)=>{if(active&&initialRows.length===0)setError(c instanceof Error?c.message:'Không thể tải danh mục hiệu chuẩn')}).finally(()=>{if(active)setLoading(false)})
     return()=>{active=false}
-  }, [])
+  }, [initialRows.length])
   useEffect(() => {
-    if (!selectedId) { setLogs([]); return }
+    if (!selectedId) return
     const selected = rows.find((row)=>row.calibrationEquipmentId===selectedId)
     if (!selected?.equipmentId) return
-    void loadCalibrationLogs(selected.equipmentId).then(setLogs).catch(()=>setLogs([]))
+    let active = true
+    const equipmentId = selected.equipmentId
+    void loadCalibrationLogs(equipmentId)
+      .then((nextLogs) => { if (active) { setLogs(nextLogs); setLogsFor(equipmentId) } })
+      .catch(() => { if (active) { setLogs([]); setLogsFor(equipmentId) } })
+    return () => { active = false }
   }, [selectedId, rows])
   useEffect(() => { if(!selectedId)return; const h=(e:KeyboardEvent)=>{if(e.key==='Escape'){setRecordMode(false);setSelectedId('')}}; window.addEventListener('keydown',h); return()=>window.removeEventListener('keydown',h) }, [selectedId])
 
@@ -57,6 +61,7 @@ export function LiveCalibrationPanel() {
   const filteredRows=useMemo(()=>rows.filter((row)=>{ if(linkFilter!=='ALL'&&row.linkState!==linkFilter)return false; const due=getCalibrationDueStatus(row.nextDueDate,today); if(dueFilter!=='ALL'&&due!==dueFilter)return false; if(!normalizedQuery)return true; return [row.controlNumber,row.equipmentId,row.calibrationEquipmentId,row.instrumentName,row.localName,row.model,row.serialNumber,row.manufacturer,row.department].filter(Boolean).join(' ').toLocaleLowerCase().includes(normalizedQuery)}),[rows,linkFilter,dueFilter,normalizedQuery,today])
   const selected=selectedId?rows.find((r)=>r.calibrationEquipmentId===selectedId)||null:null
   const selectedDue=selected?getCalibrationDueStatus(selected.nextDueDate,today):'NO_PLAN'
+  const visibleLogs = selected?.equipmentId && logsFor === selected.equipmentId ? logs : []
 
   const submitRecord=async(e:FormEvent)=>{
     e.preventDefault(); if(!selected?.equipmentId)return
@@ -67,7 +72,9 @@ export function LiveCalibrationPanel() {
       setRows(getCalibrationCacheSnapshot())
       setMessage(`Đã ghi hiệu chuẩn ${selected.equipmentId}`)
       setRecordMode(false); setProvider('');setNote('');setCertificate(undefined)
-      setLogs(await loadCalibrationLogs(selected.equipmentId,{force:true}))
+      const nextLogs = await loadCalibrationLogs(selected.equipmentId,{force:true})
+      setLogs(nextLogs)
+      setLogsFor(selected.equipmentId)
       void loadLiveCalibration({force:true}).then(setRows).catch(()=>undefined)
     }
     catch(c:unknown){setError(c instanceof Error?c.message:'Không thể ghi hiệu chuẩn')} finally{setSaving(false)}
@@ -86,7 +93,7 @@ export function LiveCalibrationPanel() {
       <div className="calibration-alert-row"><span className={`calibration-due due-${selectedDue.toLowerCase()}`}>{dueLabel(selectedDue)}</span><span className={`calibration-link-state link-${selected.linkState.toLowerCase()}`}>{linkLabel[selected.linkState]}</span>{selected.linkState==='LINKED'&&canRecord?<button className="calibration-record-button" onClick={()=>setRecordMode((v)=>!v)}>{recordMode?'Đóng biểu mẫu':'+ Ghi hiệu chuẩn'}</button>:selected.linkState==='LINKED'?<span className="calibration-readonly">Chỉ xem · {roleLabel[role]||role}</span>:null}</div>
       {recordMode&&canRecord?<form className="calibration-record-form" onSubmit={submitRecord}><label><span>Ngày hiệu chuẩn</span><input type="date" value={calibrationDate} onChange={(e)=>setCalibrationDate(e.target.value)} required/></label><label><span>Hạn tiếp theo</span><input type="date" value={nextDueDate} onChange={(e)=>setNextDueDate(e.target.value)} required/></label><label><span>Kết quả</span><select value={result} onChange={(e)=>setResult(e.target.value as typeof result)}><option value="PASS">Đạt</option><option value="LIMITED_USE">Sử dụng hạn chế</option><option value="FAIL">Không đạt</option></select></label><label><span>Đơn vị hiệu chuẩn</span><input value={provider} onChange={(e)=>setProvider(e.target.value)}/></label><label><span>Chứng chỉ</span><input type="file" accept="application/pdf,image/*" onChange={(e)=>setCertificate(e.target.files?.[0])}/></label><label><span>Ghi chú</span><textarea value={note} onChange={(e)=>setNote(e.target.value)}/></label><button className="calibration-record-button primary" disabled={saving}>{saving?'Đang lưu…':'Lưu lịch sử hiệu chuẩn'}</button></form>:null}
       <div className="calibration-detail-grid"><div><span>Mã thiết bị</span><strong>{selected.equipmentId||'—'}</strong></div><div><span>Mã hiệu chuẩn</span><strong>{selected.calibrationEquipmentId}</strong></div><div><span>Mẫu máy</span><strong>{selected.model||'—'}</strong></div><div><span>Số sê-ri</span><strong>{selected.serialNumber||'—'}</strong></div><div><span>Hiệu chuẩn gần nhất</span><strong>{selected.lastCalibrationDate||'—'}</strong></div><div><span>Hạn tiếp theo</span><strong>{selected.nextDueDate||'—'}</strong></div></div>
-      <section className="calibration-detail-section"><span>Lịch sử hiệu chuẩn</span>{logs.length?<div className="calibration-log-list">{logs.map((log)=><article key={log.calibrationLogId}><div><b>{log.calibrationDate}</b><span>{resultLabel(log.result)}</span></div><small>Hạn tiếp theo: {log.nextDueDate} · {log.provider||'—'} · {log.actorEmail||'—'}</small>{log.note?<p>{log.note}</p>:null}{log.certificateUrl?<a href={log.certificateUrl} target="_blank" rel="noreferrer">Mở chứng chỉ</a>:null}</article>)}</div>:<p>Chưa có lịch sử hiệu chuẩn.</p>}</section>
+      <section className="calibration-detail-section"><span>Lịch sử hiệu chuẩn</span>{visibleLogs.length?<div className="calibration-log-list">{visibleLogs.map((log)=><article key={log.calibrationLogId}><div><b>{log.calibrationDate}</b><span>{resultLabel(log.result)}</span></div><small>Hạn tiếp theo: {log.nextDueDate} · {log.provider||'—'} · {log.actorEmail||'—'}</small>{log.note?<p>{log.note}</p>:null}{log.certificateUrl?<a href={log.certificateUrl} target="_blank" rel="noreferrer">Mở chứng chỉ</a>:null}</article>)}</div>:<p>Chưa có lịch sử hiệu chuẩn.</p>}</section>
       </aside></div>:null}
   </div>
 }

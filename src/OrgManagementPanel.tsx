@@ -6,6 +6,7 @@ type Tab='people'|'roles'|'units'
 const emptyPerson:OrgPerson={person_code:'',display_name:'',unit_code:null,job_title:null,active:true}
 const emptyRole:OrgRole={role_code:'',role_name:'',unit_code:null,active:true}
 const emptyUnit:OrgUnit={unit_code:'',unit_name:'',unit_type:'DEPARTMENT',parent_unit_code:null,active:true,sort_order:0}
+function codeFromName(value:string,prefix:string){return `${prefix}_${value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').toUpperCase()}`}
 
 export function OrgManagementPanel(){
   const[tab,setTab]=useState<Tab>('people')
@@ -13,12 +14,11 @@ export function OrgManagementPanel(){
   const[loading,setLoading]=useState(true); const[saving,setSaving]=useState(false); const[message,setMessage]=useState('')
   const[person,setPerson]=useState<OrgPerson>(emptyPerson); const[role,setRole]=useState<OrgRole>(emptyRole); const[unit,setUnit]=useState<OrgUnit>(emptyUnit)
   async function reload(){setLoading(true);try{const data=await loadOrgAdminData();setUnits(data.units);setPeople(data.people);setRoles(data.roles);setAssignments(data.assignments);setMessage('')}catch(error){setMessage(error instanceof Error?error.message:'Không tải được dữ liệu tổ chức')}finally{setLoading(false)}}
-  useEffect(()=>{void reload()},[])
+  useEffect(()=>{let active=true;void loadOrgAdminData().then((data)=>{if(!active)return;setUnits(data.units);setPeople(data.people);setRoles(data.roles);setAssignments(data.assignments);setMessage('')}).catch((error)=>{if(active)setMessage(error instanceof Error?error.message:'Không tải được dữ liệu tổ chức')}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[])
   const unitName=useMemo(()=>new Map(units.map((item)=>[item.unit_code,item.unit_name])),[units])
   const personName=useMemo(()=>new Map(people.map((item)=>[item.person_code,item.display_name])),[people])
   const currentAssignment=useMemo(()=>new Map(assignments.filter((item)=>item.active&&!item.valid_to).map((item)=>[item.role_code,item])),[assignments])
   async function run(action:()=>Promise<void>,success:string){setSaving(true);setMessage('');try{await action();setMessage(success);await reload()}catch(error){setMessage(error instanceof Error?error.message:'Không lưu được')}finally{setSaving(false)}}
-  function codeFromName(value:string,prefix:string){return `${prefix}_${value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').toUpperCase()}`}
   return <section className="org-panel">
     <header className="org-panel-header"><div><p className="eyebrow">Organization master</p><h1>Tổ chức & nhân sự</h1><p>Quản lý bộ phận, nhân sự và chức vụ chịu trách nhiệm thiết bị. Đổi người giữ chức vụ sẽ tự áp dụng cho các thiết bị gắn theo role.</p></div><button type="button" onClick={()=>void reload()} disabled={loading||saving}>Làm mới</button></header>
     <div className="org-tabs" role="tablist"><button className={tab==='people'?'active':''} onClick={()=>setTab('people')}>Nhân sự · {people.length}</button><button className={tab==='roles'?'active':''} onClick={()=>setTab('roles')}>Chức vụ · {roles.length}</button><button className={tab==='units'?'active':''} onClick={()=>setTab('units')}>Bộ phận · {units.length}</button></div>

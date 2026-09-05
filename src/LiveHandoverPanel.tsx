@@ -36,7 +36,18 @@ export function LiveHandoverPanel() {
     setHandovers(result.handovers)
   }
 
-  useEffect(() => { void refresh().catch((cause) => setError(cause instanceof Error ? cause.message : 'Không thể tải BM05')) }, [])
+  useEffect(() => {
+    let active = true
+    void loadLiveMaintenance()
+      .then((result) => {
+        if (!active) return
+        setWorkOrders(result.workOrders.filter((row) => row.status === 'VERIFIED'))
+        setEquipment(result.equipment)
+        setHandovers(result.handovers)
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải BM05') })
+    return () => { active = false }
+  }, [])
   const equipmentName = useMemo(() => new Map(equipment.map((row) => [row.equipmentId, row.equipmentName])), [equipment])
 
   const chooseWorkOrder = (workOrderId: string) => {

@@ -8,8 +8,10 @@ description: Project-local UI/UX review rules for CEV Equipment Management, deri
 Upstream reference: `nextlevelbuilder/ui-ux-pro-max-skill` (source commit family reviewed 2026-09-04).
 Visual inspiration reference: `KKshitiz/Awesome-UI-Templates`.
 Product references: MaintainX, Limble, UpKeep.
+Architecture companion: `.agents/skills/platform-ui-architecture/SKILL.md`.
 
 Use this skill for every UI, responsive, mobile, navigation, drawer, form, card, profile, work-order, inspection, spare-part, QR, or dashboard change.
+For desktop/mobile renderer or layout ownership changes, read the platform architecture skill before implementation as well.
 
 ## Priority order
 
@@ -37,6 +39,7 @@ Use this skill for every UI, responsive, mobile, navigation, drawer, form, card,
 - No horizontal page scrolling.
 - Text, chips, badges and buttons must reflow without clipping.
 - Never solve overflow by hiding a required action.
+- If desktop and mobile need materially different DOM/task flow, use separate platform renderers with shared business logic; do not keep adding CSS patches to one mixed renderer.
 
 ### 3. One scroll owner
 - Modal/drawer/profile overlays must lock the background.
@@ -76,7 +79,7 @@ Use this skill for every UI, responsive, mobile, navigation, drawer, form, card,
 ### 9. Mobile-first task flow
 - One screen = one primary task.
 - Prefer short cards, quick actions, full-screen drawers and bottom sheets.
-- Avoid desktop tables on mobile; convert to cards/label-value rows.
+- Avoid desktop tables on mobile when a card/list interaction is materially better; if the DOM differs, own it in the mobile renderer instead of overriding desktop markup.
 - Sticky CTA is allowed when it does not cover content or bottom navigation.
 
 ### 10. Equipment image contract — immutable
@@ -96,7 +99,16 @@ Applies to Equipment Profile, Equipment List thumbnails, Edit Equipment, Registe
 - Do not add CSS overrides that revert any equipment image to `cover`.
 - Before delivery test five image shapes/sizes: small, large, portrait, landscape, square.
 
-### 11. Pre-delivery UI checklist
+### 11. Architecture ownership
+- Shared primitives own accessibility/interaction contracts, not page composition.
+- UI primitives must not call Supabase directly.
+- Equipment desktop code must not import mobile renderers; mobile code must not import desktop renderers.
+- Shared Equipment controller/hooks must not import either platform renderer.
+- `EquipmentWorkspace.tsx` is the single platform selector for Equipment.
+- Current Equipment boundary: `<901px` mobile/tablet, `>=901px` desktop.
+- Run `npm run test:architecture` after platform/refactor work.
+
+### 12. Pre-delivery UI checklist
 Before claiming a UI change is done, verify:
 - [ ] 375 px
 - [ ] 440 px
@@ -114,6 +126,7 @@ Before claiming a UI change is done, verify:
 - [ ] badge meaning not color-only
 - [ ] safe-area does not hide CTA/nav
 - [ ] equipment images show full bitmap, upscale/downscale, never crop or distort
+- [ ] architecture guard passes when platform layout changed
 - [ ] Chromium + Pixel/WebKit smoke gates remain green
 
 ## Project-specific mobile architecture
@@ -136,5 +149,6 @@ Each quick action must preserve `equipment_id` as navigation context so the user
 ## Source usage
 
 Use `nextlevelbuilder/ui-ux-pro-max-skill` for UX rules and anti-patterns.
+Use `.agents/skills/platform-ui-architecture/SKILL.md` for desktop/mobile ownership and shared-layer boundaries.
 Use `KKshitiz/Awesome-UI-Templates` only for visual inspiration, never as a source of business workflow logic.
 Use MaintainX/Limble/UpKeep only as CMMS interaction references; CEV workflow and current repository architecture take precedence.

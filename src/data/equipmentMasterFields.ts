@@ -78,7 +78,7 @@ function unique(values: Array<string | undefined>) {
     seen.add(key)
     result.push(clean)
   }
-  return result.sort((a, b) => a.localeCompare(b, 'vi'))
+  return result.toSorted((a, b) => a.localeCompare(b, 'vi'))
 }
 
 export function buildEquipmentMasterSuggestions(rows: EquipmentMasterSuggestionSource[]): EquipmentMasterSuggestions {

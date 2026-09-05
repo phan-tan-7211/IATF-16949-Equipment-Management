@@ -33,7 +33,12 @@ export function LiveSparePartsPanel(){
   const reload=async()=>{const [p,e]=await Promise.all([loadSpareParts(),loadLiveEquipment()]);setParts(p);setEquipment(e)}
   useEffect(()=>{let active=true;Promise.all([loadSpareParts(),loadLiveEquipment()]).then(([p,e])=>{if(active){setParts(p);setEquipment(e);setError('')}}).catch((cause:unknown)=>{if(active)setError(cause instanceof Error?cause.message:'Không thể tải danh mục phụ tùng')}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[])
   const selected=parts.find((item)=>item.partId===selectedId)||null
-  useEffect(()=>{if(!selectedId){setUsage([]);return}void loadSpareUsage(selectedId).then(setUsage).catch(()=>setUsage([]))},[selectedId])
+  useEffect(()=>{
+    if(!selectedId)return
+    let active=true
+    void loadSpareUsage(selectedId).then((rows)=>{if(active)setUsage(rows)}).catch(()=>{if(active)setUsage([])})
+    return()=>{active=false}
+  },[selectedId])
   const preview=classify(form,equipment)
   const normalized=query.trim().toLowerCase()
   const filtered=useMemo(()=>parts.filter((part)=>{if(purchaseOnly&&!(part.stockQty<=part.minQty&&part.classification!=='NORMAL'))return false;if(!normalized)return true;return [part.partId,part.partName,part.partNumber,part.maker,part.location,...part.equipment.flatMap((e)=>[e.equipmentId,e.equipmentName])].join(' ').toLowerCase().includes(normalized)}),[parts,purchaseOnly,normalized])

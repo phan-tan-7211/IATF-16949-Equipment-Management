@@ -6,7 +6,11 @@ const loading = new Map<string, Promise<unknown>>()
 const prefetchers: Record<string, Prefetcher> = {
   dashboard: () => import('../LiveDashboardPanel'),
   qr: () => import('../LiveQrScannerPanel'),
-  equipment: () => Promise.all([import('../LiveEquipmentRegistrationPanel'), import('../LiveEquipmentPanel'), import('../QrEquipmentResult')]),
+  equipment: () => Promise.all([
+    import('../equipment/EquipmentWorkspace'),
+    import('../LiveEquipmentRegistrationPanel'),
+    import('../QrEquipmentResult'),
+  ]),
   inventory: async () => {
     const [, data] = await Promise.all([import('../LiveEquipmentInventoryPanel'), import('./liveEquipmentInventory')])
     await data.warmEquipmentInventory()
