@@ -14,7 +14,7 @@ type UseEquipmentDataResult = {
 }
 
 export function useEquipmentData(refreshPhotoStates: RefreshPhotoStates): UseEquipmentDataResult {
-  const initialSnapshot = getEquipmentCacheSnapshot()
+  const [initialSnapshot] = useState<LiveEquipment[]>(getEquipmentCacheSnapshot)
   const [rows, setRows] = useState<LiveEquipment[]>(initialSnapshot)
   const [loading, setLoading] = useState(initialSnapshot.length === 0)
   const [error, setError] = useState('')
@@ -35,28 +35,16 @@ export function useEquipmentData(refreshPhotoStates: RefreshPhotoStates): UseEqu
   }
 
   useEffect(() => {
-    const snapshot = getEquipmentCacheSnapshot()
-    if (snapshot.length) {
-      setRows(snapshot)
-      setLoading(false)
-      void refreshPhotoStates(snapshot)
-      void loadLiveEquipment({ force: true }).then((result) => {
-        setRows(result)
-        setError('')
-        void refreshPhotoStates(result)
-      }).catch(() => undefined)
-      return
-    }
+    if (initialSnapshot.length) void refreshPhotoStates(initialSnapshot)
 
-    setLoading(true)
     void loadLiveEquipment({ force: true }).then((result) => {
       setRows(result)
       setError('')
       void refreshPhotoStates(result)
     }).catch((cause) => {
-      setError(cause instanceof Error ? cause.message : 'Không thể tải danh mục thiết bị')
+      if (!initialSnapshot.length) setError(cause instanceof Error ? cause.message : 'Không thể tải danh mục thiết bị')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [initialSnapshot, refreshPhotoStates])
 
   return { rows, setRows, loading, error, setError, reloadEquipment }
 }
