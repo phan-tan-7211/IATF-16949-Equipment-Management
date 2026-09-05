@@ -100,7 +100,7 @@ test('A4 and account controls match the current shell', async ({ page }) => {
   }
 
   await openView(page, 'Hồ sơ A4')
-  await expect(page.getByRole('heading', { name: 'Hồ sơ A4 / PDF' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Hồ sơ / Tem quản lý' })).toBeVisible()
   await expect(page.locator('.a4-document')).toContainText('CEV-BM-TBSX-01')
   await expect(page.getByRole('button', { name: 'In / Xuất PDF A4' })).toBeVisible()
   await expect(page.locator('.sidebar-user')).toContainText('Quản trị hệ thống')
