@@ -1,5 +1,6 @@
 import type { LiveEquipment } from '../data/liveEquipment'
 import { buildEquipmentMasterSuggestions, type EquipmentMasterSuggestionKey } from '../data/equipmentMasterFields'
+import { getOrgAutocompleteOptions } from '../data/orgMaster'
 import { getEquipmentCacheSnapshot } from '../data/supabaseEquipment'
 import { SmartAutocomplete } from './SmartAutocomplete'
 
@@ -28,15 +29,9 @@ let cachedFirstRow: LiveEquipment | undefined
 let cachedLastRow: LiveEquipment | undefined
 let cachedSuggestions = buildEquipmentMasterSuggestions([])
 
-function autocompleteOptions(columnKey: string) {
+function equipmentSuggestionOptions(columnKey: string) {
   const suggestionKey = AUTOCOMPLETE_KEY_MAP[columnKey]
   if (!suggestionKey) return []
-
-  // getEquipmentCacheSnapshot() intentionally returns a shallow copy. Comparing the
-  // array reference therefore rebuilt all suggestions once for every editable cell
-  // (hundreds/thousands of times) and could freeze bulk-edit mode. The row object
-  // references stay stable until the equipment cache actually changes, so use an O(1)
-  // signature and rebuild the shared suggestion index only when the cache changes.
   const rows = getEquipmentCacheSnapshot()
   const firstRow = rows[0]
   const lastRow = rows[rows.length - 1]
@@ -47,6 +42,12 @@ function autocompleteOptions(columnKey: string) {
     cachedSuggestions = buildEquipmentMasterSuggestions(rows.map((row) => ({ ...row, department: row.usingDepartment })))
   }
   return cachedSuggestions[suggestionKey]
+}
+
+function autocompleteOptions(columnKey: string) {
+  const orgOptions = getOrgAutocompleteOptions(columnKey)
+  if (orgOptions.length) return orgOptions
+  return equipmentSuggestionOptions(columnKey)
 }
 
 export function EquipmentInlineCell({ equipment, columnKey, label, value, onChange }: Props) {
