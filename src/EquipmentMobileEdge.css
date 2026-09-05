@@ -3,7 +3,9 @@
   .equipment-page{gap:8px;margin-left:-12px;margin-right:-12px}
   .equipment-summary{margin:0 12px;padding:12px 14px;border-radius:12px;box-shadow:none}
   .equipment-surface{width:100%;border-left:0;border-right:0;border-radius:0;box-shadow:none}
-  .equipment-page-header{padding-left:16px;padding-right:16px}
+  .equipment-page-header{display:grid;grid-template-columns:1fr;gap:10px;padding-left:16px;padding-right:16px}
+  .equipment-page-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+  .equipment-page-actions>button{width:100%;min-width:0;min-height:38px;padding:0 6px!important;font-size:11px!important;white-space:nowrap}
   .equipment-toolbar{padding-left:16px;padding-right:16px}
   .equipment-feedback{margin-left:16px;margin-right:16px}
   .equipment-table-scroll{width:100%}
