@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react'
 import { canEditEquipment, useAppRole } from '../../auth/AppRoleContext'
 import { deriveEquipmentCriticality } from '../../data/autoRegistration'
-import { bulkUpdateEquipmentRows, type EquipmentRowPatch } from '../../data/equipmentBulkEdit'
+import { bulkUpdateEquipmentRows } from '../../data/equipmentBulkEdit'
 import { buildEquipmentMasterSuggestions } from '../../data/equipmentMasterFields'
 import { loadLiveEquipment, type LiveEquipment } from '../../data/liveEquipment'
 import { checkEquipmentDeletion, deleteUnusedEquipment } from '../../data/equipmentDeletion'
@@ -9,187 +9,39 @@ import { deleteEquipmentPhotos } from '../../data/equipmentPhotoDelete'
 import { getEquipmentPhotoCacheSnapshot, invalidateEquipmentPhotoCache, loadCachedEquipmentPhotoPreview, loadCachedEquipmentPhotoPreviews } from '../../data/equipmentPhotoCache'
 import { updateEquipmentDetails, type EquipmentMasterEditInput } from '../../data/equipmentMasterEdit'
 import { getEquipmentCacheSnapshot, uploadEquipmentPhoto } from '../../data/supabaseEquipment'
+import {
+  COLUMN_STORAGE_KEY,
+  COLUMNS,
+  columnValue,
+  includesQuery,
+  loadVisibleColumns,
+  patchKeyForColumn,
+  photoHoverPosition,
+  type ColumnFilters,
+  type ColumnKey,
+  type InlineChanges,
+  type PhotoHover,
+  type PhotoInfo,
+  type SortDirection,
+} from './equipmentColumns'
+import { mergeDraftIntoRow, mergeInlinePatch, toDraft } from './equipmentRowMappers'
 
-export const statusLabel: Record<string, string> = { RUNNING: 'Hoạt động', DOWN: 'Sự cố', MAINTENANCE: 'Bảo trì', STOPPED: 'Dừng', DISPOSED: 'Thanh lý', UNKNOWN: 'Chưa rõ' }
-export const labelSizeLabel: Record<string, string> = { tiny: '15 × 25 mm', standard: '30 × 50 mm', large: '45 × 80 mm' }
+export {
+  COLUMNS,
+  booleanSelectValue,
+  columnValue,
+  defaultVisibleColumns,
+  documentLinks,
+  inlineValue,
+  parseBooleanSelect,
+  patchKeyForColumn,
+  photoHoverPosition,
+  statusLabel,
+} from './equipmentColumns'
+export type { ColumnDef, ColumnFilters, ColumnKey, InlineChanges, PhotoHover, PhotoInfo, SortDirection } from './equipmentColumns'
 
-export type PhotoInfo = { state: 'loading' | 'yes' | 'no' | 'error'; url: string }
-export type PhotoHover = { url: string; name: string; x: number; y: number; size: number }
-export type SortDirection = 'asc' | 'desc'
-export type ColumnKey =
-  | 'equipmentId' | 'equipmentName' | 'equipmentType' | 'equipmentCategory' | 'manufacturer' | 'distributor' | 'model' | 'serialNumber'
-  | 'usingDepartment' | 'managingDepartment' | 'managementResponsiblePrimary' | 'managementResponsibleSecondary' | 'currentArea' | 'currentLine' | 'status' | 'defaultLabelSize'
-  | 'technicalSpecification' | 'description' | 'accuracy' | 'criticality'
-  | 'controlsProductQuality' | 'specialCharacteristicImpact' | 'stopsProduction' | 'hasBackup' | 'capacityImpact'
-  | 'origin' | 'manufactureDate' | 'inServiceDate' | 'warrantyUntil' | 'warrantyContact'
-  | 'note' | 'relatedDocuments' | 'qrCode' | 'active' | 'updatedAt'
-export type ColumnGroup = 'Nhận diện'|'Quản lý'|'Kỹ thuật'|'Vòng đời'|'Tài liệu'|'Hệ thống'
-export type ColumnDef = { key: ColumnKey; label: string; defaultVisible?: boolean; group: ColumnGroup }
-export type ColumnFilters = Partial<Record<ColumnKey, string[]>>
-export type InlineChanges = Record<string, EquipmentRowPatch>
-
-const COLUMN_STORAGE_KEY = 'cev-equipment-visible-columns-v5'
-export const COLUMNS: ColumnDef[] = [
-  { key:'equipmentId',label:'Mã thiết bị',defaultVisible:true,group:'Nhận diện' },
-  { key:'equipmentName',label:'Tên thiết bị',defaultVisible:true,group:'Nhận diện' },
-  { key:'equipmentType',label:'Loại thiết bị',defaultVisible:true,group:'Nhận diện' },
-  { key:'equipmentCategory',label:'Nhóm thiết bị',group:'Nhận diện' },
-  { key:'managingDepartment',label:'Bộ phận quản lý',defaultVisible:true,group:'Quản lý' },
-  { key:'managementResponsiblePrimary',label:'Người QL chính',defaultVisible:true,group:'Quản lý' },
-  { key:'managementResponsibleSecondary',label:'Người QL phụ',defaultVisible:true,group:'Quản lý' },
-  { key:'usingDepartment',label:'Bộ phận sử dụng',group:'Quản lý' },
-  { key:'currentArea',label:'Khu vực',defaultVisible:true,group:'Quản lý' },
-  { key:'currentLine',label:'Dây chuyền',defaultVisible:true,group:'Quản lý' },
-  { key:'status',label:'Trạng thái',defaultVisible:true,group:'Quản lý' },
-  { key:'defaultLabelSize',label:'Khổ tem mặc định',group:'Quản lý' },
-  { key:'manufacturer',label:'Hãng / nhà sản xuất',group:'Nhận diện' },
-  { key:'distributor',label:'Nhà phân phối',group:'Nhận diện' },
-  { key:'model',label:'Mẫu máy',group:'Nhận diện' },
-  { key:'serialNumber',label:'Số sê-ri',group:'Nhận diện' },
-  { key:'technicalSpecification',label:'Thông số kỹ thuật',group:'Kỹ thuật' },
-  { key:'description',label:'Mô tả / chức năng',group:'Kỹ thuật' },
-  { key:'accuracy',label:'Độ chính xác',group:'Kỹ thuật' },
-  { key:'criticality',label:'Cấp độ A/B/C/D',group:'Kỹ thuật' },
-  { key:'controlsProductQuality',label:'Kiểm soát chất lượng',group:'Kỹ thuật' },
-  { key:'specialCharacteristicImpact',label:'Ảnh hưởng đặc tính đặc biệt',group:'Kỹ thuật' },
-  { key:'stopsProduction',label:'Mất máy gây dừng SX',group:'Kỹ thuật' },
-  { key:'hasBackup',label:'Có thiết bị dự phòng',group:'Kỹ thuật' },
-  { key:'capacityImpact',label:'Ảnh hưởng sản lượng / giao hàng',group:'Kỹ thuật' },
-  { key:'origin',label:'Xuất xứ',group:'Vòng đời' },
-  { key:'manufactureDate',label:'Ngày sản xuất',group:'Vòng đời' },
-  { key:'inServiceDate',label:'Ngày đưa vào sử dụng',group:'Vòng đời' },
-  { key:'warrantyUntil',label:'Bảo hành đến',group:'Vòng đời' },
-  { key:'warrantyContact',label:'Liên hệ bảo hành',group:'Vòng đời' },
-  { key:'note',label:'Ghi chú',group:'Tài liệu' },
-  { key:'relatedDocuments',label:'Tài liệu liên quan',group:'Tài liệu' },
-  { key:'qrCode',label:'Mã QR',group:'Hệ thống' },
-  { key:'active',label:'Đang quản lý',group:'Hệ thống' },
-  { key:'updatedAt',label:'Cập nhật gần nhất',group:'Hệ thống' },
-]
-
-export function booleanSelectValue(value: boolean | undefined) { return value === true ? 'YES' : value === false ? 'NO' : '' }
-export function parseBooleanSelect(value: string) { return value === 'YES' ? true : value === 'NO' ? false : undefined }
 function clipboardFileExtension(mimeType: string) { if (mimeType === 'image/png') return 'png'; if (mimeType === 'image/webp') return 'webp'; if (mimeType === 'image/gif') return 'gif'; return 'jpg' }
-function clean(value: unknown) { return String(value ?? '').trim() }
-function yesNo(value: boolean | undefined) { return value === true ? 'Có' : value === false ? 'Không' : 'Chưa trả lời' }
-export function columnValue(row: LiveEquipment, key: ColumnKey) {
-  if (key === 'equipmentType') return row.equipmentType === 'MEASUREMENT' ? 'Đo kiểm' : 'Sản xuất'
-  if (key === 'status') return statusLabel[row.status] || row.status
-  if (key === 'defaultLabelSize') return labelSizeLabel[row.defaultLabelSize || 'standard'] || '30 × 50 mm'
-  if (key === 'controlsProductQuality') return yesNo(row.criticalityFacts?.controlsProductQuality)
-  if (key === 'specialCharacteristicImpact') return yesNo(row.criticalityFacts?.specialCharacteristicImpact)
-  if (key === 'stopsProduction') return yesNo(row.criticalityFacts?.stopsProduction)
-  if (key === 'hasBackup') return yesNo(row.criticalityFacts?.hasBackup)
-  if (key === 'capacityImpact') return yesNo(row.criticalityFacts?.capacityImpact)
-  if (key === 'active') return row.active ? 'Đang quản lý' : 'Ngừng quản lý'
-  if (key === 'updatedAt') return row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('vi-VN') : ''
-  return clean(row[key as keyof LiveEquipment])
-}
-export function documentLinks(value: string) { return value.split(/[\n;,]+/).map((item) => item.trim()).filter((item) => /^https?:\/\//i.test(item)) }
-function includesQuery(row: LiveEquipment, query: string) { if (!query) return true; return COLUMNS.map((col) => columnValue(row,col.key)).join(' ').toLocaleLowerCase().includes(query) }
-export function defaultVisibleColumns() { return COLUMNS.filter((col) => col.defaultVisible).map((col) => col.key) }
-function loadVisibleColumns(): ColumnKey[] { try { const parsed = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || '[]'); const valid = Array.isArray(parsed) ? parsed.filter((key): key is ColumnKey => COLUMNS.some((col) => col.key === key)) : []; return valid.length ? valid : defaultVisibleColumns() } catch { return defaultVisibleColumns() } }
 function photoCacheInitialState(): Record<string, PhotoInfo> { const snapshot=getEquipmentPhotoCacheSnapshot(); return Object.fromEntries(Object.entries(snapshot).map(([id,preview])=>[id,{state:preview.exists?'yes':'no',url:preview.signedUrl} as PhotoInfo])) }
-export function photoHoverPosition(clientX:number,clientY:number){
-  const margin=12, gap=14
-  const size=Math.min(360,Math.max(180,window.innerWidth-margin*2),Math.max(180,window.innerHeight-margin*2))
-  let x=clientX+gap, y=clientY-size-gap
-  if(x+size>window.innerWidth-margin)x=clientX-size-gap
-  x=Math.max(margin,Math.min(x,window.innerWidth-size-margin))
-  y=Math.max(margin,Math.min(y,window.innerHeight-size-margin))
-  return {x,y,size}
-}
-
-export function patchKeyForColumn(key: ColumnKey): keyof EquipmentRowPatch | null {
-  if (key === 'usingDepartment') return 'department'
-  if (['equipmentId','equipmentType','criticality','qrCode','updatedAt'].includes(key)) return null
-  return key as keyof EquipmentRowPatch
-}
-function editableRawValue(row: LiveEquipment, key: ColumnKey) {
-  if (key === 'usingDepartment') return row.usingDepartment
-  if (key === 'controlsProductQuality') return row.criticalityFacts?.controlsProductQuality
-  if (key === 'specialCharacteristicImpact') return row.criticalityFacts?.specialCharacteristicImpact
-  if (key === 'stopsProduction') return row.criticalityFacts?.stopsProduction
-  if (key === 'hasBackup') return row.criticalityFacts?.hasBackup
-  if (key === 'capacityImpact') return row.criticalityFacts?.capacityImpact
-  return row[key as keyof LiveEquipment] as string | boolean | undefined
-}
-export function inlineValue(row: LiveEquipment, key: ColumnKey, changes: InlineChanges) {
-  const patchKey=patchKeyForColumn(key)
-  if (!patchKey) return undefined
-  const patch=changes[row.equipmentId]
-  if (patch && Object.prototype.hasOwnProperty.call(patch,patchKey)) return patch[patchKey] as string | boolean | undefined
-  return editableRawValue(row,key)
-}
-function mergeInlinePatch(row: LiveEquipment, patch: EquipmentRowPatch): LiveEquipment {
-  const next: LiveEquipment={...row}
-  if (patch.equipmentName!==undefined) next.equipmentName=patch.equipmentName
-  if (patch.equipmentCategory!==undefined) next.equipmentCategory=patch.equipmentCategory
-  if (patch.manufacturer!==undefined) next.manufacturer=patch.manufacturer
-  if (patch.distributor!==undefined) next.distributor=patch.distributor
-  if (patch.model!==undefined) next.model=patch.model
-  if (patch.serialNumber!==undefined) next.serialNumber=patch.serialNumber
-  if (patch.department!==undefined) next.usingDepartment=patch.department
-  if (patch.managingDepartment!==undefined) next.managingDepartment=patch.managingDepartment
-  if (patch.managementResponsiblePrimary!==undefined) next.managementResponsiblePrimary=patch.managementResponsiblePrimary
-  if (patch.managementResponsibleSecondary!==undefined) next.managementResponsibleSecondary=patch.managementResponsibleSecondary
-  if (patch.currentArea!==undefined) next.currentArea=patch.currentArea
-  if (patch.currentLine!==undefined) next.currentLine=patch.currentLine
-  if (patch.status!==undefined) next.status=patch.status
-  if (patch.defaultLabelSize!==undefined) next.defaultLabelSize=patch.defaultLabelSize
-  if (patch.technicalSpecification!==undefined) next.technicalSpecification=patch.technicalSpecification
-  if (patch.description!==undefined) next.description=patch.description
-  if (patch.accuracy!==undefined) next.accuracy=patch.accuracy
-  if (patch.origin!==undefined) next.origin=patch.origin
-  if (patch.manufactureDate!==undefined) next.manufactureDate=patch.manufactureDate
-  if (patch.inServiceDate!==undefined) next.inServiceDate=patch.inServiceDate
-  if (patch.warrantyUntil!==undefined) next.warrantyUntil=patch.warrantyUntil
-  if (patch.warrantyContact!==undefined) next.warrantyContact=patch.warrantyContact
-  if (patch.note!==undefined) next.note=patch.note
-  if (patch.relatedDocuments!==undefined) next.relatedDocuments=patch.relatedDocuments
-  if (patch.active!==undefined) next.active=patch.active
-  const facts={...(row.criticalityFacts||{})}
-  if (patch.controlsProductQuality!==undefined) facts.controlsProductQuality=patch.controlsProductQuality
-  if (patch.specialCharacteristicImpact!==undefined) facts.specialCharacteristicImpact=patch.specialCharacteristicImpact
-  if (patch.stopsProduction!==undefined) facts.stopsProduction=patch.stopsProduction
-  if (patch.hasBackup!==undefined) facts.hasBackup=patch.hasBackup
-  if (patch.capacityImpact!==undefined) facts.capacityImpact=patch.capacityImpact
-  next.criticalityFacts=facts
-  const derived=deriveEquipmentCriticality(facts)
-  if (derived) next.criticality=derived
-  next.updatedAt=new Date().toISOString()
-  return next
-}
-function toDraft(row: LiveEquipment): EquipmentMasterEditInput {
-  const criticalityFacts = row.criticalityFacts
-  return {
-    equipmentId: row.equipmentId, equipmentType: row.equipmentType, equipmentName: row.equipmentName,
-    equipmentCategory: row.equipmentCategory || '', manufacturer: row.manufacturer || '', distributor: row.distributor || '', model: row.model || '', serialNumber: row.serialNumber || '',
-    department: row.usingDepartment || '', currentArea: row.currentArea || '', currentLine: row.currentLine || '', managingDepartment: row.managingDepartment || '',
-    managementResponsiblePrimary: row.managementResponsiblePrimary || '', managementResponsibleSecondary: row.managementResponsibleSecondary || '',
-    technicalSpecification: row.technicalSpecification || '', description: row.description || '', accuracy: row.accuracy || '', origin: row.origin || '',
-    manufactureDate: row.manufactureDate || '', inServiceDate: row.inServiceDate || '', warrantyUntil: row.warrantyUntil || '', warrantyContact: row.warrantyContact || '',
-    note: row.note || '', relatedDocuments: row.relatedDocuments || '', status: row.status || 'RUNNING',
-    controlsProductQuality: criticalityFacts?.controlsProductQuality, specialCharacteristicImpact: criticalityFacts?.specialCharacteristicImpact,
-    stopsProduction: criticalityFacts?.stopsProduction, hasBackup: criticalityFacts?.hasBackup, capacityImpact: criticalityFacts?.capacityImpact,
-  }
-}
-function mergeDraftIntoRow(row: LiveEquipment, draft: EquipmentMasterEditInput, criticality: string): LiveEquipment {
-  if (row.equipmentId !== draft.equipmentId.trim().toUpperCase()) return row
-  return {
-    ...row,
-    equipmentName: draft.equipmentName.trim(), equipmentType: draft.equipmentType, equipmentCategory: draft.equipmentCategory.trim(),
-    manufacturer: draft.manufacturer.trim(), distributor: draft.distributor?.trim() || '', model: draft.model.trim(), serialNumber: draft.serialNumber.trim(),
-    currentArea: draft.currentArea.trim(), currentLine: draft.currentLine.trim(), managingDepartment: draft.managingDepartment.trim(),
-    managementResponsiblePrimary: draft.managementResponsiblePrimary?.trim() || '', managementResponsibleSecondary: draft.managementResponsibleSecondary?.trim() || '',
-    usingDepartment: draft.department.trim(), technicalSpecification: draft.technicalSpecification.trim(), description: draft.description.trim(),
-    accuracy: draft.accuracy.trim(), origin: draft.origin.trim(), manufactureDate: draft.manufactureDate.trim(), inServiceDate: draft.inServiceDate.trim(),
-    warrantyUntil: draft.warrantyUntil.trim(), warrantyContact: draft.warrantyContact.trim(), note: draft.note.trim(), relatedDocuments: draft.relatedDocuments.trim(),
-    status: draft.status.trim() || 'RUNNING', criticality,
-    criticalityFacts: { controlsProductQuality: draft.controlsProductQuality, specialCharacteristicImpact: draft.specialCharacteristicImpact, stopsProduction: draft.stopsProduction, hasBackup: draft.hasBackup, capacityImpact: draft.capacityImpact },
-    updatedAt: new Date().toISOString(),
-  }
-}
 
 export function useEquipmentPanelController() {
   const role = useAppRole(); const canBulkEdit = canEditEquipment(role)
