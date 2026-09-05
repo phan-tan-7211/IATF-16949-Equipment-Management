@@ -8,16 +8,18 @@
     margin-right:-12px;
   }
 
-  /* Flatten the desktop card/header wrappers so mobile can use the requested order:
-     title -> summary -> actions -> search/tools -> table. */
+  /* Mobile visual order: title -> summary -> actions -> search/tools -> table. */
   .equipment-surface,
   .equipment-page-header{display:contents}
 
   .equipment-page-header>div:first-child{
     order:1;
+    grid-column:1/-1;
+    width:auto;
     min-width:0;
     margin:0 12px;
-    padding:2px 6px 0;
+    padding:2px 6px 4px;
+    box-sizing:border-box;
   }
   .equipment-page-header>div:first-child .eyebrow{margin-bottom:3px}
   .equipment-page-header>div:first-child h2{margin:0;font-size:19px;line-height:1.15}
@@ -25,6 +27,7 @@
 
   .equipment-summary{
     order:2;
+    grid-column:1/-1;
     display:grid;
     grid-template-columns:repeat(3,minmax(0,1fr));
     gap:0;
@@ -48,24 +51,38 @@
   .equipment-summary span{font-size:9px;line-height:1.2;white-space:nowrap}
   .equipment-summary strong{font-size:22px;line-height:1.05}
 
+  /* Actions are a dedicated row/card. Never share the title row. */
   .equipment-page-actions{
     order:3;
+    grid-column:1/-1!important;
+    position:relative!important;
+    inset:auto!important;
+    float:none!important;
+    clear:both!important;
+    transform:none!important;
+    justify-self:stretch!important;
+    align-self:stretch!important;
     display:grid!important;
     grid-template-columns:repeat(3,minmax(0,1fr));
     gap:8px;
-    width:auto;
-    margin:0 8px;
-    padding:8px;
+    width:auto!important;
+    max-width:none!important;
+    min-width:0!important;
+    margin:0 8px!important;
+    padding:8px!important;
     box-sizing:border-box;
     border:1px solid var(--color-border);
     border-radius:12px;
     background:var(--color-surface);
   }
   .equipment-page-actions>button{
-    width:100%;
-    min-width:0;
-    min-height:40px;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    min-height:40px!important;
+    height:40px!important;
     padding:0 6px!important;
+    margin:0!important;
     border-radius:8px!important;
     font-size:10px!important;
     white-space:nowrap;
@@ -73,15 +90,16 @@
 
   .equipment-toolbar{
     order:4;
+    grid-column:1/-1;
     grid-template-columns:1fr;
     margin:0;
     padding:8px 16px 10px;
     border-top:0;
   }
-  .equipment-feedback{order:5;margin-left:16px;margin-right:16px}
-  .equipment-spreadsheet-bar,.equipment-bulk-editor,.equipment-bulk-hint{order:5}
-  .equipment-state{order:6}
-  .equipment-table-scroll{order:7;width:100%;min-width:0;overflow:auto}
+  .equipment-feedback{order:5;grid-column:1/-1;margin-left:16px;margin-right:16px}
+  .equipment-spreadsheet-bar,.equipment-bulk-editor,.equipment-bulk-hint{order:5;grid-column:1/-1}
+  .equipment-state{order:6;grid-column:1/-1}
+  .equipment-table-scroll{order:7;grid-column:1/-1;width:100%;min-width:0;overflow:auto}
 
   .equipment-image-col.paste-ready:hover,.equipment-image-col.paste-ready:focus{box-shadow:none}
 
