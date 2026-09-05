@@ -31,6 +31,7 @@ export function EquipmentMultiSelect({
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCTION' | 'MEASUREMENT'>('ALL')
   const [photos, setPhotos] = useState<Record<string, EquipmentPhotoPreview>>({})
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -41,6 +42,10 @@ export function EquipmentMultiSelect({
       .catch(() => { if (active) setPhotos({}) })
     return () => { active = false }
   }, [equipment])
+
+  useEffect(() => {
+    if (showSelectedOnly && selectedIds.length === 0) setShowSelectedOnly(false)
+  }, [selectedIds.length, showSelectedOnly])
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds])
   const filtered = useMemo(() => {
@@ -61,6 +66,11 @@ export function EquipmentMultiSelect({
       return words.every((word) => haystack.includes(word))
     })
   }, [equipment, query, typeFilter])
+
+  const visible = useMemo(
+    () => showSelectedOnly ? filtered.filter((item) => selected.has(item.equipmentId)) : filtered,
+    [filtered, selected, showSelectedOnly],
+  )
 
   function toggle(id: string) {
     if (disabled) return
@@ -86,6 +96,18 @@ export function EquipmentMultiSelect({
     onChange(selectedIds.filter((id) => !filteredIds.has(id)))
   }
 
+  function toggleSelectedView() {
+    if (disabled || selectionMode === 'single' || !selectedIds.length) return
+    setShowSelectedOnly((current) => {
+      const next = !current
+      if (next) {
+        setQuery('')
+        setTypeFilter('ALL')
+      }
+      return next
+    })
+  }
+
   const filteredSelected = filtered.filter((item) => selected.has(item.equipmentId)).length
 
   return <section className={`equipment-multi-select${compact ? ' compact' : ''}`} aria-label={title}>
@@ -102,7 +124,7 @@ export function EquipmentMultiSelect({
         type="search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Tìm mã, tên máy, model, line, bộ phận…"
+        placeholder={showSelectedOnly ? 'Tìm trong các máy đang chọn…' : 'Tìm mã, tên máy, model, line, bộ phận…'}
         disabled={disabled}
       />
       <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)} disabled={disabled}>
@@ -113,16 +135,24 @@ export function EquipmentMultiSelect({
       {selectionMode === 'multiple' ? <>
         <button type="button" onClick={selectFiltered} disabled={disabled || !filtered.length}>Chọn tất cả kết quả</button>
         <button type="button" onClick={clearFiltered} disabled={disabled || !filteredSelected}>Bỏ chọn kết quả</button>
+        <button
+          type="button"
+          className={`equipment-multi-selected-toggle${showSelectedOnly ? ' active' : ''}`}
+          onClick={toggleSelectedView}
+          disabled={disabled || !selectedIds.length}
+          aria-pressed={showSelectedOnly}
+        >{showSelectedOnly ? 'Hiện tất cả' : `Hiện đang chọn (${selectedIds.length})`}</button>
       </> : selectedIds.length ? <button type="button" onClick={() => onChange([])} disabled={disabled}>Bỏ chọn</button> : null}
     </div>
 
     <div className="equipment-multi-summary">
-      <span>{filtered.length} thiết bị phù hợp</span>
-      {selectionMode === 'multiple' ? <span>{filteredSelected} đang chọn trong kết quả</span> : null}
+      <span>{showSelectedOnly ? `${visible.length} thiết bị đang chọn` : `${filtered.length} thiết bị phù hợp`}</span>
+      {selectionMode === 'multiple' && !showSelectedOnly ? <span>{filteredSelected} đang chọn trong kết quả</span> : null}
+      {selectionMode === 'multiple' && showSelectedOnly ? <span>Bỏ tích máy chọn nhầm rồi lưu thay đổi như bình thường</span> : null}
     </div>
 
     <div className="equipment-multi-grid">
-      {filtered.map((item) => {
+      {visible.map((item) => {
         const checked = selected.has(item.equipmentId)
         const photo = photos[item.equipmentId]
         return <label key={item.equipmentId} className={`equipment-multi-card${checked ? ' selected' : ''}`}>
@@ -140,7 +170,7 @@ export function EquipmentMultiSelect({
           <span className={`equipment-multi-criticality level-${(item.criticality || 'na').toLowerCase()}`}>{item.criticality ? `Cấp ${item.criticality}` : '—'}</span>
         </label>
       })}
-      {!filtered.length ? <div className="equipment-multi-empty">Không tìm thấy thiết bị phù hợp.</div> : null}
+      {!visible.length ? <div className="equipment-multi-empty">{showSelectedOnly ? 'Không còn thiết bị nào đang chọn.' : 'Không tìm thấy thiết bị phù hợp.'}</div> : null}
     </div>
   </section>
 }
