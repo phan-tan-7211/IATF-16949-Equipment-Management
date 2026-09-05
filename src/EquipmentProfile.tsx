@@ -16,6 +16,7 @@ type Props = {
 }
 
 type Tab = 'overview' | 'calibration' | 'maintenance' | 'inspection' | 'downtime' | 'movement' | 'audit'
+type HistoryState = { equipmentId: string; history: EquipmentHistory; error: string }
 
 const EMPTY_HISTORY: EquipmentHistory = { calibration: [], maintenance: [], inspections: [], downtime: [], movements: [], audit: [] }
 
@@ -26,23 +27,29 @@ const statusText: Record<string,string> = { RUNNING:'Hoạt động', DOWN:'Sự
 
 export function EquipmentProfile({ equipment, photoUrl, onClose, onEdit, onNavigate }: Props) {
   const [tab, setTab] = useState<Tab>('overview')
-  const [history, setHistory] = useState<EquipmentHistory>(EMPTY_HISTORY)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [historyState, setHistoryState] = useState<HistoryState>({ equipmentId: '', history: EMPTY_HISTORY, error: '' })
   const [issueOpen, setIssueOpen] = useState(false)
+  const historyReady = historyState.equipmentId === equipment.equipmentId
+  const history = historyReady ? historyState.history : EMPTY_HISTORY
+  const loading = !historyReady
+  const error = historyReady ? historyState.error : ''
 
   async function refreshHistory() {
-    try { setHistory(await loadEquipmentHistory(equipment.equipmentId)); setError('') }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Không tải được lịch sử thiết bị') }
+    const equipmentId = equipment.equipmentId
+    try {
+      const nextHistory = await loadEquipmentHistory(equipmentId)
+      setHistoryState({ equipmentId, history: nextHistory, error: '' })
+    } catch (cause) {
+      setHistoryState({ equipmentId, history: EMPTY_HISTORY, error: cause instanceof Error ? cause.message : 'Không tải được lịch sử thiết bị' })
+    }
   }
 
   useEffect(() => {
     let active = true
-    setLoading(true); setError('')
-    void loadEquipmentHistory(equipment.equipmentId)
-      .then((result) => { if (active) setHistory(result) })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được lịch sử thiết bị') })
-      .finally(() => { if (active) setLoading(false) })
+    const equipmentId = equipment.equipmentId
+    void loadEquipmentHistory(equipmentId)
+      .then((result) => { if (active) setHistoryState({ equipmentId, history: result, error: '' }) })
+      .catch((cause) => { if (active) setHistoryState({ equipmentId, history: EMPTY_HISTORY, error: cause instanceof Error ? cause.message : 'Không tải được lịch sử thiết bị' }) })
     return () => { active = false }
   }, [equipment.equipmentId])
 
