@@ -3,6 +3,7 @@ import { SmartAutocomplete } from './components/SmartAutocomplete'
 import type { EquipmentMasterEditInput } from './data/equipmentMasterEdit'
 import { buildEquipmentMasterSuggestions, canonicalizeMasterValue, type EquipmentMasterSuggestionKey, type EquipmentMasterSuggestions } from './data/equipmentMasterFields'
 import { loadLiveEquipment } from './data/liveEquipment'
+import { getOrgAutocompleteOptions, loadOrgMaster } from './data/orgMaster'
 
 type Props = {
   value: EquipmentMasterEditInput
@@ -13,6 +14,13 @@ type Props = {
 export function EquipmentMasterEditFields({ value, suggestions, onChange }: Props) {
   const hydratedEquipmentId = useRef('')
   const [responsibleSuggestions, setResponsibleSuggestions] = useState<string[]>([])
+  const [, setOrgReady] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    void loadOrgMaster().then(() => { if (active) setOrgReady((value) => value + 1) }).catch(() => undefined)
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     const equipmentId = value.equipmentId.trim()
@@ -28,18 +36,29 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
       onChange({
         ...value,
         distributor: value.distributor || current.distributor || '',
-        managementResponsiblePrimary: value.managementResponsiblePrimary || current.managementResponsiblePrimary || '',
-        managementResponsibleSecondary: value.managementResponsibleSecondary || current.managementResponsibleSecondary || '',
+        managementResponsiblePrimary: current.managementResponsiblePrimary || value.managementResponsiblePrimary || '',
+        managementResponsibleSecondary: current.managementResponsibleSecondary || value.managementResponsibleSecondary || '',
+        managingDepartment: current.managingDepartment || value.managingDepartment || '',
       })
     }).catch(() => undefined)
     return () => { active = false }
   }, [value.equipmentId])
 
-  const mergedSuggestions = useMemo<EquipmentMasterSuggestions>(() => ({
-    ...suggestions,
-    managementResponsiblePrimary: responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsiblePrimary,
-    managementResponsibleSecondary: responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsibleSecondary,
-  }), [responsibleSuggestions, suggestions])
+  const mergedSuggestions = useMemo<EquipmentMasterSuggestions>(() => {
+    const orgDepartments = getOrgAutocompleteOptions('managingDepartment')
+    const orgPeople = getOrgAutocompleteOptions('managementResponsiblePrimary')
+    const orgAreas = getOrgAutocompleteOptions('currentArea')
+    const orgLines = getOrgAutocompleteOptions('currentLine')
+    return {
+      ...suggestions,
+      department: orgDepartments.length ? orgDepartments : suggestions.department,
+      managingDepartment: orgDepartments.length ? orgDepartments : suggestions.managingDepartment,
+      managementResponsiblePrimary: orgPeople.length ? orgPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsiblePrimary,
+      managementResponsibleSecondary: orgPeople.length ? orgPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsibleSecondary,
+      currentArea: orgAreas.length ? orgAreas : suggestions.currentArea,
+      currentLine: orgLines.length ? orgLines : suggestions.currentLine,
+    }
+  }, [responsibleSuggestions, suggestions])
 
   function setField<K extends keyof EquipmentMasterEditInput>(key: K, nextValue: EquipmentMasterEditInput[K]) {
     onChange({ ...value, [key]: nextValue })
