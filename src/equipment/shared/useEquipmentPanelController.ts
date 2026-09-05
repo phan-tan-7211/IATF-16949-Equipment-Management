@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react'
+import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
 import { canEditEquipment, useAppRole } from '../../auth/AppRoleContext'
 import { deriveEquipmentCriticality } from '../../data/autoRegistration'
 import { bulkUpdateEquipmentRows } from '../../data/equipmentBulkEdit'
@@ -10,21 +10,14 @@ import { getEquipmentPhotoCacheSnapshot, invalidateEquipmentPhotoCache, loadCach
 import { updateEquipmentDetails, type EquipmentMasterEditInput } from '../../data/equipmentMasterEdit'
 import { getEquipmentCacheSnapshot, uploadEquipmentPhoto } from '../../data/supabaseEquipment'
 import {
-  COLUMN_STORAGE_KEY,
-  COLUMNS,
-  columnValue,
-  includesQuery,
-  loadVisibleColumns,
   patchKeyForColumn,
   photoHoverPosition,
-  type ColumnFilters,
   type ColumnKey,
   type InlineChanges,
-  type PhotoHover,
   type PhotoInfo,
-  type SortDirection,
 } from './equipmentColumns'
 import { mergeDraftIntoRow, mergeInlinePatch, toDraft } from './equipmentRowMappers'
+import { useEquipmentTableState } from './useEquipmentTableState'
 
 export {
   COLUMNS,
@@ -56,45 +49,27 @@ export function useEquipmentPanelController() {
   const [deletingPhotoId,setDeletingPhotoId]=useState('')
   const [saving,setSaving]=useState(false)
   const [deleting,setDeleting]=useState(false)
-  const [query,setQuery]=useState('')
-  const [sortKey,setSortKey]=useState<ColumnKey>('equipmentId')
-  const [sortDirection,setSortDirection]=useState<SortDirection>('asc')
   const [bulkMode,setBulkMode]=useState(false)
   const [bulkSaving,setBulkSaving]=useState(false)
   const [inlineChanges,setInlineChanges]=useState<InlineChanges>({})
-  const [visibleColumns,setVisibleColumns]=useState<ColumnKey[]>(loadVisibleColumns)
-  const [columnPickerOpen,setColumnPickerOpen]=useState(false)
-  const [filterColumn,setFilterColumn]=useState<ColumnKey|null>(null)
-  const [filterSearch,setFilterSearch]=useState('')
-  const [columnFilters,setColumnFilters]=useState<ColumnFilters>({})
-  const [photoHover,setPhotoHover]=useState<PhotoHover|null>(null)
-  const columnPickerRef=useRef<HTMLDivElement|null>(null)
+
+  const {
+    query,setQuery,sortKey,sortDirection,
+    visibleColumns,setVisibleColumns,columnPickerOpen,setColumnPickerOpen,
+    filterColumn,setFilterColumn,filterSearch,setFilterSearch,columnFilters,setColumnFilters,
+    photoHover,setPhotoHover,columnPickerRef,activeFilterCount,sortedRows,
+    toggleSort,toggleColumn,filterOptions,toggleFilterValue,clearFilter,
+  }=useEquipmentTableState(rows)
 
   const masterSuggestions=useMemo(()=>buildEquipmentMasterSuggestions(rows.map((row)=>({...row,department:row.usingDepartment}))),[rows])
-  useEffect(()=>{ localStorage.setItem(COLUMN_STORAGE_KEY,JSON.stringify(visibleColumns)) },[visibleColumns])
 
   async function refreshOnePhoto(equipmentId:string,force=false){ setPhotos((current)=>({...current,[equipmentId]:{state:'loading',url:current[equipmentId]?.url||''}})); try{const preview=await loadCachedEquipmentPhotoPreview(equipmentId,force);setPhotos((current)=>({...current,[equipmentId]:{state:preview.exists?'yes':'no',url:preview.signedUrl}}));return preview.exists}catch{setPhotos((current)=>({...current,[equipmentId]:{state:'error',url:current[equipmentId]?.url||''}}));return false} }
   async function refreshPhotoStates(result:LiveEquipment[]){ setPhotos((current)=>Object.fromEntries(result.map((row)=>[row.equipmentId,current[row.equipmentId]||{state:'loading',url:''} as PhotoInfo]))); try{const previews=await loadCachedEquipmentPhotoPreviews(result.map((row)=>row.equipmentId));setPhotos((current)=>Object.fromEntries(result.map((row)=>{const preview=previews[row.equipmentId];return [row.equipmentId,preview?{state:preview.exists?'yes':'no',url:preview.signedUrl||''} as PhotoInfo:current[row.equipmentId]||{state:'loading',url:''} as PhotoInfo]})))}catch{setPhotos((current)=>Object.fromEntries(result.map((row)=>[row.equipmentId,current[row.equipmentId]||{state:'error',url:''} as PhotoInfo])))} }
   async function reloadEquipment(force=false){const block=force||rows.length===0;if(block)setLoading(true);try{const result=await loadLiveEquipment({force});setRows(result);setError('');void refreshPhotoStates(result)}catch(cause){setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')}finally{if(block)setLoading(false)}}
   useEffect(()=>{const snapshot=getEquipmentCacheSnapshot();if(snapshot.length){setRows(snapshot);setLoading(false);void refreshPhotoStates(snapshot);void loadLiveEquipment({force:true}).then((result)=>{setRows(result);setError('');void refreshPhotoStates(result)}).catch(()=>undefined)}else{setLoading(true);void loadLiveEquipment({force:true}).then((result)=>{setRows(result);setError('');void refreshPhotoStates(result)}).catch((cause)=>setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')).finally(()=>setLoading(false))}},[])
   useEffect(()=>{if(!editing)return;const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape')setEditing(null)};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown)},[editing])
-  useEffect(()=>{
-    const onPointerDown=(event:PointerEvent)=>{
-      const target=event.target
-      if(!(target instanceof Node))return
-      if(columnPickerRef.current&&!columnPickerRef.current.contains(target))setColumnPickerOpen(false)
-      if(!(target instanceof Element)||!target.closest('.equipment-filter-popover,.equipment-filter-button')){setFilterColumn(null);setFilterSearch('')}
-    }
-    const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape'){setColumnPickerOpen(false);setFilterColumn(null);setFilterSearch('');setPhotoHover(null)}}
-    document.addEventListener('pointerdown',onPointerDown,true)
-    document.addEventListener('keydown',onKeyDown,true)
-    return()=>{document.removeEventListener('pointerdown',onPointerDown,true);document.removeEventListener('keydown',onKeyDown,true)}
-  },[])
 
   const editCriticality=editing?deriveEquipmentCriticality(editing):''
-  const activeFilterCount=Object.values(columnFilters).filter((value)=>value?.length).length
-  const filteredRows=useMemo(()=>rows.filter((row)=>{if(!includesQuery(row,query.trim().toLocaleLowerCase()))return false;for(const [key,values] of Object.entries(columnFilters) as Array<[ColumnKey,string[]|undefined]>){if(values?.length&&!values.includes(columnValue(row,key)||'—'))return false}return true}),[rows,query,columnFilters])
-  const sortedRows=useMemo(()=>[...filteredRows].sort((a,b)=>{const result=columnValue(a,sortKey).localeCompare(columnValue(b,sortKey),'vi',{numeric:true,sensitivity:'base'});return sortDirection==='asc'?result:-result}),[filteredRows,sortKey,sortDirection])
   const productionCount=rows.filter((row)=>row.equipmentType==='PRODUCTION').length
   const measurementCount=rows.filter((row)=>row.equipmentType==='MEASUREMENT').length
   const profileEquipment=profileId?rows.find((row)=>row.equipmentId===profileId)||null:null
@@ -102,11 +77,6 @@ export function useEquipmentPanelController() {
 
   function openPhotoHover(url:string,name:string,clientX:number,clientY:number){if(!window.matchMedia('(hover: hover) and (pointer: fine)').matches)return;setPhotoHover({url,name,...photoHoverPosition(clientX,clientY)})}
   function openEdit(row:LiveEquipment){setProfileId('');setEditing(toDraft(row))}
-  function toggleSort(key:ColumnKey){if(sortKey===key)setSortDirection((value)=>value==='asc'?'desc':'asc');else{setSortKey(key);setSortDirection('asc')}}
-  function toggleColumn(key:ColumnKey){setVisibleColumns((current)=>current.includes(key)?current.filter((item)=>item!==key):[...current,key])}
-  function filterOptions(key:ColumnKey){return Array.from(new Set(rows.map((row)=>columnValue(row,key)||'—'))).sort((a,b)=>a.localeCompare(b,'vi',{numeric:true,sensitivity:'base'}))}
-  function toggleFilterValue(key:ColumnKey,value:string){setColumnFilters((current)=>{const selected=current[key]||[];const next=selected.includes(value)?selected.filter((item)=>item!==value):[...selected,value];const result={...current,[key]:next};if(!next.length)delete result[key];return result})}
-  function clearFilter(key:ColumnKey){setColumnFilters((current)=>{const next={...current};delete next[key];return next})}
   function setInlineCell(equipment:LiveEquipment,key:ColumnKey,value:string|boolean){const patchKey=patchKeyForColumn(key);if(!patchKey)return;setInlineChanges((current)=>({...current,[equipment.equipmentId]:{...(current[equipment.equipmentId]||{}),[patchKey]:value}}))}
   function exitBulkMode(){if(dirtyCount&&!window.confirm(`Bỏ ${dirtyCount} dòng chưa lưu?`))return;setInlineChanges({});setBulkMode(false)}
   async function saveInlineChanges(){const changes=Object.entries(inlineChanges).map(([equipmentId,patch])=>({equipmentId,patch}));if(!changes.length)return;const before=rows;setBulkSaving(true);setError('');setMessage('');setRows((current)=>current.map((row)=>inlineChanges[row.equipmentId]?mergeInlinePatch(row,inlineChanges[row.equipmentId]):row));try{const result=await bulkUpdateEquipmentRows(changes);setInlineChanges({});setMessage(`Đã lưu ${result.updatedCount} dòng trực tiếp trên bảng.`)}catch(cause){setRows(before);setError(cause instanceof Error?cause.message:'Không thể lưu thay đổi trên bảng.')}finally{setBulkSaving(false)}}
