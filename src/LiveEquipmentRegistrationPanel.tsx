@@ -117,12 +117,9 @@ export function LiveEquipmentRegistrationPanel() {
     return () => { active = false }
   }, [open])
 
-  useEffect(() => {
-    if (!photoFile) { setPhotoPreview(''); return }
-    const url = URL.createObjectURL(photoFile)
-    setPhotoPreview(url)
-    return () => URL.revokeObjectURL(url)
-  }, [photoFile])
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+  }, [photoPreview])
 
   const cloneOptions = useMemo(() => sourceRows.map(cloneOptionLabel), [sourceRows])
 
@@ -147,11 +144,15 @@ export function LiveEquipmentRegistrationPanel() {
 
   const canSubmit = canCreate && !saving && missingRequired.length === 0
 
+  function setPhotoSelection(file: File | null) {
+    setPhotoFile(file)
+    setPhotoPreview(file ? URL.createObjectURL(file) : '')
+  }
+
   function resetForm() {
     setForm(EMPTY)
     setCloneSourceId('')
-    setPhotoFile(null)
-    setPhotoPreview('')
+    setPhotoSelection(null)
   }
 
   function closeDrawer() {
@@ -175,8 +176,7 @@ export function LiveEquipmentRegistrationPanel() {
     if (!source) return
     setCloneSourceId(cloneOptionLabel(source))
     setForm(cloneRegistrationInput(source))
-    setPhotoFile(null)
-    setPhotoPreview('')
+    setPhotoSelection(null)
     setError('')
     setMessage(`Đã sao chép dữ liệu từ ${source.equipmentId}. Mã mới sẽ tự sinh; hãy nhập lại Số sê-ri, ngày và ảnh nếu cần.`)
   }
@@ -191,7 +191,7 @@ export function LiveEquipmentRegistrationPanel() {
     event.preventDefault()
     const file = imageItem.getAsFile()
     if (!file) { setError('Không đọc được ảnh từ bộ nhớ tạm.'); return }
-    setPhotoFile(file)
+    setPhotoSelection(file)
     setError('')
   }
 
@@ -202,7 +202,7 @@ export function LiveEquipmentRegistrationPanel() {
         const imageType = item.types.find((type) => type.startsWith('image/'))
         if (!imageType) continue
         const blob = await item.getType(imageType)
-        setPhotoFile(new File([blob], `clipboard.${clipboardFileExtension(imageType)}`, { type: imageType }))
+        setPhotoSelection(new File([blob], `clipboard.${clipboardFileExtension(imageType)}`, { type: imageType }))
         setError('')
         return
       }
@@ -271,7 +271,7 @@ export function LiveEquipmentRegistrationPanel() {
               <label><span>Ngày đưa vào sử dụng</span><input type="date" value={form.inServiceDate || ''} onChange={(e) => setForm({ ...form, inServiceDate: e.target.value })} /></label>
               <label><span>Bảo hành đến ngày</span><input type="date" value={form.warrantyUntil || ''} onChange={(e) => setForm({ ...form, warrantyUntil: e.target.value })} /></label>
               {textField('warrantyContact','Liên hệ bảo hành','warrantyContact')}{textField('technicalSpecification','Thông số kỹ thuật','technicalSpecification',false,'Chọn thông số đã dùng hoặc nhập thông số mới')}{textField('description','Mô tả / chức năng chính','description')}{textField('note','Ghi chú','note')}{textField('relatedDocuments','Tài liệu liên quan','relatedDocuments')}
-              <label className="wide equipment-register-photo"><span>Ảnh thiết bị</span><div className="equipment-register-photo-box" tabIndex={0} onClick={handlePhotoBoxClick} onPaste={handlePhotoPaste} title="Nhấn để dán ảnh từ clipboard hoặc Ctrl+V">{photoPreview ? <img src={photoPreview} alt="Ảnh thiết bị chuẩn bị đăng ký" /> : <div>Nhấn để dán ảnh · hoặc Ctrl+V</div>}<label className="equipment-register-photo-pick" onClick={(event) => event.stopPropagation()}>📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" onClick={(event) => event.stopPropagation()} onChange={(event) => setPhotoFile(event.currentTarget.files?.[0] || null)} /></label><button type="button" onClick={(event) => { event.stopPropagation(); void pastePhotoFromClipboard() }}>📋 Dán ảnh từ clipboard</button>{photoFile ? <button type="button" onClick={(event) => { event.stopPropagation(); setPhotoFile(null) }}>Bỏ ảnh</button> : null}</div><small>Nhấn vào khung để dán clipboard. Chỉ nút 📷 mới mở cửa sổ chọn ảnh.</small></label>
+              <label className="wide equipment-register-photo"><span>Ảnh thiết bị</span><div className="equipment-register-photo-box" tabIndex={0} onClick={handlePhotoBoxClick} onPaste={handlePhotoPaste} title="Nhấn để dán ảnh từ clipboard hoặc Ctrl+V">{photoPreview ? <img src={photoPreview} alt="Ảnh thiết bị chuẩn bị đăng ký" /> : <div>Nhấn để dán ảnh · hoặc Ctrl+V</div>}<label className="equipment-register-photo-pick" onClick={(event) => event.stopPropagation()}>📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" onClick={(event) => event.stopPropagation()} onChange={(event) => setPhotoSelection(event.currentTarget.files?.[0] || null)} /></label><button type="button" onClick={(event) => { event.stopPropagation(); void pastePhotoFromClipboard() }}>📋 Dán ảnh từ clipboard</button>{photoFile ? <button type="button" onClick={(event) => { event.stopPropagation(); setPhotoSelection(null) }}>Bỏ ảnh</button> : null}</div><small>Nhấn vào khung để dán clipboard. Chỉ nút 📷 mới mở cửa sổ chọn ảnh.</small></label>
               <fieldset className="equipment-criticality-auto"><legend>Mức độ quan trọng thiết bị · hệ thống tự xác định</legend><p>5 câu dưới đây đều bắt buộc để hệ thống tính cấp A/B/C/D.</p><div className="equipment-criticality-questions">
                 <label><span>Thiết bị trực tiếp tạo / kiểm soát đặc tính chất lượng? *</span><select required value={booleanSelectValue(form.controlsProductQuality)} onChange={(e) => setForm({ ...form, controlsProductQuality: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
                 <label><span>Liên quan đặc tính đặc biệt / an toàn sản phẩm? *</span><select required value={booleanSelectValue(form.specialCharacteristicImpact)} onChange={(e) => setForm({ ...form, specialCharacteristicImpact: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
