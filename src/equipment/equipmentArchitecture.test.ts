@@ -13,10 +13,7 @@ function filesUnder(path: string): string[] {
     return statSync(resolve(root, child)).isDirectory() ? filesUnder(child) : [child]
   })
 }
-
-function sourceFiles(path: string) {
-  return filesUnder(path).filter((file) => /\.(ts|tsx|css)$/.test(file))
-}
+function sourceFiles(path: string) { return filesUnder(path).filter((file) => /\.(ts|tsx|css)$/.test(file)) }
 
 describe('Equipment platform architecture', () => {
   it('routes Equipment through the viewport workspace instead of the legacy mixed panel', () => {
@@ -38,14 +35,8 @@ describe('Equipment platform architecture', () => {
   })
 
   it('forbids cross-platform imports anywhere under desktop/mobile', () => {
-    for (const file of sourceFiles('src/equipment/desktop')) {
-      const content = read(file)
-      expect(content, `${file} must not import or reference mobile presentation`).not.toMatch(/(?:from\s+['"][^'"]*\/mobile\/|EquipmentMobile)/)
-    }
-    for (const file of sourceFiles('src/equipment/mobile')) {
-      const content = read(file)
-      expect(content, `${file} must not import or reference desktop presentation`).not.toMatch(/(?:from\s+['"][^'"]*\/desktop\/|EquipmentDesktop)/)
-    }
+    for (const file of sourceFiles('src/equipment/desktop')) expect(read(file), `${file} must not reference mobile presentation`).not.toMatch(/(?:from\s+['"][^'"]*\/mobile\/|EquipmentMobile)/)
+    for (const file of sourceFiles('src/equipment/mobile')) expect(read(file), `${file} must not reference desktop presentation`).not.toMatch(/(?:from\s+['"][^'"]*\/desktop\/|EquipmentDesktop)/)
   })
 
   it('keeps shared code free of platform presentation imports and names', () => {
@@ -56,42 +47,35 @@ describe('Equipment platform architecture', () => {
     }
   })
 
-  it('keeps shared Equipment primitive styles free of viewport page-layout media queries', () => {
+  it('keeps shared primitive styles viewport-neutral', () => {
     for (const file of [
       'src/equipment/shared/styles/EquipmentPrimitives.css',
       'src/equipment/shared/styles/EquipmentSheetPrimitives.css',
       'src/equipment/shared/styles/EquipmentRegistrationPrimitives.css',
-    ]) {
-      const content = read(file)
-      expect(content, `${file} is shared primitive CSS and must not own viewport layout`).not.toMatch(/@media\s*\(/)
-    }
+    ]) expect(read(file), `${file} must not own viewport layout`).not.toMatch(/@media\s*\(/)
   })
 
-  it('makes platform panels consume shared primitives directly instead of root compatibility CSS', () => {
+  it('makes platform panels consume equipment-owned primitives directly', () => {
     for (const file of ['src/equipment/desktop/EquipmentDesktopPanel.tsx', 'src/equipment/mobile/EquipmentMobilePanel.tsx']) {
       const content = read(file)
       expect(content).toContain("../shared/styles/EquipmentPrimitives.css")
       expect(content).toContain("../shared/styles/EquipmentSheetPrimitives.css")
-      expect(content).not.toContain("../../Equipment.css")
-      expect(content).not.toContain("../../EquipmentSheetView.css")
       expect(content).toContain('EquipmentTableHeaderCell')
       expect(content).toContain('EquipmentTableValue')
       expect(content).toContain('EquipmentEditFormContent')
     }
   })
 
-  it('keeps registration on equipment-owned styles instead of root compatibility CSS', () => {
+  it('keeps registration on equipment-owned styles', () => {
     const registration = read('src/LiveEquipmentRegistrationPanel.tsx')
     expect(registration).toContain("./equipment/shared/styles/EquipmentPrimitives.css")
     expect(registration).toContain("./equipment/shared/styles/EquipmentRegistrationPrimitives.css")
-    expect(registration).not.toContain("./Equipment.css")
-    expect(registration).not.toContain("./EquipmentRegistration.css")
   })
 
-  it('keeps root Equipment styles as thin compatibility wrappers only', () => {
-    expect(read('src/Equipment.css')).toContain("@import './equipment/shared/styles/EquipmentPrimitives.css';")
-    expect(read('src/EquipmentSheetView.css')).toContain("@import './equipment/shared/styles/EquipmentSheetPrimitives.css';")
-    expect(read('src/EquipmentRegistration.css')).toContain("@import './equipment/shared/styles/EquipmentRegistrationPrimitives.css';")
+  it('removes retired root Equipment compatibility styles', () => {
+    for (const file of ['src/Equipment.css','src/EquipmentSheetView.css','src/EquipmentRegistration.css']) {
+      expect(existsSync(resolve(root, file)), `${file} must stay deleted`).toBe(false)
+    }
   })
 
   it('keeps the panel controller as an orchestrator of focused shared hooks', () => {
@@ -111,7 +95,7 @@ describe('Equipment platform architecture', () => {
     expect(mobileCss).toContain('.equipment-mobile-filter-fields')
   })
 
-  it('keeps mobile registration to one scroll owner and above the bottom navigation', () => {
+  it('keeps mobile registration to one scroll owner and above bottom navigation', () => {
     const mobileForms = read('src/equipment/mobile/EquipmentMobileForms.css')
     expect(mobileForms).toContain('body:has(.equipment-register-drawer){overflow:hidden}')
     expect(mobileForms).toContain('.equipment-drawer-backdrop:has(.equipment-register-drawer){bottom:calc(64px + env(safe-area-inset-bottom))')
@@ -119,19 +103,13 @@ describe('Equipment platform architecture', () => {
   })
 
   it('uses one explicit 901px platform boundary', () => {
-    const workspace = read('src/equipment/EquipmentWorkspace.tsx')
-    const desktopCss = read('src/equipment/desktop/EquipmentDesktop.css')
-    const mobileCss = read('src/equipment/mobile/EquipmentMobile.css')
-    expect(workspace).toContain('(min-width: 901px)')
-    expect(desktopCss).toContain('(min-width:901px)')
-    expect(mobileCss).toContain('(max-width:900px)')
+    expect(read('src/equipment/EquipmentWorkspace.tsx')).toContain('(min-width: 901px)')
+    expect(read('src/equipment/desktop/EquipmentDesktop.css')).toContain('(min-width:901px)')
+    expect(read('src/equipment/mobile/EquipmentMobile.css')).toContain('(max-width:900px)')
   })
 
   it('documents the same platform contract in project rules', () => {
-    const agents = read('AGENTS.md')
-    const architecture = read('docs/FRONTEND_PLATFORM_ARCHITECTURE.md')
-    const skill = read('.agents/skills/platform-ui-architecture/SKILL.md')
-    for (const content of [agents, architecture, skill]) {
+    for (const content of [read('AGENTS.md'), read('docs/FRONTEND_PLATFORM_ARCHITECTURE.md'), read('.agents/skills/platform-ui-architecture/SKILL.md')]) {
       expect(content).toContain('901px')
       expect(content).toContain('desktop')
       expect(content).toContain('mobile')
