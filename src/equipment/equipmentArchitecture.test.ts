@@ -29,11 +29,9 @@ describe('Equipment platform architecture', () => {
   it('keeps desktop and mobile composition independent', () => {
     const desktop = read('src/equipment/desktop/EquipmentDesktopWorkspace.tsx')
     const mobile = read('src/equipment/mobile/EquipmentMobileWorkspace.tsx')
-
     expect(desktop).toContain('EquipmentDesktopPanel')
     expect(desktop).not.toContain('EquipmentMobile')
     expect(desktop).not.toContain('LiveEquipmentPanel')
-
     expect(mobile).toContain('EquipmentMobilePanel')
     expect(mobile).not.toContain('EquipmentDesktop')
     expect(mobile).not.toContain('LiveEquipmentPanel')
@@ -78,11 +76,25 @@ describe('Equipment platform architecture', () => {
     }
   })
 
+  it('keeps the panel controller as an orchestrator of focused shared hooks', () => {
+    const controller = read('src/equipment/shared/useEquipmentPanelController.ts')
+    for (const hook of ['useEquipmentTableState','useEquipmentPhotos','useEquipmentBulkEdit','useEquipmentEditing']) expect(controller).toContain(hook)
+  })
+
+  it('renders normal mobile equipment as cards while preserving spreadsheet bulk editing', () => {
+    const mobile = read('src/equipment/mobile/EquipmentMobilePanel.tsx')
+    const mobileCss = read('src/equipment/mobile/EquipmentMobile.css')
+    expect(mobile).toContain('equipment-mobile-card-list')
+    expect(mobile).toContain('MobileBulkTable')
+    expect(mobile).toContain('MobileFilterFields')
+    expect(mobileCss).toContain('.equipment-mobile-card')
+    expect(mobileCss).toContain('.equipment-mobile-filter-fields')
+  })
+
   it('uses one explicit 901px platform boundary', () => {
     const workspace = read('src/equipment/EquipmentWorkspace.tsx')
     const desktopCss = read('src/equipment/desktop/EquipmentDesktop.css')
     const mobileCss = read('src/equipment/mobile/EquipmentMobile.css')
-
     expect(workspace).toContain('(min-width: 901px)')
     expect(desktopCss).toContain('(min-width:901px)')
     expect(mobileCss).toContain('(max-width:900px)')
@@ -92,7 +104,6 @@ describe('Equipment platform architecture', () => {
     const agents = read('AGENTS.md')
     const architecture = read('docs/FRONTEND_PLATFORM_ARCHITECTURE.md')
     const skill = read('.agents/skills/platform-ui-architecture/SKILL.md')
-
     for (const content of [agents, architecture, skill]) {
       expect(content).toContain('901px')
       expect(content).toContain('desktop')
