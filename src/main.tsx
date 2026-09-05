@@ -5,12 +5,11 @@ import './EquipmentDelete.css'
 import './EquipmentDrawerScroll.css'
 import './EquipmentUnified.css'
 import './DesktopWorkspace.css'
-import './EquipmentDesktopOptimize.css'
 import './UiHierarchyAudit.css'
-import './EquipmentMobileEdge.css'
 import App from './App'
 import { AppErrorBoundary } from './AppErrorBoundary'
 import { EquipmentRegisterShortcut } from './EquipmentRegisterShortcut'
+import { EquipmentViewportStyles } from './equipment/EquipmentViewportStyles'
 import { installEquipmentWarmup } from './data/equipmentWarmup'
 import { installSpareWarmup } from './data/spareWarmup'
 import { installMaintenanceWarmup } from './data/maintenanceWarmup'
@@ -36,7 +35,7 @@ if (phase3Preview !== 'supabase-test') {
 
 const content = phase3Preview === 'supabase-test'
   ? <Suspense fallback={<div className="workspace-loading" role="status">Đang tải Supabase diagnostics…</div>}><SupabaseTestPanel /></Suspense>
-  : <><App /><EquipmentRegisterShortcut /></>
+  : <><EquipmentViewportStyles /><App /><EquipmentRegisterShortcut /></>
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
