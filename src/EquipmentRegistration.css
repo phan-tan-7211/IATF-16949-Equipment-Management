@@ -1,2 +1,0 @@
-/* Compatibility entrypoint. Shared registration primitives now live with the Equipment module. */
-@import './equipment/shared/styles/EquipmentRegistrationPrimitives.css';
