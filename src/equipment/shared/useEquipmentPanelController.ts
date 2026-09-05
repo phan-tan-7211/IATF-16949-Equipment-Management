@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { canEditEquipment, useAppRole } from '../../auth/AppRoleContext'
 import { buildEquipmentMasterSuggestions } from '../../data/equipmentMasterFields'
-import { loadLiveEquipment, type LiveEquipment } from '../../data/liveEquipment'
-import { getEquipmentCacheSnapshot } from '../../data/supabaseEquipment'
 import { photoHoverPosition } from './equipmentColumns'
 import { useEquipmentBulkEdit } from './useEquipmentBulkEdit'
+import { useEquipmentData } from './useEquipmentData'
 import { useEquipmentEditing } from './useEquipmentEditing'
 import { useEquipmentPhotos } from './useEquipmentPhotos'
 import { useEquipmentTableState } from './useEquipmentTableState'
@@ -26,10 +25,16 @@ export type { ColumnDef, ColumnFilters, ColumnKey, InlineChanges, PhotoHover, Ph
 export function useEquipmentPanelController() {
   const role = useAppRole()
   const canBulkEdit = canEditEquipment(role)
-  const [rows,setRows]=useState<LiveEquipment[]>(()=>getEquipmentCacheSnapshot())
-  const [loading,setLoading]=useState(()=>getEquipmentCacheSnapshot().length===0)
-  const [error,setError]=useState('')
   const [message,setMessage]=useState('')
+
+  const {
+    photos,uploadingId,deletingPhotoId,refreshPhotoStates,removeEquipmentPhotoState,
+    handlePhotoUpload,handlePhotoDelete,handleClipboardUpload,handleEmptyPhotoCellPaste,
+  }=useEquipmentPhotos(setMessage)
+
+  const {
+    rows,setRows,loading,error,setError,reloadEquipment,
+  }=useEquipmentData(refreshPhotoStates)
 
   const {
     query,setQuery,sortKey,sortDirection,
@@ -38,11 +43,6 @@ export function useEquipmentPanelController() {
     photoHover,setPhotoHover,columnPickerRef,activeFilterCount,sortedRows,
     toggleSort,toggleColumn,filterOptions,toggleFilterValue,clearFilter,
   }=useEquipmentTableState(rows)
-
-  const {
-    photos,uploadingId,deletingPhotoId,refreshPhotoStates,removeEquipmentPhotoState,
-    handlePhotoUpload,handlePhotoDelete,handleClipboardUpload,handleEmptyPhotoCellPaste,
-  }=useEquipmentPhotos(setMessage)
 
   const {
     bulkMode,setBulkMode,bulkSaving,inlineChanges,setInlineChanges,dirtyCount,
@@ -55,43 +55,6 @@ export function useEquipmentPanelController() {
   }=useEquipmentEditing({rows,setRows,setMessage,reloadEquipment,removeEquipmentPhotoState})
 
   const masterSuggestions=useMemo(()=>buildEquipmentMasterSuggestions(rows.map((row)=>({...row,department:row.usingDepartment}))),[rows])
-
-  async function reloadEquipment(force=false){
-    const block=force||rows.length===0
-    if(block)setLoading(true)
-    try{
-      const result=await loadLiveEquipment({force})
-      setRows(result)
-      setError('')
-      void refreshPhotoStates(result)
-    }catch(cause){
-      setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')
-    }finally{
-      if(block)setLoading(false)
-    }
-  }
-
-  useEffect(()=>{
-    const snapshot=getEquipmentCacheSnapshot()
-    if(snapshot.length){
-      setRows(snapshot)
-      setLoading(false)
-      void refreshPhotoStates(snapshot)
-      void loadLiveEquipment({force:true}).then((result)=>{
-        setRows(result)
-        setError('')
-        void refreshPhotoStates(result)
-      }).catch(()=>undefined)
-    }else{
-      setLoading(true)
-      void loadLiveEquipment({force:true}).then((result)=>{
-        setRows(result)
-        setError('')
-        void refreshPhotoStates(result)
-      }).catch((cause)=>setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')).finally(()=>setLoading(false))
-    }
-  },[])
-
   const productionCount=rows.filter((row)=>row.equipmentType==='PRODUCTION').length
   const measurementCount=rows.filter((row)=>row.equipmentType==='MEASUREMENT').length
 
