@@ -40,7 +40,7 @@ export function useEquipmentPanelController() {
     query,setQuery,sortKey,sortDirection,
     visibleColumns,setVisibleColumns,columnPickerOpen,setColumnPickerOpen,
     filterColumn,setFilterColumn,filterSearch,setFilterSearch,columnFilters,setColumnFilters,
-    photoHover,setPhotoHover,columnPickerRef,activeFilterCount,sortedRows,
+    photoHover,setPhotoHover,activeFilterCount,sortedRows,
     toggleSort,toggleColumn,filterOptions,toggleFilterValue,clearFilter,
   }=useEquipmentTableState(rows)
 
@@ -67,7 +67,7 @@ export function useEquipmentPanelController() {
     rows, photos, editing, setEditing, profileId, setProfileId, loading, error, message, uploadingId, deletingPhotoId, saving, deleting,
     query, setQuery, sortKey, sortDirection, bulkMode, setBulkMode, bulkSaving, inlineChanges, setInlineChanges,
     visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, filterColumn, setFilterColumn, filterSearch, setFilterSearch,
-    columnFilters, setColumnFilters, photoHover, setPhotoHover, columnPickerRef, masterSuggestions, editCriticality, activeFilterCount,
+    columnFilters, setColumnFilters, photoHover, setPhotoHover, masterSuggestions, editCriticality, activeFilterCount,
     sortedRows, productionCount, measurementCount, profileEquipment, dirtyCount, canBulkEdit,
     reloadEquipment, openPhotoHover, openEdit, toggleSort, toggleColumn, filterOptions, toggleFilterValue, clearFilter, setInlineCell,
     exitBulkMode, saveInlineChanges, handleSave, handleDelete, handlePhotoUpload, handlePhotoDelete, handleClipboardUpload, handleEmptyPhotoCellPaste,
