@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ClipboardEvent, FormEvent } from 'react'
+import type { ClipboardEvent, FormEvent, MouseEvent } from 'react'
 import './EquipmentRegistration.css'
 import { useAppRole } from './auth/AppRoleContext'
 import { SmartAutocomplete } from './components/SmartAutocomplete'
@@ -152,6 +152,14 @@ export function LiveEquipmentRegistrationPanel() {
     }
   }
 
+  function handlePhotoBoxClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement
+    if (target.closest('button,.equipment-register-photo-pick,input')) return
+    event.preventDefault()
+    event.stopPropagation()
+    void pastePhotoFromClipboard()
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!canCreate || !canonical.equipmentName?.trim() || !canonical.managementResponsiblePrimary?.trim() || !criticality) return
@@ -189,7 +197,7 @@ export function LiveEquipmentRegistrationPanel() {
       <label><span>Ngày đưa vào sử dụng</span><input type="date" value={form.inServiceDate || ''} onChange={(e) => setForm({ ...form, inServiceDate: e.target.value })} /></label>
       <label><span>Bảo hành đến ngày</span><input type="date" value={form.warrantyUntil || ''} onChange={(e) => setForm({ ...form, warrantyUntil: e.target.value })} /></label>
       {textField('warrantyContact','Liên hệ bảo hành','warrantyContact')}{textField('technicalSpecification','Thông số kỹ thuật','technicalSpecification',false,'Chọn thông số đã dùng hoặc nhập thông số mới')}{textField('description','Mô tả / chức năng chính','description')}{textField('note','Ghi chú','note')}{textField('relatedDocuments','Tài liệu liên quan','relatedDocuments')}
-      <label className="equipment-register-photo"><span>Ảnh thiết bị</span><div className="equipment-register-photo-box" tabIndex={0} onPaste={handlePhotoPaste} title="Có thể Ctrl+V ảnh trực tiếp vào đây">{photoPreview ? <img src={photoPreview} alt="Ảnh thiết bị chuẩn bị đăng ký" /> : <div>Chưa chọn ảnh · có thể Ctrl+V</div>}<label className="equipment-register-photo-pick">📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.currentTarget.files?.[0] || null)} /></label><button type="button" onClick={() => void pastePhotoFromClipboard()}>📋 Dán ảnh từ clipboard</button>{photoFile ? <button type="button" onClick={() => setPhotoFile(null)}>Bỏ ảnh</button> : null}</div><small>1 thiết bị = 1 ảnh · chọn file hoặc dán trực tiếp từ clipboard bằng Ctrl+V.</small></label>
+      <label className="equipment-register-photo"><span>Ảnh thiết bị</span><div className="equipment-register-photo-box" tabIndex={0} onClick={handlePhotoBoxClick} onPaste={handlePhotoPaste} title="Nhấn để dán ảnh từ clipboard hoặc Ctrl+V">{photoPreview ? <img src={photoPreview} alt="Ảnh thiết bị chuẩn bị đăng ký" /> : <div>Nhấn để dán ảnh · hoặc Ctrl+V</div>}<label className="equipment-register-photo-pick" onClick={(event) => event.stopPropagation()}>📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" onClick={(event) => event.stopPropagation()} onChange={(event) => setPhotoFile(event.currentTarget.files?.[0] || null)} /></label><button type="button" onClick={(event) => { event.stopPropagation(); void pastePhotoFromClipboard() }}>📋 Dán ảnh từ clipboard</button>{photoFile ? <button type="button" onClick={(event) => { event.stopPropagation(); setPhotoFile(null) }}>Bỏ ảnh</button> : null}</div><small>Nhấn vào khung để dán từ clipboard. Chỉ nút 📷 mới mở cửa sổ chọn ảnh.</small></label>
       <fieldset className="equipment-criticality-auto"><legend>Mức độ quan trọng thiết bị · hệ thống tự xác định</legend><p>Tạo mới và chỉnh sửa dùng cùng quy tắc CEV-ABCD-V2.</p><div className="equipment-criticality-questions">
         <label><span>Thiết bị trực tiếp tạo / kiểm soát đặc tính chất lượng?</span><select required value={booleanSelectValue(form.controlsProductQuality)} onChange={(e) => setForm({ ...form, controlsProductQuality: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
         <label><span>Liên quan đặc tính đặc biệt / an toàn sản phẩm?</span><select required value={booleanSelectValue(form.specialCharacteristicImpact)} onChange={(e) => setForm({ ...form, specialCharacteristicImpact: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
