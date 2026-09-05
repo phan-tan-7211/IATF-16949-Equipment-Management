@@ -1,14 +1,19 @@
-/* Mobile-only Equipment form/drawer layout. */
+/* Mobile/tablet-only Equipment form/drawer layout. Scoped to the mobile renderer. */
 @media (max-width:900px){
-  .equipment-system-fields,.equipment-edit-criticality-grid{grid-template-columns:1fr}
-  .equipment-register-photo-box{align-items:flex-start;flex-wrap:wrap}
-  .equipment-edit-grid{grid-template-columns:1fr;gap:12px;padding:16px 14px}.equipment-edit-grid>label.equipment-edit-wide{grid-column:auto}.equipment-edit-criticality{margin:0 14px 18px}.equipment-form-grid-full .wide{grid-column:auto}
+  .equipment-mobile-workspace .equipment-system-fields,.equipment-mobile-workspace .equipment-edit-criticality-grid{grid-template-columns:1fr}
+  .equipment-mobile-workspace .equipment-register-photo-box{align-items:flex-start;flex-wrap:wrap}
+  .equipment-mobile-workspace .equipment-edit-grid{grid-template-columns:1fr;gap:12px;padding:16px 14px}
+  .equipment-mobile-workspace .equipment-edit-grid>label.equipment-edit-wide{grid-column:auto}
+  .equipment-mobile-workspace .equipment-edit-criticality{margin:0 14px 18px}
+  .equipment-mobile-workspace .equipment-form-grid-full .wide{grid-column:auto}
 }
 @media (max-width:640px){
-  .equipment-register-form{grid-template-columns:1fr;padding:12px}
-  .equipment-register-form label.wide,.equipment-register-photo,.equipment-criticality-auto,.equipment-register-outcomes{grid-column:auto}
-  .equipment-register-outcomes{grid-template-columns:1fr}
-  .equipment-register-photo-box>img,.equipment-register-photo-box>div:first-child{width:100%;height:115px;max-height:115px}
-  .equipment-register-footer{padding:10px 12px!important}.equipment-register-footer-actions{display:grid;grid-template-columns:1fr 1fr}.equipment-register-footer-actions button{width:100%}
-  .equipment-register-toast{left:12px;right:12px;top:12px}
+  .equipment-mobile-workspace .equipment-register-form{grid-template-columns:1fr;padding:12px}
+  .equipment-mobile-workspace .equipment-register-form label.wide,.equipment-mobile-workspace .equipment-register-photo,.equipment-mobile-workspace .equipment-criticality-auto,.equipment-mobile-workspace .equipment-register-outcomes{grid-column:auto}
+  .equipment-mobile-workspace .equipment-register-outcomes{grid-template-columns:1fr}
+  .equipment-mobile-workspace .equipment-register-photo-box>img,.equipment-mobile-workspace .equipment-register-photo-box>div:first-child{width:100%;height:115px;max-height:115px}
+  .equipment-mobile-workspace .equipment-register-footer{padding:10px 12px!important}
+  .equipment-mobile-workspace .equipment-register-footer-actions{display:grid;grid-template-columns:1fr 1fr}
+  .equipment-mobile-workspace .equipment-register-footer-actions button{width:100%}
+  .equipment-mobile-workspace .equipment-register-toast{left:12px;right:12px;top:12px}
 }
