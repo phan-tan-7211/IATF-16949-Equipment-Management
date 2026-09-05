@@ -1,9 +1,9 @@
 import './EquipmentDesktop.css'
 import './EquipmentDesktopSheet.css'
 import { LiveEquipmentRegistrationPanel } from '../../LiveEquipmentRegistrationPanel'
-import { LiveEquipmentPanel } from '../../LiveEquipmentPanel'
+import { EquipmentDesktopPanel } from './EquipmentDesktopPanel'
 
-/** Desktop Equipment composition. Mobile composition must not be added here. */
+/** Desktop Equipment composition. Mobile UI must never be imported here. */
 export function EquipmentDesktopWorkspace() {
-  return <div className="maintenance-workspace-stack equipment-desktop-workspace"><LiveEquipmentRegistrationPanel/><LiveEquipmentPanel/></div>
+  return <div className="maintenance-workspace-stack equipment-desktop-workspace"><LiveEquipmentRegistrationPanel/><EquipmentDesktopPanel/></div>
 }
