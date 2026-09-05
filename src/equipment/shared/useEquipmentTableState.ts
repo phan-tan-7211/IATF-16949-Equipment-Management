@@ -33,7 +33,7 @@ export function useEquipmentTableState(rows: LiveEquipment[]) {
       const target = event.target
       if (!(target instanceof Node)) return
       if (columnPickerRef.current && !columnPickerRef.current.contains(target)) setColumnPickerOpen(false)
-      if (!(target instanceof Element) || !target.closest('.equipment-filter-popover,.equipment-filter-button')) {
+      if (!(target instanceof Element) || !target.closest('.equipment-filter-popover,.equipment-filter-button,.equipment-mobile-filter-field,.equipment-mobile-filter-panel')) {
         setFilterColumn(null)
         setFilterSearch('')
       }
