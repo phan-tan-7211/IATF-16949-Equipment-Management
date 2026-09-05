@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ClipboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react'
 import './Equipment.css'
 import './EquipmentSheetView.css'
 import { EquipmentProfile } from './EquipmentProfile'
@@ -33,12 +33,10 @@ type InlineChanges = Record<string, EquipmentRowPatch>
 
 const COLUMN_STORAGE_KEY = 'cev-equipment-visible-columns-v5'
 const COLUMNS: ColumnDef[] = [
-  // Mặc định chỉ hiện các cột cốt lõi để nhận diện + trách nhiệm + vị trí.
   { key:'equipmentId',label:'Mã thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentName',label:'Tên thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentType',label:'Loại thiết bị',defaultVisible:true,group:'Nhận diện' },
   { key:'equipmentCategory',label:'Nhóm thiết bị',group:'Nhận diện' },
-
   { key:'managingDepartment',label:'Bộ phận quản lý',defaultVisible:true,group:'Quản lý' },
   { key:'managementResponsiblePrimary',label:'Người QL chính',defaultVisible:true,group:'Quản lý' },
   { key:'managementResponsibleSecondary',label:'Người QL phụ',defaultVisible:true,group:'Quản lý' },
@@ -47,12 +45,10 @@ const COLUMNS: ColumnDef[] = [
   { key:'currentLine',label:'Dây chuyền',defaultVisible:true,group:'Quản lý' },
   { key:'status',label:'Trạng thái',defaultVisible:true,group:'Quản lý' },
   { key:'defaultLabelSize',label:'Khổ tem mặc định',group:'Quản lý' },
-
   { key:'manufacturer',label:'Hãng / nhà sản xuất',group:'Nhận diện' },
   { key:'distributor',label:'Nhà phân phối',group:'Nhận diện' },
   { key:'model',label:'Mẫu máy',group:'Nhận diện' },
   { key:'serialNumber',label:'Số sê-ri',group:'Nhận diện' },
-
   { key:'technicalSpecification',label:'Thông số kỹ thuật',group:'Kỹ thuật' },
   { key:'description',label:'Mô tả / chức năng',group:'Kỹ thuật' },
   { key:'accuracy',label:'Độ chính xác',group:'Kỹ thuật' },
@@ -62,7 +58,6 @@ const COLUMNS: ColumnDef[] = [
   { key:'stopsProduction',label:'Mất máy gây dừng SX',group:'Kỹ thuật' },
   { key:'hasBackup',label:'Có thiết bị dự phòng',group:'Kỹ thuật' },
   { key:'capacityImpact',label:'Ảnh hưởng sản lượng / giao hàng',group:'Kỹ thuật' },
-
   { key:'origin',label:'Xuất xứ',group:'Vòng đời' },
   { key:'manufactureDate',label:'Ngày sản xuất',group:'Vòng đời' },
   { key:'inServiceDate',label:'Ngày đưa vào sử dụng',group:'Vòng đời' },
@@ -198,6 +193,7 @@ export function LiveEquipmentPanel() {
   const [loading,setLoading]=useState(()=>getEquipmentCacheSnapshot().length===0); const [error,setError]=useState(''); const [message,setMessage]=useState(''); const [uploadingId,setUploadingId]=useState(''); const [deletingPhotoId,setDeletingPhotoId]=useState(''); const [saving,setSaving]=useState(false); const [deleting,setDeleting]=useState(false)
   const [query,setQuery]=useState(''); const [sortKey,setSortKey]=useState<ColumnKey>('equipmentId'); const [sortDirection,setSortDirection]=useState<SortDirection>('asc'); const [bulkMode,setBulkMode]=useState(false); const [bulkSaving,setBulkSaving]=useState(false); const [inlineChanges,setInlineChanges]=useState<InlineChanges>({})
   const [visibleColumns,setVisibleColumns]=useState<ColumnKey[]>(loadVisibleColumns); const [columnPickerOpen,setColumnPickerOpen]=useState(false); const [filterColumn,setFilterColumn]=useState<ColumnKey|null>(null); const [filterSearch,setFilterSearch]=useState(''); const [columnFilters,setColumnFilters]=useState<ColumnFilters>({})
+  const columnPickerRef=useRef<HTMLDivElement|null>(null)
 
   const masterSuggestions=useMemo(()=>buildEquipmentMasterSuggestions(rows.map((row)=>({...row,department:row.usingDepartment}))),[rows])
   useEffect(()=>{ localStorage.setItem(COLUMN_STORAGE_KEY,JSON.stringify(visibleColumns)) },[visibleColumns])
@@ -207,8 +203,18 @@ export function LiveEquipmentPanel() {
   async function reloadEquipment(force=false){const block=force||rows.length===0;if(block)setLoading(true);try{const result=await loadLiveEquipment({force});setRows(result);setError('');void refreshPhotoStates(result)}catch(cause){setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')}finally{if(block)setLoading(false)}}
   useEffect(()=>{const snapshot=getEquipmentCacheSnapshot();if(snapshot.length){setRows(snapshot);setLoading(false);void refreshPhotoStates(snapshot);void loadLiveEquipment({force:true}).then((result)=>{setRows(result);setError('');void refreshPhotoStates(result)}).catch(()=>undefined)}else{setLoading(true);void loadLiveEquipment({force:true}).then((result)=>{setRows(result);setError('');void refreshPhotoStates(result)}).catch((cause)=>setError(cause instanceof Error?cause.message:'Không thể tải danh mục thiết bị')).finally(()=>setLoading(false))}},[])
   useEffect(()=>{if(!editing)return;const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape')setEditing(null)};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown)},[editing])
-  useEffect(()=>{if(!columnPickerOpen)return;const closePicker=()=>setColumnPickerOpen(false);const onPointerDown=(event:PointerEvent)=>{const target=event.target;if(target instanceof Element&&target.closest('.equipment-column-picker'))return;closePicker()};const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape')closePicker()};document.addEventListener('pointerdown',onPointerDown);window.addEventListener('keydown',onKeyDown);return()=>{document.removeEventListener('pointerdown',onPointerDown);window.removeEventListener('keydown',onKeyDown)}},[columnPickerOpen])
-  useEffect(()=>{if(!filterColumn)return;const closeFilter=()=>{setFilterColumn(null);setFilterSearch('')};const onPointerDown=(event:PointerEvent)=>{const target=event.target;if(target instanceof Element&&target.closest('.equipment-filter-popover,.equipment-filter-button'))return;closeFilter()};const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape')closeFilter()};document.addEventListener('pointerdown',onPointerDown);window.addEventListener('keydown',onKeyDown);return()=>{document.removeEventListener('pointerdown',onPointerDown);window.removeEventListener('keydown',onKeyDown)}},[filterColumn])
+  useEffect(()=>{
+    const onPointerDown=(event:PointerEvent)=>{
+      const target=event.target
+      if(!(target instanceof Node))return
+      if(columnPickerRef.current&&!columnPickerRef.current.contains(target))setColumnPickerOpen(false)
+      if(!(target instanceof Element)||!target.closest('.equipment-filter-popover,.equipment-filter-button')){setFilterColumn(null);setFilterSearch('')}
+    }
+    const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape'){setColumnPickerOpen(false);setFilterColumn(null);setFilterSearch('')}}
+    document.addEventListener('pointerdown',onPointerDown,true)
+    document.addEventListener('keydown',onKeyDown,true)
+    return()=>{document.removeEventListener('pointerdown',onPointerDown,true);document.removeEventListener('keydown',onKeyDown,true)}
+  },[])
   const editCriticality=editing?deriveEquipmentCriticality(editing):''
 
   async function handleSave(){if(!editing)return;if(!editing.equipmentName.trim()){setMessage('Tên thiết bị không được để trống.');return}if(!editing.managementResponsiblePrimary?.trim()){setMessage('Người phụ trách quản lý chính không được để trống.');return}if(!editCriticality){setMessage('Trả lời đủ 5 câu về mức độ quan trọng trước khi lưu.');return}setSaving(true);setMessage('');const draft=editing;try{const result=await updateEquipmentDetails(draft);setRows((current)=>current.map((row)=>mergeDraftIntoRow(row,draft,result.criticality)));setMessage(`Đã lưu ${result.equipmentId} · Cấp ${result.criticality}`);setEditing(null)}catch(cause){setMessage(cause instanceof Error?cause.message:'Không thể lưu thay đổi')}finally{setSaving(false)}}
@@ -243,7 +249,7 @@ export function LiveEquipmentPanel() {
     <section className="equipment-summary" aria-label="Tổng quan thiết bị"><article><span>Tổng thiết bị</span><strong>{rows.length}</strong></article><article><span>Thiết bị sản xuất</span><strong>{productionCount}</strong></article><article><span>Thiết bị đo kiểm</span><strong>{measurementCount}</strong></article></section>
     <section className="equipment-surface" aria-labelledby="equipment-title">
       <header className="equipment-page-header"><div><p className="eyebrow">Danh mục thiết bị</p><h2 id="equipment-title">Danh sách thiết bị</h2><p>{sortedRows.length} / {rows.length} thiết bị · toàn bộ trường master đều có thể bật cột và lọc</p></div><div className="equipment-page-actions">{canBulkEdit?<button className={`equipment-bulk-mode-toggle${bulkMode?' active':''}`} type="button" onClick={()=>bulkMode?exitBulkMode():setBulkMode(true)}>{bulkMode?'Thoát sửa trực tiếp':'Sửa hàng loạt'}</button>:null}<button className="equipment-refresh" type="button" onClick={()=>void reloadEquipment(true)} disabled={loading||bulkSaving}>Làm mới</button></div></header>
-      <div className="equipment-toolbar" role="search"><label className="equipment-search"><span className="sr-only">Tìm thiết bị</span><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Tìm trên toàn bộ dữ liệu thiết bị…"/></label><div className="equipment-sheet-tools"><div className="equipment-column-picker"><button className={columnPickerOpen?'active':''} type="button" aria-expanded={columnPickerOpen} onClick={()=>{setFilterColumn(null);setFilterSearch('');setColumnPickerOpen((value)=>!value)}}>Cột hiển thị · {visibleColumns.length}/{COLUMNS.length}</button>{columnPickerOpen?<div className="equipment-column-menu"><header><strong>Ẩn / hiện cột</strong><div><button type="button" onClick={()=>setVisibleColumns(COLUMNS.map((column)=>column.key))}>Hiện tất cả</button><button type="button" onClick={()=>setVisibleColumns(defaultVisibleColumns())}>Mặc định</button></div></header>{(['Nhận diện','Quản lý','Kỹ thuật','Vòng đời','Tài liệu','Hệ thống'] as const).map((group)=><div key={group}><small>{group}</small>{COLUMNS.filter((column)=>column.group===group).map((column)=><label key={column.key}><input type="checkbox" checked={visibleColumns.includes(column.key)} onChange={()=>toggleColumn(column.key)}/><span>{column.label}</span></label>)}</div>)}</div>:null}</div><button type="button" className={activeFilterCount?'active':''} onClick={()=>setColumnFilters({})}>Bỏ toàn bộ lọc{activeFilterCount?` · ${activeFilterCount}`:''}</button></div></div>
+      <div className="equipment-toolbar" role="search"><label className="equipment-search"><span className="sr-only">Tìm thiết bị</span><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Tìm trên toàn bộ dữ liệu thiết bị…"/></label><div className="equipment-sheet-tools"><div className="equipment-column-picker" ref={columnPickerRef}><button className={columnPickerOpen?'active':''} type="button" aria-expanded={columnPickerOpen} onClick={()=>{setFilterColumn(null);setFilterSearch('');setColumnPickerOpen((value)=>!value)}}>Cột hiển thị · {visibleColumns.length}/{COLUMNS.length}</button>{columnPickerOpen?<div className="equipment-column-menu"><header><strong>Ẩn / hiện cột</strong><div><button type="button" onClick={()=>setVisibleColumns(COLUMNS.map((column)=>column.key))}>Hiện tất cả</button><button type="button" onClick={()=>setVisibleColumns(defaultVisibleColumns())}>Mặc định</button></div></header>{(['Nhận diện','Quản lý','Kỹ thuật','Vòng đời','Tài liệu','Hệ thống'] as const).map((group)=><div key={group}><small>{group}</small>{COLUMNS.filter((column)=>column.group===group).map((column)=><label key={column.key}><input type="checkbox" checked={visibleColumns.includes(column.key)} onChange={()=>toggleColumn(column.key)}/><span>{column.label}</span></label>)}</div>)}</div>:null}</div><button type="button" className={activeFilterCount?'active':''} onClick={()=>setColumnFilters({})}>Bỏ toàn bộ lọc{activeFilterCount?` · ${activeFilterCount}`:''}</button></div></div>
       {bulkMode&&canBulkEdit?<div className="equipment-spreadsheet-bar"><div className="equipment-spreadsheet-copy"><strong>Chế độ sửa như Excel · {dirtyCount} dòng đã thay đổi</strong><span>Gõ trực tiếp trong ô · Tab/Shift+Tab để chuyển ô · Cấp A/B/C/D tự tính từ 5 câu kỹ thuật.</span></div><div className="equipment-spreadsheet-actions"><button type="button" onClick={()=>setInlineChanges({})} disabled={!dirtyCount||bulkSaving}>Hoàn tác chưa lưu</button><button className="save" type="button" onClick={()=>void saveInlineChanges()} disabled={!dirtyCount||bulkSaving}>{bulkSaving?'Đang lưu…':`Lưu ${dirtyCount} dòng`}</button><button type="button" onClick={exitBulkMode} disabled={bulkSaving}>Thoát</button></div></div>:null}
       {message?<div className="equipment-feedback" role="status">{message}</div>:null}{error?<div className="equipment-state error" role="alert">{error}</div>:null}{loading&&rows.length===0?<div className="equipment-state">Đang tải danh mục thiết bị…</div>:null}
       {rows.length>0?<div className="equipment-table-scroll"><table className={`equipment-data-table${bulkMode?' spreadsheet-mode':''}`}><caption className="sr-only">Danh sách thiết bị</caption><thead><tr><th>Ảnh</th>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map(renderHeader)}<th aria-label="Thao tác"/></tr></thead><tbody>{sortedRows.map((equipment)=>{const photo=photos[equipment.equipmentId]||{state:'loading',url:''};const pasteReady=photo.state==='no';const dirty=Boolean(inlineChanges[equipment.equipmentId]);return <tr key={equipment.equipmentId} className={dirty?'is-dirty':''}><td className={`equipment-image-col${pasteReady?' paste-ready':''}`} tabIndex={pasteReady?0:undefined} title={pasteReady?'Chọn ô ảnh rồi nhấn Ctrl+V để dán ảnh':'Mở hồ sơ thiết bị'} onPaste={pasteReady?(event)=>void handleEmptyPhotoCellPaste(equipment.equipmentId,event):undefined}>{photo.state==='yes'&&photo.url?<button className="equipment-image-button" type="button" onClick={()=>setProfileId(equipment.equipmentId)}><img src={photo.url} alt={equipment.equipmentName}/></button>:photo.state==='loading'?<span className="equipment-photo-state">…</span>:<button className="equipment-photo-empty" type="button" onClick={()=>setProfileId(equipment.equipmentId)}>Chưa có ảnh</button>}</td>{COLUMNS.filter((column)=>visibleColumns.includes(column.key)).map((column)=><td key={column.key}>{renderCell(equipment,column)}</td>)}<td>{bulkMode?<span className={dirty?'equipment-inline-dirty-dot':'equipment-cell-muted'}>{dirty?'Đã sửa':'—'}</span>:<button className="equipment-edit-row" type="button" onClick={()=>openEdit(equipment)}>Sửa</button>}</td></tr>})}</tbody></table></div>:null}
