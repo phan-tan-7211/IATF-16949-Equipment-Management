@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest run --exclude 'tests/browser/**'",
+    "test:architecture": "vitest run src/equipment/equipmentArchitecture.test.ts",
     "test:browser": "playwright test",
     "lint": "oxlint",
     "preview": "vite preview"
