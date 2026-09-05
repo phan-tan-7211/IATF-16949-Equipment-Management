@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ClipboardEvent, FormEvent } from 'react'
 import './EquipmentRegistration.css'
 import { useAppRole } from './auth/AppRoleContext'
 import { SmartAutocomplete } from './components/SmartAutocomplete'
@@ -18,6 +18,7 @@ const EMPTY: EquipmentRegistrationInput = {
 
 function booleanSelectValue(value: boolean | undefined) { return value === true ? 'YES' : value === false ? 'NO' : '' }
 function parseBooleanSelect(value: string) { return value === 'YES' ? true : value === 'NO' ? false : undefined }
+function clipboardFileExtension(mimeType: string) { if (mimeType === 'image/png') return 'png'; if (mimeType === 'image/webp') return 'webp'; if (mimeType === 'image/gif') return 'gif'; return 'jpg' }
 
 function refreshEquipmentMasterAfterCreate() {
   requestAnimationFrame(() => {
@@ -68,6 +69,33 @@ export function LiveEquipmentRegistrationPanel() {
     return <label className={wide ? 'wide' : undefined}><span>{label}</span>{suggestionKey ? <SmartAutocomplete required={required} value={String(form[key] || '')} options={suggestions[suggestionKey]} onChange={(nextValue) => setForm({ ...form, [key]: nextValue })} onBlur={() => setForm((current) => ({ ...current, [key]: canonicalizeMasterValue(String(current[key] || ''), suggestions[suggestionKey]) }))} placeholder={placeholder} /> : <input required={required} value={String(form[key] || '')} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={placeholder} />}</label>
   }
 
+  function handlePhotoPaste(event: ClipboardEvent<HTMLElement>) {
+    const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/'))
+    if (!imageItem) return
+    event.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file) { setError('Không đọc được ảnh từ bộ nhớ tạm.'); return }
+    setPhotoFile(file)
+    setError('')
+  }
+
+  async function pastePhotoFromClipboard() {
+    if (!navigator.clipboard?.read) { setError('Trình duyệt không hỗ trợ đọc ảnh trực tiếp từ bộ nhớ tạm. Hãy nhấn Ctrl+V vào khung ảnh.'); return }
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const imageType = item.types.find((type) => type.startsWith('image/'))
+        if (!imageType) continue
+        const blob = await item.getType(imageType)
+        setPhotoFile(new File([blob], `clipboard.${clipboardFileExtension(imageType)}`, { type: imageType }))
+        setError('')
+        return
+      }
+      setError('Bộ nhớ tạm không có ảnh.')
+    } catch (cause) {
+      setError(cause instanceof Error ? `Không thể đọc ảnh từ bộ nhớ tạm: ${cause.message}` : 'Không thể đọc ảnh từ bộ nhớ tạm.')
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!canCreate || !canonical.equipmentName?.trim() || !canonical.managementResponsiblePrimary?.trim() || !criticality) return
@@ -107,7 +135,7 @@ export function LiveEquipmentRegistrationPanel() {
       {textField('warrantyContact','Liên hệ bảo hành','warrantyContact')}
       {textField('technicalSpecification','Thông số kỹ thuật','technicalSpecification',true,'Chọn thông số đã dùng hoặc nhập thông số mới')}
       {textField('description','Mô tả / chức năng chính','description',true)}{textField('note','Ghi chú','note',true)}{textField('relatedDocuments','Tài liệu liên quan','relatedDocuments',true)}
-      <label className="wide equipment-register-photo"><span>Ảnh thiết bị</span><div className="equipment-register-photo-box">{photoPreview ? <img src={photoPreview} alt="Ảnh thiết bị chuẩn bị đăng ký" /> : <div>Chưa chọn ảnh</div>}<label className="equipment-register-photo-pick">📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.currentTarget.files?.[0] || null)} /></label>{photoFile ? <button type="button" onClick={() => setPhotoFile(null)}>Bỏ ảnh</button> : null}</div><small>1 thiết bị = 1 ảnh. Ảnh tự co vừa khung, không cắt xén.</small></label>
+      <label className="wide equipment-register-photo"><span>Ảnh thiết bị</span><div className="equipment-register-photo-box" tabIndex={0} onPaste={handlePhotoPaste} title="Có thể Ctrl+V ảnh trực tiếp vào đây">{photoPreview ? <img src={photoPreview} alt="Ảnh thiết bị chuẩn bị đăng ký" /> : <div>Chưa chọn ảnh · có thể Ctrl+V</div>}<label className="equipment-register-photo-pick">📷 Chụp / chọn ảnh<input type="file" accept="image/*" capture="environment" onChange={(event) => setPhotoFile(event.currentTarget.files?.[0] || null)} /></label><button type="button" onClick={() => void pastePhotoFromClipboard()}>📋 Dán ảnh từ clipboard</button>{photoFile ? <button type="button" onClick={() => setPhotoFile(null)}>Bỏ ảnh</button> : null}</div><small>1 thiết bị = 1 ảnh · chọn file hoặc dán trực tiếp từ clipboard bằng Ctrl+V.</small></label>
       <fieldset className="equipment-criticality-auto"><legend>Mức độ quan trọng thiết bị · hệ thống tự xác định</legend><p>Tạo mới và chỉnh sửa dùng cùng quy tắc CEV-ABCD-V2.</p><div className="equipment-criticality-questions">
         <label><span>Thiết bị trực tiếp tạo / kiểm soát đặc tính chất lượng?</span><select required value={booleanSelectValue(form.controlsProductQuality)} onChange={(e) => setForm({ ...form, controlsProductQuality: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
         <label><span>Liên quan đặc tính đặc biệt / an toàn sản phẩm?</span><select required value={booleanSelectValue(form.specialCharacteristicImpact)} onChange={(e) => setForm({ ...form, specialCharacteristicImpact: parseBooleanSelect(e.target.value) })}><option value="">Chọn…</option><option value="YES">Có</option><option value="NO">Không</option></select></label>
