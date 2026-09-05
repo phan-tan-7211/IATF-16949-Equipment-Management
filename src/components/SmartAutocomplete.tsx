@@ -83,11 +83,6 @@ export function SmartAutocomplete({
     }
   }, [open, updatePlacement])
 
-  useEffect(() => {
-    setActiveIndex(-1)
-    if (open) requestAnimationFrame(updatePlacement)
-  }, [open, updatePlacement, value])
-
   function selectOption(option: string) {
     onChange(option)
     setOpen(false)
@@ -138,10 +133,12 @@ export function SmartAutocomplete({
       aria-activedescendant={showMenu && activeIndex >= 0 ? `${menuId}-${activeIndex}` : undefined}
       onFocus={(event) => {
         inputProps.onFocus?.(event)
+        setActiveIndex(-1)
         setOpen(true)
         requestAnimationFrame(updatePlacement)
       }}
       onChange={(event) => {
+        setActiveIndex(-1)
         onChange(event.target.value)
         setOpen(true)
       }}
