@@ -45,7 +45,7 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
   }, [value.equipmentId])
 
   const mergedSuggestions = useMemo<EquipmentMasterSuggestions>(() => {
-    const context = { managingDepartment: value.managingDepartment, usingDepartment: value.department }
+    const context = { managingDepartment: value.managingDepartment }
     const orgDepartments = getOrgAutocompleteOptions('managingDepartment', context)
     const orgPrimaryPeople = getOrgAutocompleteOptions('managementResponsiblePrimary', context)
     const orgSecondaryPeople = getOrgAutocompleteOptions('managementResponsibleSecondary', context)
@@ -53,14 +53,13 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
     const orgLines = getOrgAutocompleteOptions('currentLine', context)
     return {
       ...suggestions,
-      department: orgDepartments.length ? orgDepartments : suggestions.department,
       managingDepartment: orgDepartments.length ? orgDepartments : suggestions.managingDepartment,
       managementResponsiblePrimary: orgPrimaryPeople.length ? orgPrimaryPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsiblePrimary,
       managementResponsibleSecondary: orgSecondaryPeople.length ? orgSecondaryPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsibleSecondary,
       currentArea: orgAreas.length ? orgAreas : suggestions.currentArea,
       currentLine: orgLines.length ? orgLines : suggestions.currentLine,
     }
-  }, [responsibleSuggestions, suggestions, value.department, value.managingDepartment])
+  }, [responsibleSuggestions, suggestions, value.managingDepartment])
 
   function setField<K extends keyof EquipmentMasterEditInput>(key: K, nextValue: EquipmentMasterEditInput[K]) {
     onChange({ ...value, [key]: nextValue })
@@ -78,7 +77,6 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
     {textField('distributor','Nhà phân phối','distributor')}
     {textField('model','Mẫu máy','model')}
     {textField('serialNumber','Số sê-ri')}
-    {textField('department','Bộ phận sử dụng','department')}
     {textField('managingDepartment','Bộ phận quản lý','managingDepartment')}
     {textField('managementResponsiblePrimary','Người phụ trách quản lý · Chính *','managementResponsiblePrimary',false,true)}
     {textField('managementResponsibleSecondary','Người phụ trách quản lý · Phụ','managementResponsibleSecondary')}
