@@ -9,7 +9,6 @@ import './UiHierarchyAudit.css'
 import App from './App'
 import { AppErrorBoundary } from './AppErrorBoundary'
 import { EquipmentRegisterShortcut } from './EquipmentRegisterShortcut'
-import { EquipmentViewportStyles } from './equipment/EquipmentViewportStyles'
 import { installEquipmentWarmup } from './data/equipmentWarmup'
 import { installSpareWarmup } from './data/spareWarmup'
 import { installMaintenanceWarmup } from './data/maintenanceWarmup'
@@ -35,7 +34,7 @@ if (phase3Preview !== 'supabase-test') {
 
 const content = phase3Preview === 'supabase-test'
   ? <Suspense fallback={<div className="workspace-loading" role="status">Đang tải Supabase diagnostics…</div>}><SupabaseTestPanel /></Suspense>
-  : <><EquipmentViewportStyles /><App /><EquipmentRegisterShortcut /></>
+  : <><App /><EquipmentRegisterShortcut /></>
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
