@@ -1,9 +1,19 @@
-/* Mobile/tablet-only placement for Equipment spreadsheet controls. */
+/* Mobile/tablet-only spreadsheet placement. Scoped to the mobile renderer. */
 @media (max-width:900px){
-  .equipment-column-menu{position:fixed;left:12px;right:12px;top:auto;bottom:76px;width:auto;max-height:55vh}
-  .equipment-filter-popover{position:fixed;left:12px;right:12px;top:auto;bottom:76px;width:auto;max-width:none;max-height:52vh}
-  .equipment-photo-hover-preview{display:none}
-  .equipment-spreadsheet-bar{position:fixed;right:6px;left:auto;top:50%;bottom:auto;transform:translateY(-50%);z-index:160;width:50px;max-width:50px;padding:5px;margin:0;background:#fff;border:1px solid #cbd5e1;border-radius:9px;box-shadow:0 8px 22px rgba(15,23,42,.16)}
-  .equipment-spreadsheet-copy{display:none}.equipment-spreadsheet-actions{display:grid;grid-template-columns:1fr;gap:5px;width:100%}.equipment-spreadsheet-actions button{width:40px;min-width:40px;min-height:44px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;padding:3px;font:inherit;font-size:9px;line-height:1.1;font-weight:700;white-space:normal;cursor:pointer}.equipment-spreadsheet-actions .save{border-color:#1d4ed8;background:#2563eb;color:#fff}.equipment-spreadsheet-actions button:disabled{opacity:.5;cursor:not-allowed}.equipment-spreadsheet-actions button:last-child{display:none}.equipment-bulk-mode-toggle.active{font-size:0}.equipment-bulk-mode-toggle.active::after{content:"Thoát";font-size:11px;line-height:1}
-  .equipment-inline-input{min-height:44px;min-width:0}.equipment-data-table.spreadsheet-mode td{padding:9px 12px}.equipment-data-table th:first-child,.equipment-data-table td:first-child{min-width:72px;width:72px;max-width:72px}.equipment-data-table th:last-child,.equipment-data-table td:last-child{min-width:58px;width:58px;max-width:58px}
+  .equipment-mobile-workspace .equipment-column-menu{position:fixed;left:12px;right:12px;top:auto;bottom:76px;width:auto;max-height:55vh}
+  .equipment-mobile-workspace .equipment-filter-popover{position:fixed;left:12px;right:12px;top:auto;bottom:76px;width:auto;max-width:none;max-height:52vh}
+  .equipment-mobile-workspace .equipment-photo-hover-preview{display:none}
+  .equipment-mobile-workspace .equipment-spreadsheet-bar{position:fixed;right:6px;left:auto;top:50%;bottom:auto;transform:translateY(-50%);z-index:160;width:50px;max-width:50px;padding:5px;margin:0;background:#fff;border:1px solid #cbd5e1;border-radius:9px;box-shadow:0 8px 22px rgba(15,23,42,.16)}
+  .equipment-mobile-workspace .equipment-spreadsheet-copy{display:none}
+  .equipment-mobile-workspace .equipment-spreadsheet-actions{display:grid;grid-template-columns:1fr;gap:5px;width:100%}
+  .equipment-mobile-workspace .equipment-spreadsheet-actions button{width:40px;min-width:40px;min-height:44px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;padding:3px;font:inherit;font-size:9px;line-height:1.1;font-weight:700;white-space:normal;cursor:pointer}
+  .equipment-mobile-workspace .equipment-spreadsheet-actions .save{border-color:#1d4ed8;background:#2563eb;color:#fff}
+  .equipment-mobile-workspace .equipment-spreadsheet-actions button:disabled{opacity:.5;cursor:not-allowed}
+  .equipment-mobile-workspace .equipment-spreadsheet-actions button:last-child{display:none}
+  .equipment-mobile-workspace .equipment-bulk-mode-toggle.active{font-size:0}
+  .equipment-mobile-workspace .equipment-bulk-mode-toggle.active::after{content:"Thoát";font-size:11px;line-height:1}
+  .equipment-mobile-workspace .equipment-inline-input{min-height:44px;min-width:0}
+  .equipment-mobile-workspace .equipment-data-table.spreadsheet-mode td{padding:9px 12px}
+  .equipment-mobile-workspace .equipment-data-table th:first-child,.equipment-mobile-workspace .equipment-data-table td:first-child{min-width:72px;width:72px;max-width:72px}
+  .equipment-mobile-workspace .equipment-data-table th:last-child,.equipment-mobile-workspace .equipment-data-table td:last-child{min-width:58px;width:58px;max-width:58px}
 }
