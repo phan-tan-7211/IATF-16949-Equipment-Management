@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { LiveEquipment } from '../../data/liveEquipment'
 import {
   COLUMN_STORAGE_KEY,
@@ -21,7 +21,6 @@ export function useEquipmentTableState(rows: LiveEquipment[]) {
   const [filterSearch, setFilterSearch] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({})
   const [photoHover, setPhotoHover] = useState<PhotoHover | null>(null)
-  const columnPickerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(visibleColumns))
@@ -30,8 +29,7 @@ export function useEquipmentTableState(rows: LiveEquipment[]) {
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target
-      if (!(target instanceof Node)) return
-      if (columnPickerRef.current && !columnPickerRef.current.contains(target)) setColumnPickerOpen(false)
+      if (!(target instanceof Element) || !target.closest('.equipment-column-picker')) setColumnPickerOpen(false)
       if (!(target instanceof Element) || !target.closest('.equipment-filter-popover,.equipment-filter-button,.equipment-mobile-filter-field,.equipment-mobile-filter-panel')) {
         setFilterColumn(null)
         setFilterSearch('')
@@ -110,7 +108,6 @@ export function useEquipmentTableState(rows: LiveEquipment[]) {
     filterSearch, setFilterSearch,
     columnFilters, setColumnFilters,
     photoHover, setPhotoHover,
-    columnPickerRef,
     activeFilterCount,
     sortedRows,
     toggleSort,
