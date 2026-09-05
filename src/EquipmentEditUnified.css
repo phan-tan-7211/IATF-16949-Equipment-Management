@@ -11,15 +11,17 @@
 .equipment-edit-grid-unified .equipment-edit-system-id{grid-column:1/-1;padding:9px 10px;border:1px dashed var(--color-border);border-radius:9px;background:var(--color-surface)}
 .equipment-edit-grid-unified .equipment-edit-system-id input{border:0;padding:0;min-height:auto;background:transparent;color:var(--color-text);font-size:16px;font-weight:800}
 
-/* Registration places the photo after the main fields and before criticality; Edit now follows the same visual flow. */
-.equipment-edit-photo{order:2;display:grid!important;grid-template-columns:1fr!important;gap:7px!important;align-items:start!important;margin:0 16px 12px;padding:7px!important;border:1px solid var(--color-border)!important;border-radius:9px;background:var(--color-surface)!important;overflow:hidden}
+/* Registration places the photo after the main fields and before criticality; Edit follows the same flow but keeps all image-management actions visible. */
+.equipment-edit-photo{order:2;display:grid!important;grid-template-columns:1fr!important;gap:7px!important;align-items:start!important;margin:0 16px 12px;padding:7px!important;border:1px solid var(--color-border)!important;border-radius:9px;background:var(--color-surface)!important;overflow:visible!important}
+.equipment-edit-photo::before{content:"Ảnh thiết bị";display:block;font-size:11px;font-weight:800;color:var(--color-text-muted);line-height:1.3}
 .equipment-edit-photo>img,.equipment-edit-photo>.equipment-edit-photo-empty{display:block;width:100%!important;height:130px!important;min-width:0!important;max-width:100%!important;max-height:130px!important;box-sizing:border-box;border-radius:7px!important;border:0!important;background:var(--color-surface-subtle);object-fit:contain!important;object-position:center!important}
 .equipment-edit-photo>.equipment-edit-photo-empty{display:grid;place-items:center;color:var(--color-text-muted);font-size:11px}
-.equipment-edit-photo-actions{display:grid!important;grid-template-columns:1fr 1fr;gap:7px!important;min-width:0}
-.equipment-edit-photo-actions button,.equipment-edit-photo-picker{display:flex!important;align-items:center;justify-content:center;min-height:32px;box-sizing:border-box;border:1px solid var(--color-border)!important;border-radius:7px!important;background:var(--color-surface)!important;color:var(--color-text)!important;padding:0 9px!important;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.equipment-edit-photo-actions{display:grid!important;grid-template-columns:1fr 1fr;gap:7px!important;min-width:0;width:100%}
+.equipment-edit-photo-actions button,.equipment-edit-photo-picker{display:flex!important;visibility:visible!important;opacity:1;align-items:center;justify-content:center;width:100%;min-width:0;min-height:34px;box-sizing:border-box;border:1px solid var(--color-border)!important;border-radius:7px!important;background:var(--color-surface)!important;color:var(--color-text)!important;padding:0 9px!important;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
 .equipment-edit-photo-actions button:first-child{grid-column:1/-1;border-color:var(--color-primary)!important;background:var(--color-primary)!important;color:#fff!important}
-.equipment-edit-photo-actions .equipment-edit-photo-delete{border-color:color-mix(in srgb,var(--color-danger-fg) 35%,var(--color-border))!important;color:var(--color-danger-fg)!important;background:var(--color-surface)!important}
-.equipment-edit-photo-picker input{display:none}
+.equipment-edit-photo-actions .equipment-edit-photo-delete{display:flex!important;border-color:color-mix(in srgb,var(--color-danger-fg) 35%,var(--color-border))!important;color:var(--color-danger-fg)!important;background:var(--color-surface)!important}
+.equipment-edit-photo-picker{position:relative;overflow:hidden}
+.equipment-edit-photo-picker input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;clip-path:inset(50%)!important}
 .equipment-edit-photo-actions small{grid-column:1/-1;color:var(--color-text-muted);font-size:10px;line-height:1.35}
 
 /* Criticality block mirrors Registration density and sequence. */
@@ -50,8 +52,8 @@
   .equipment-edit-photo{margin:0 12px 12px}
   .equipment-edit-photo>img,.equipment-edit-photo>.equipment-edit-photo-empty{height:115px!important;max-height:115px!important}
   .equipment-edit-criticality{margin:0 12px 12px!important}
-  .equipment-edit-photo-actions{grid-template-columns:1fr}
-  .equipment-edit-photo-actions button:first-child,.equipment-edit-photo-actions small{grid-column:auto}
+  .equipment-edit-photo-actions{grid-template-columns:1fr 1fr}
+  .equipment-edit-photo-actions button:first-child,.equipment-edit-photo-actions small{grid-column:1/-1}
   .equipment-drawer>footer{padding:10px 12px!important}
   .equipment-drawer-footer-actions{display:grid;grid-template-columns:1fr 1fr;flex:1}
   .equipment-drawer>footer button{min-height:44px}
