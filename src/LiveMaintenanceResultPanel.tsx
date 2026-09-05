@@ -15,7 +15,18 @@ export function LiveMaintenanceResultPanel() {
   const [selectedWo, setSelectedWo] = useState(''); const [executionDate, setExecutionDate] = useState(today()); const [periodicFrequency, setPeriodicFrequency] = useState(''); const [inspectionDepartment, setInspectionDepartment] = useState('Bảo trì'); const [items, setItems] = useState<DraftItem[]>([]); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState('')
 
   const refresh = async () => { const [maintenance, execution] = await Promise.all([loadLiveMaintenance(), loadMaintenanceExecutionResults()]); setWorkOrders(maintenance.workOrders.filter((row) => row.status === 'IN_PROGRESS' || row.status === 'COMPLETED')); setPlans(maintenance.plans); setResults(execution) }
-  useEffect(() => { void refresh().catch((cause) => setError(cause instanceof Error ? cause.message : 'Không thể tải BM08')) }, [])
+  useEffect(() => {
+    let active = true
+    void Promise.all([loadLiveMaintenance(), loadMaintenanceExecutionResults()])
+      .then(([maintenance, execution]) => {
+        if (!active) return
+        setWorkOrders(maintenance.workOrders.filter((row) => row.status === 'IN_PROGRESS' || row.status === 'COMPLETED'))
+        setPlans(maintenance.plans)
+        setResults(execution)
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải BM08') })
+    return () => { active = false }
+  }, [])
   const workOrder = useMemo(() => workOrders.find((row) => row.workOrderId === selectedWo) || null, [workOrders, selectedWo])
   const chooseWorkOrder = (workOrderId: string) => { setSelectedWo(workOrderId); setMessage(''); setError(''); const wo = workOrders.find((row) => row.workOrderId === workOrderId); const plan = wo ? plans.find((row) => row.equipmentId === wo.equipmentId && row.active) : undefined; setPeriodicFrequency(plan?.frequency || ''); setItems((plan?.items || []).map((item) => ({ itemName: item.itemName, resultMark: '○', repairContent: '', maintenanceContent: '', inspector: '' }))) }
   const updateItem = (index: number, patch: Partial<DraftItem>) => setItems((current) => current.map((item, i) => i === index ? { ...item, ...patch } : item))
