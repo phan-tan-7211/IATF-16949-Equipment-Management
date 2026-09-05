@@ -22,7 +22,18 @@ export function LiveDowntimePanel() {
   const [month, setMonth] = useState(currentMonth()); const [report, setReport] = useState<DowntimeMonthlyReport | null>(null); const [equipment, setEquipment] = useState<MaintenanceEquipmentOption[]>([]); const [draft, setDraft] = useState<DowntimeInput | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [message, setMessage] = useState('')
 
   const refresh = async (targetMonth = month) => { const [nextReport, maintenance] = await Promise.all([loadDowntimeMonthlyReport(targetMonth), loadLiveMaintenance()]); setReport(nextReport); setEquipment(maintenance.equipment); setError('') }
-  useEffect(() => { void refresh(month).catch((cause) => setError(cause instanceof Error ? cause.message : 'Không thể tải BM06')) }, [month])
+  useEffect(() => {
+    let active = true
+    void Promise.all([loadDowntimeMonthlyReport(month), loadLiveMaintenance()])
+      .then(([nextReport, maintenance]) => {
+        if (!active) return
+        setReport(nextReport)
+        setEquipment(maintenance.equipment)
+        setError('')
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải BM06') })
+    return () => { active = false }
+  }, [month])
   const causeLabel = useMemo(() => new Map(CAUSES.map((item) => [item.value, item.label])), [])
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!draft || !canWrite) return; setBusy(true); setError(''); setMessage(''); try { const result = await upsertDowntimeEvent(draft); setMessage(`Đã lưu sự kiện dừng máy ${result.downtimeId}`); setDraft(null); await refresh() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể lưu BM06') } finally { setBusy(false) } }
 
