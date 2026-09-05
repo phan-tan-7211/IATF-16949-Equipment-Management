@@ -45,20 +45,22 @@ export function EquipmentMasterEditFields({ value, suggestions, onChange }: Prop
   }, [value.equipmentId])
 
   const mergedSuggestions = useMemo<EquipmentMasterSuggestions>(() => {
-    const orgDepartments = getOrgAutocompleteOptions('managingDepartment')
-    const orgPeople = getOrgAutocompleteOptions('managementResponsiblePrimary')
-    const orgAreas = getOrgAutocompleteOptions('currentArea')
-    const orgLines = getOrgAutocompleteOptions('currentLine')
+    const context = { managingDepartment: value.managingDepartment, usingDepartment: value.department }
+    const orgDepartments = getOrgAutocompleteOptions('managingDepartment', context)
+    const orgPrimaryPeople = getOrgAutocompleteOptions('managementResponsiblePrimary', context)
+    const orgSecondaryPeople = getOrgAutocompleteOptions('managementResponsibleSecondary', context)
+    const orgAreas = getOrgAutocompleteOptions('currentArea', context)
+    const orgLines = getOrgAutocompleteOptions('currentLine', context)
     return {
       ...suggestions,
       department: orgDepartments.length ? orgDepartments : suggestions.department,
       managingDepartment: orgDepartments.length ? orgDepartments : suggestions.managingDepartment,
-      managementResponsiblePrimary: orgPeople.length ? orgPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsiblePrimary,
-      managementResponsibleSecondary: orgPeople.length ? orgPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsibleSecondary,
+      managementResponsiblePrimary: orgPrimaryPeople.length ? orgPrimaryPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsiblePrimary,
+      managementResponsibleSecondary: orgSecondaryPeople.length ? orgSecondaryPeople : responsibleSuggestions.length ? responsibleSuggestions : suggestions.managementResponsibleSecondary,
       currentArea: orgAreas.length ? orgAreas : suggestions.currentArea,
       currentLine: orgLines.length ? orgLines : suggestions.currentLine,
     }
-  }, [responsibleSuggestions, suggestions])
+  }, [responsibleSuggestions, suggestions, value.department, value.managingDepartment])
 
   function setField<K extends keyof EquipmentMasterEditInput>(key: K, nextValue: EquipmentMasterEditInput[K]) {
     onChange({ ...value, [key]: nextValue })
