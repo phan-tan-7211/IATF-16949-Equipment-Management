@@ -1,6 +1,14 @@
 # Equipment UI architecture
 
-Equipment follows the same principle used by the reference apps: one shared business model, separate platform renderers.
+Equipment follows one shared business model with separate platform renderers when desktop/mobile task flow differs.
+
+Mandatory references before architecture/UI changes:
+
+- `AGENTS.md`
+- `.agents/skills/platform-ui-architecture/SKILL.md`
+- `.agents/skills/ui-ux-pro-max/SKILL.md`
+- `docs/FRONTEND_PLATFORM_ARCHITECTURE.md`
+- `docs/UI_UX_REFERENCE.md`
 
 ## Runtime entry point
 
@@ -26,7 +34,7 @@ Desktop must never import mobile UI/CSS. Mobile must never import desktop UI/CSS
 
 Do not duplicate these rules in desktop/mobile renderers.
 
-Shared field/control components are also allowed when the business model must remain identical, for example registration/edit fields, autocomplete, status semantics and the immutable equipment-image contract.
+Shared field/control components are allowed when the business/interaction contract is identical, for example registration/edit fields, autocomplete, status semantics and the immutable equipment-image contract. Shared primitives must not call Supabase directly and must not own platform page composition.
 
 ## Desktop ownership
 
@@ -49,7 +57,7 @@ Mobile presentation files:
 - `mobile/EquipmentMobileSheet.css`
 - `mobile/EquipmentMobileForms.css`
 
-Mobile owns its title, summary, 3-column quick actions, search/tools, full-width list/table viewport, touch targets, bottom-nav safe area and mobile drawer geometry. Do not repair mobile by overriding desktop DOM.
+Mobile owns its title, summary, quick actions, search/tools, full-width list/table viewport, touch targets, bottom-nav safe area and mobile drawer geometry. Do not repair mobile by overriding desktop DOM.
 
 Registration is a shared business component but its drawer is portaled to `document.body`; therefore mobile-only portal placement rules may be unscoped inside `EquipmentMobileForms.css`. That stylesheet is loaded only from the mobile workspace.
 
@@ -66,8 +74,22 @@ Viewport/page composition, spacing, widths, positioning and breakpoint behavior 
 
 There is no undefined 641–900px ownership range.
 
-## Regression rule
+## Regression guard
 
-Do not recreate a mixed `LiveEquipmentPanel` that renders one DOM tree and relies on desktop/mobile CSS overrides. If desktop and mobile need different UX, create/change the corresponding renderer while keeping business rules in the shared controller.
+Do not recreate a mixed `LiveEquipmentPanel` that renders one DOM tree and relies on desktop/mobile CSS overrides. If desktop and mobile need different UX, change the corresponding renderer while keeping business rules in the shared controller.
 
-Required verification remains 375, 440, 768, 1024 and 1440 px per `AGENTS.md` and `docs/UI_UX_REFERENCE.md`.
+Run the architecture guard after Equipment layout/refactor work:
+
+```bash
+npm run test:architecture
+```
+
+The guard checks:
+
+- legacy mixed panel does not return;
+- desktop/mobile do not import each other;
+- shared controller code does not import platform renderers;
+- shared primitive CSS does not regain viewport media-query ownership;
+- the 901px platform contract remains explicit and documented.
+
+Required local UI verification remains 375, 440, 768, 1024 and 1440 px.
