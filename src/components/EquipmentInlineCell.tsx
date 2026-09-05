@@ -24,6 +24,9 @@ const AUTOCOMPLETE_KEY_MAP: Partial<Record<string, EquipmentMasterSuggestionKey>
   currentLine: 'currentLine',
 }
 
+type RowOrgContext = { managingDepartment: string; usingDepartment: string }
+const rowOrgContext = new Map<string, RowOrgContext>()
+
 let cachedLength = -1
 let cachedFirstRow: LiveEquipment | undefined
 let cachedLastRow: LiveEquipment | undefined
@@ -44,20 +47,36 @@ function equipmentSuggestionOptions(columnKey: string) {
   return cachedSuggestions[suggestionKey]
 }
 
-function autocompleteOptions(columnKey: string, equipment: LiveEquipment) {
-  const orgOptions = getOrgAutocompleteOptions(columnKey, {
-    managingDepartment: equipment.managingDepartment,
-    usingDepartment: equipment.usingDepartment,
-  })
+function contextFor(equipment: LiveEquipment, columnKey: string, value: string | boolean | undefined) {
+  const existing = rowOrgContext.get(equipment.equipmentId) || {
+    managingDepartment: equipment.managingDepartment || '',
+    usingDepartment: equipment.usingDepartment || '',
+  }
+  const next = { ...existing }
+  if (columnKey === 'managingDepartment') next.managingDepartment = String(value ?? '')
+  if (columnKey === 'usingDepartment') next.usingDepartment = String(value ?? '')
+  rowOrgContext.set(equipment.equipmentId, next)
+  return next
+}
+
+function autocompleteOptions(columnKey: string, equipment: LiveEquipment, value: string | boolean | undefined) {
+  const orgOptions = getOrgAutocompleteOptions(columnKey, contextFor(equipment, columnKey, value))
   if (orgOptions.length) return orgOptions
   return equipmentSuggestionOptions(columnKey)
 }
 
 export function EquipmentInlineCell({ equipment, columnKey, label, value, onChange }: Props) {
   const ariaLabel = `${label} · ${equipment.equipmentId}`
+  const handleChange = (nextValue: string | boolean) => {
+    if (columnKey === 'managingDepartment' || columnKey === 'usingDepartment') {
+      const current = contextFor(equipment, columnKey, nextValue)
+      rowOrgContext.set(equipment.equipmentId, current)
+    }
+    onChange(nextValue)
+  }
 
   if (columnKey === 'status') {
-    return <select className="equipment-inline-input" aria-label={ariaLabel} value={String(value || 'RUNNING')} onChange={(event) => onChange(event.target.value)}>
+    return <select className="equipment-inline-input" aria-label={ariaLabel} value={String(value || 'RUNNING')} onChange={(event) => handleChange(event.target.value)}>
       <option value="RUNNING">Hoạt động</option>
       <option value="DOWN">Sự cố</option>
       <option value="MAINTENANCE">Bảo trì</option>
@@ -68,7 +87,7 @@ export function EquipmentInlineCell({ equipment, columnKey, label, value, onChan
   }
 
   if (columnKey === 'defaultLabelSize') {
-    return <select className="equipment-inline-input" aria-label={ariaLabel} value={String(value || 'standard')} onChange={(event) => onChange(event.target.value)}>
+    return <select className="equipment-inline-input" aria-label={ariaLabel} value={String(value || 'standard')} onChange={(event) => handleChange(event.target.value)}>
       <option value="tiny">15 × 25 mm</option>
       <option value="standard">30 × 50 mm</option>
       <option value="large">45 × 80 mm</option>
@@ -76,28 +95,28 @@ export function EquipmentInlineCell({ equipment, columnKey, label, value, onChan
   }
 
   if (columnKey === 'active') {
-    return <select className="equipment-inline-input" aria-label={ariaLabel} value={value === false ? 'false' : 'true'} onChange={(event) => onChange(event.target.value === 'true')}>
+    return <select className="equipment-inline-input" aria-label={ariaLabel} value={value === false ? 'false' : 'true'} onChange={(event) => handleChange(event.target.value === 'true')}>
       <option value="true">Đang quản lý</option>
       <option value="false">Ngừng quản lý</option>
     </select>
   }
 
   if (BOOLEAN_KEYS.has(columnKey)) {
-    return <select className="equipment-inline-input" aria-label={ariaLabel} value={value === true ? 'true' : value === false ? 'false' : ''} onChange={(event) => onChange(event.target.value === 'true')}>
+    return <select className="equipment-inline-input" aria-label={ariaLabel} value={value === true ? 'true' : value === false ? 'false' : ''} onChange={(event) => handleChange(event.target.value === 'true')}>
       <option value="">Chọn…</option>
       <option value="true">Có</option>
       <option value="false">Không</option>
     </select>
   }
 
-  const options = autocompleteOptions(columnKey, equipment)
+  const options = autocompleteOptions(columnKey, equipment, value)
   if (options.length) {
     return <SmartAutocomplete
       className="equipment-inline-input"
       aria-label={ariaLabel}
       value={String(value ?? '')}
       options={options}
-      onChange={onChange}
+      onChange={handleChange}
       onFocus={(event) => event.currentTarget.select()}
       autoComplete="off"
       maxOptions={30}
@@ -109,7 +128,7 @@ export function EquipmentInlineCell({ equipment, columnKey, label, value, onChan
     type={DATE_KEYS.has(columnKey) ? 'date' : 'text'}
     aria-label={ariaLabel}
     value={String(value ?? '')}
-    onChange={(event) => onChange(event.target.value)}
+    onChange={(event) => handleChange(event.target.value)}
     onFocus={(event) => event.currentTarget.select()}
     autoComplete="off"
   />
