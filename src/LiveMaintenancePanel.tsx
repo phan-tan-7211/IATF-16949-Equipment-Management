@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './Maintenance.css'
 import { canCreateMaintenance, canTransitionMaintenance, useAppRole } from './auth/AppRoleContext'
@@ -44,16 +44,16 @@ export function LiveMaintenancePanel() {
   const [reason, setReason] = useState('')
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM')
 
-  const applyResult = (result: Awaited<ReturnType<typeof loadLiveMaintenance>>) => {
+  const applyResult = useCallback((result: Awaited<ReturnType<typeof loadLiveMaintenance>>) => {
     setEquipment(result.equipment)
     setPlans(result.plans)
     setWorkOrders(result.workOrders)
     setHandovers(result.handovers)
     setEquipmentId((current) => current || result.equipment[0]?.equipmentId || '')
     setError('')
-  }
+  }, [])
 
-  const refresh = async () => applyResult(await loadLiveMaintenance())
+  const refresh = useCallback(async () => applyResult(await loadLiveMaintenance()), [applyResult])
 
   useEffect(() => {
     let active = true
@@ -62,7 +62,7 @@ export function LiveMaintenancePanel() {
       .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải dữ liệu bảo trì') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [applyResult])
 
   useEffect(() => {
     if (!selectedId && !createOpen) return
