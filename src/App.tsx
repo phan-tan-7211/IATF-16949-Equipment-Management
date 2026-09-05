@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import './App.css'
 import './MobileUx.css'
@@ -40,36 +40,36 @@ const ROLE_LABEL: Record<AppRole,string> = { MAINTENANCE:'Bảo trì', SUPERVISO
 function initialView():View{const requested=new URLSearchParams(window.location.search).get('phase3');if(requested==='qr'||requested==='equipment'||requested==='inventory'||requested==='dashboard'||requested==='inspection'||requested==='maintenance'||requested==='spare'||requested==='tooling'||requested==='calibration'||requested==='print'||requested==='organization')return requested;if(requested==='audit')return'settings';return'dashboard'}
 function initialEquipmentTarget(){return new URLSearchParams(window.location.search).get('equipment')?.trim().toUpperCase()||''}
 function normalizeRole(value:string):AppRole{return['MAINTENANCE','SUPERVISOR','QUALITY','MANAGER','ADMIN'].includes(value)?value as AppRole:'UNKNOWN'}
+function permittedView(nextView:View,role:AppRole):View{return(nextView==='settings'||nextView==='organization')&&!canViewAudit(role)?'dashboard':nextView}
+function syncUrl(nextView:View,equipmentId=''){
+  const url=new URL(window.location.href)
+  url.searchParams.set('phase3',nextView==='settings'?'audit':nextView)
+  if(equipmentId)url.searchParams.set('equipment',equipmentId)
+  else url.searchParams.delete('equipment')
+  window.history.replaceState({},'',url)
+}
 function LiveView({view,equipmentTarget,onOpenEquipment,onCloseQrResult,onEditQrResult,onNavigate}:{view:View;equipmentTarget:string;onOpenEquipment:(equipmentId:string)=>void;onCloseQrResult:()=>void;onEditQrResult:()=>void;onNavigate:(view:View)=>void}){if(view==='dashboard')return <LiveDashboardPanel onNavigate={onNavigate}/>;if(view==='qr')return <LiveQrScannerPanel onOpenEquipment={onOpenEquipment}/>;if(view==='equipment'&&equipmentTarget)return <QrEquipmentResult equipmentId={equipmentTarget} onClose={onCloseQrResult} onEdit={onEditQrResult}/>;if(view==='equipment')return <EquipmentWorkspace/>;if(view==='inventory')return <LiveEquipmentInventoryPanel/>;if(view==='inspection')return <LiveInspectionPanel/>;if(view==='maintenance')return <div className="maintenance-workspace-stack"><LiveMaintenancePlanPanel/><LiveMaintenanceResultPanel/><LiveHandoverPanel/><LiveDowntimePanel/><LiveMaintenancePanel/></div>;if(view==='spare')return <LiveSparePartsAutoPanel/>;if(view==='tooling')return <LiveToolingPanel/>;if(view==='calibration')return <div className="maintenance-workspace-stack"><LiveCalibrationPanel/><LiveCalibrationEvaluationPanel/><LiveCalibrationQuotePanel/></div>;if(view==='print')return <A4PrintCenter/>;if(view==='organization')return <OrgManagementPanel/>;return <LiveAuditPanel/>}
 export default function App() { return <><PwaStatus/><AuthGate>{(session, signOut) => <AppWorkspace session={session} signOut={signOut}/>}</AuthGate></> }
 function AppWorkspace({session,signOut}:{session:LiveSession;signOut:()=>Promise<void>}){
-  const initial=initialView()
+  const role=normalizeRole(session.role)
+  const initial=permittedView(initialView(),role)
   const[view,setView]=useState<View>(initial)
   const[visitedViews,setVisitedViews]=useState<Set<View>>(()=>new Set([initial]))
   const[equipmentTarget,setEquipmentTarget]=useState(initialEquipmentTarget)
   const[returnEquipmentId,setReturnEquipmentId]=useState('')
   const[mobileMoreOpen,setMobileMoreOpen]=useState(false)
-  const role=normalizeRole(session.role)
   const sessionEmail=session.email
   const roleLoaded=true
 
-  function markVisited(nextView:View){setVisitedViews((current)=>current.has(nextView)?current:new Set([...current,nextView]))}
-  useEffect(()=>{if(roleLoaded&&(view==='settings'||view==='organization')&&!canViewAudit(role)){markVisited('dashboard');setView('dashboard')}},[role,roleLoaded,view])
+  const markVisited=useCallback((nextView:View)=>{setVisitedViews((current)=>current.has(nextView)?current:new Set([...current,nextView]))},[])
 
   const visibleNav=useMemo(()=>NAV.filter((item)=>!item.adminOnly||canViewAudit(role)),[role])
   const mobileMoreItems=useMemo(()=>visibleNav.filter((item)=>!MOBILE_PRIMARY.some((primary)=>primary.id===item.id)),[visibleNav])
   const mountedViews=useMemo(()=>visibleNav.filter((item)=>visitedViews.has(item.id)),[visibleNav,visitedViews])
 
-  function syncUrl(nextView:View,equipmentId=''){
-    const url=new URL(window.location.href)
-    url.searchParams.set('phase3',nextView==='settings'?'audit':nextView)
-    if(equipmentId)url.searchParams.set('equipment',equipmentId)
-    else url.searchParams.delete('equipment')
-    window.history.replaceState({},'',url)
-  }
   function openEquipmentFromQr(equipmentId:string){setMobileMoreOpen(false);markVisited('equipment');setEquipmentTarget(equipmentId);setView('equipment');syncUrl('equipment',equipmentId)}
-  function openView(nextView:View){setMobileMoreOpen(false);setReturnEquipmentId('');markVisited(nextView);setView(nextView);setEquipmentTarget('');syncUrl(nextView);window.scrollTo({top:0,behavior:'auto'})}
-  function openContextView(nextView:View,equipmentId:string){setMobileMoreOpen(false);setReturnEquipmentId(equipmentId.trim().toUpperCase());markVisited(nextView);setView(nextView);setEquipmentTarget('');syncUrl(nextView);window.scrollTo({top:0,behavior:'auto'})}
+  function openView(requestedView:View){const nextView=permittedView(requestedView,role);setMobileMoreOpen(false);setReturnEquipmentId('');markVisited(nextView);setView(nextView);setEquipmentTarget('');syncUrl(nextView);window.scrollTo({top:0,behavior:'auto'})}
+  const openContextView=useCallback((requestedView:View,equipmentId:string)=>{const nextView=permittedView(requestedView,role);setMobileMoreOpen(false);setReturnEquipmentId(equipmentId.trim().toUpperCase());markVisited(nextView);setView(nextView);setEquipmentTarget('');syncUrl(nextView);window.scrollTo({top:0,behavior:'auto'})},[markVisited,role])
   function backToEquipmentContext(){if(!returnEquipmentId)return;const equipmentId=returnEquipmentId;setReturnEquipmentId('');markVisited('equipment');setEquipmentTarget(equipmentId);setView('equipment');syncUrl('equipment',equipmentId);window.scrollTo({top:0,behavior:'auto'})}
   function closeQrResult(){markVisited('qr');setEquipmentTarget('');setView('qr');syncUrl('qr')}
   function editQrResult(){markVisited('equipment');setEquipmentTarget('');setView('equipment');syncUrl('equipment')}
@@ -82,7 +82,7 @@ function AppWorkspace({session,signOut}:{session:LiveSession;signOut:()=>Promise
     }
     window.addEventListener('cev:navigate',handleNavigate)
     return()=>window.removeEventListener('cev:navigate',handleNavigate)
-  },[])
+  },[openContextView])
 
   const mobileNav=<><nav className="bottom-nav mobile-primary-nav" aria-label="Điều hướng trên điện thoại">{MOBILE_PRIMARY.map((item)=><button key={item.id} type="button" className={`${item.id===view?'active ':''}${item.id==='qr'?'scan-action':''}`.trim()} aria-current={item.id===view?'page':undefined} onClick={()=>openView(item.id)}><span className="mobile-nav-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}<button type="button" className={mobileMoreOpen?'active':''} aria-expanded={mobileMoreOpen} onClick={()=>setMobileMoreOpen((current)=>!current)}><span className="mobile-nav-icon" aria-hidden="true">•••</span><span>Thêm</span></button></nav>{mobileMoreOpen?<div className="mobile-more-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)setMobileMoreOpen(false)}}><section className="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Các chức năng khác"><header><div><p className="eyebrow">Quản lý thiết bị CEV</p><h2>Chức năng khác</h2></div><button type="button" aria-label="Đóng" onClick={()=>setMobileMoreOpen(false)}>×</button></header><div className="mobile-more-grid">{mobileMoreItems.map((item)=><button key={item.id} type="button" className={item.id===view?'active':''} onClick={()=>openView(item.id)}><strong>{item.label}</strong><small>Mở chức năng</small></button>)}</div><div className="mobile-more-account"><strong>{ROLE_LABEL[role]}</strong><span>{sessionEmail||'Xác thực Supabase'}</span><button type="button" onClick={()=>{setMobileMoreOpen(false);void signOut()}}>Đăng xuất</button></div></section></div>:null}</>
 
