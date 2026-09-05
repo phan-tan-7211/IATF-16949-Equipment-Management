@@ -1,16 +1,20 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 
+type EquipmentViewportMode = 'desktop' | 'mobile'
+
 const DesktopEquipmentWorkspace = lazy(() => import('./desktop/EquipmentDesktopWorkspace').then((module) => ({ default: module.EquipmentDesktopWorkspace })))
 const MobileEquipmentWorkspace = lazy(() => import('./mobile/EquipmentMobileWorkspace').then((module) => ({ default: module.EquipmentMobileWorkspace })))
 
-function currentMode() { return window.matchMedia('(min-width: 901px)').matches ? 'desktop' : 'mobile' as const }
+function currentMode(): EquipmentViewportMode {
+  return window.matchMedia('(min-width: 901px)').matches ? 'desktop' : 'mobile'
+}
 
 /**
  * Equipment has two independent presentation entrypoints.
  * Business/data components remain reusable, but desktop/mobile layout ownership is separate.
  */
 export function EquipmentWorkspace() {
-  const [mode, setMode] = useState<'desktop'|'mobile'>(() => currentMode())
+  const [mode, setMode] = useState<EquipmentViewportMode>(() => currentMode())
   useEffect(() => {
     const media = window.matchMedia('(min-width: 901px)')
     const sync = () => setMode(media.matches ? 'desktop' : 'mobile')
