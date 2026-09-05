@@ -1,0 +1,58 @@
+.equipment-drawer-scroll{display:flex;min-height:0;flex:1 1 auto;flex-direction:column;overflow:auto;overscroll-behavior:contain;background:var(--color-surface-subtle)}
+
+/* Match Edit field geometry to Registration: same 2-column drawer grid, spacing and control language. */
+.equipment-edit-grid-unified{order:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px;background:var(--color-surface-subtle);align-items:start}
+.equipment-edit-grid-unified label{display:grid;gap:5px;min-width:0}
+.equipment-edit-grid-unified .equipment-edit-wide{grid-column:1/-1}
+.equipment-edit-grid-unified label span{font-size:11px;font-weight:800;color:var(--color-text-muted);line-height:1.3}
+.equipment-edit-grid-unified input,.equipment-edit-grid-unified select{width:100%;box-sizing:border-box;min-height:33px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);padding:0 9px;font:inherit;color:var(--color-text)}
+.equipment-edit-grid-unified input:focus,.equipment-edit-grid-unified select:focus{outline:2px solid hsl(var(--blue-500)/.25);border-color:hsl(var(--blue-500))}
+.equipment-edit-grid-unified input[readonly]{background:var(--color-surface-subtle);color:var(--color-text-muted)}
+.equipment-edit-grid-unified .equipment-edit-system-id{grid-column:1/-1;padding:9px 10px;border:1px dashed var(--color-border);border-radius:9px;background:var(--color-surface)}
+.equipment-edit-grid-unified .equipment-edit-system-id input{border:0;padding:0;min-height:auto;background:transparent;color:var(--color-text);font-size:16px;font-weight:800}
+
+/* Registration places the photo after the main fields and before criticality; Edit now follows the same visual flow. */
+.equipment-edit-photo{order:2;display:grid!important;grid-template-columns:1fr!important;gap:7px!important;align-items:start!important;margin:0 16px 12px;padding:7px!important;border:1px solid var(--color-border)!important;border-radius:9px;background:var(--color-surface)!important;overflow:hidden}
+.equipment-edit-photo>img,.equipment-edit-photo>.equipment-edit-photo-empty{display:block;width:100%!important;height:130px!important;min-width:0!important;max-width:100%!important;max-height:130px!important;box-sizing:border-box;border-radius:7px!important;border:0!important;background:var(--color-surface-subtle);object-fit:contain!important;object-position:center!important}
+.equipment-edit-photo>.equipment-edit-photo-empty{display:grid;place-items:center;color:var(--color-text-muted);font-size:11px}
+.equipment-edit-photo-actions{display:grid!important;grid-template-columns:1fr 1fr;gap:7px!important;min-width:0}
+.equipment-edit-photo-actions button,.equipment-edit-photo-picker{display:flex!important;align-items:center;justify-content:center;min-height:32px;box-sizing:border-box;border:1px solid var(--color-border)!important;border-radius:7px!important;background:var(--color-surface)!important;color:var(--color-text)!important;padding:0 9px!important;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.equipment-edit-photo-actions button:first-child{grid-column:1/-1;border-color:var(--color-primary)!important;background:var(--color-primary)!important;color:#fff!important}
+.equipment-edit-photo-actions .equipment-edit-photo-delete{border-color:color-mix(in srgb,var(--color-danger-fg) 35%,var(--color-border))!important;color:var(--color-danger-fg)!important;background:var(--color-surface)!important}
+.equipment-edit-photo-picker input{display:none}
+.equipment-edit-photo-actions small{grid-column:1/-1;color:var(--color-text-muted);font-size:10px;line-height:1.35}
+
+/* Criticality block mirrors Registration density and sequence. */
+.equipment-edit-criticality{order:3;margin:0 16px 14px!important;padding:12px!important;border:1px solid var(--color-border)!important;border-radius:10px!important;background:var(--color-surface)!important}
+.equipment-edit-criticality legend{padding:0 6px;font-size:12px;font-weight:900}
+.equipment-edit-criticality>p{margin:0 0 8px;color:var(--color-text-muted);font-size:10px}
+.equipment-edit-criticality-grid{display:grid!important;grid-template-columns:1fr!important;gap:8px!important}
+.equipment-edit-criticality-grid label{display:grid;gap:5px;min-width:0}
+.equipment-edit-criticality-grid label span{font-size:11px;font-weight:800;color:var(--color-text-muted);line-height:1.3}
+.equipment-edit-criticality-grid select{width:100%;box-sizing:border-box;min-height:33px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);padding:0 9px;font:inherit;color:var(--color-text)}
+.equipment-edit-criticality-result{display:grid;gap:3px;margin:9px 0 0;padding:9px 10px;border:1px dashed var(--color-border);border-radius:9px;background:var(--color-surface)}
+.equipment-edit-criticality-result span{font-size:10px;color:var(--color-text-muted)}
+.equipment-edit-criticality-result strong{font-size:18px}
+.equipment-edit-criticality-result.level-a{border-style:solid;background:var(--color-danger-bg);color:var(--color-danger-fg)}
+.equipment-edit-criticality-result.level-b{border-style:solid;background:var(--color-warning-bg);color:var(--color-warning-fg)}
+.equipment-edit-criticality-result.level-c,.equipment-edit-criticality-result.level-d{border-style:solid;background:var(--color-success-bg);color:var(--color-success-fg)}
+
+/* Footer uses the same compact sticky action language as Registration while preserving Delete/Cancel/Save. */
+.equipment-drawer>footer{flex:0 0 auto;display:flex!important;align-items:center;justify-content:space-between!important;gap:9px!important;margin:0!important;padding:11px 16px!important;border-top:1px solid var(--color-border);background:var(--color-surface)}
+.equipment-drawer-footer-actions{display:flex;align-items:center;gap:9px}
+.equipment-drawer>footer button{min-height:33px;padding:0 11px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.equipment-drawer-footer-actions button:last-child{border-color:var(--color-primary);background:var(--color-primary);color:#fff}
+.equipment-drawer>footer .equipment-delete{border-color:color-mix(in srgb,var(--color-danger-fg) 35%,var(--color-border));color:var(--color-danger-fg);background:var(--color-surface)}
+
+@media(max-width:640px){
+  .equipment-edit-grid-unified{grid-template-columns:1fr;padding:12px}
+  .equipment-edit-grid-unified .equipment-edit-wide,.equipment-edit-grid-unified .equipment-edit-system-id{grid-column:auto}
+  .equipment-edit-photo{margin:0 12px 12px}
+  .equipment-edit-photo>img,.equipment-edit-photo>.equipment-edit-photo-empty{height:115px!important;max-height:115px!important}
+  .equipment-edit-criticality{margin:0 12px 12px!important}
+  .equipment-edit-photo-actions{grid-template-columns:1fr}
+  .equipment-edit-photo-actions button:first-child,.equipment-edit-photo-actions small{grid-column:auto}
+  .equipment-drawer>footer{padding:10px 12px!important}
+  .equipment-drawer-footer-actions{display:grid;grid-template-columns:1fr 1fr;flex:1}
+  .equipment-drawer>footer button{min-height:44px}
+}
