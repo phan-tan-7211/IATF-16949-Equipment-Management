@@ -1,9 +1,22 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
+
+function filesUnder(path: string): string[] {
+  const absolute = resolve(root, path)
+  if (!existsSync(absolute)) return []
+  return readdirSync(absolute).flatMap((name) => {
+    const child = `${path}/${name}`
+    return statSync(resolve(root, child)).isDirectory() ? filesUnder(child) : [child]
+  })
+}
+
+function sourceFiles(path: string) {
+  return filesUnder(path).filter((file) => /\.(ts|tsx|css)$/.test(file))
+}
 
 describe('Equipment platform architecture', () => {
   it('routes Equipment through the viewport workspace instead of the legacy mixed panel', () => {
@@ -26,12 +39,30 @@ describe('Equipment platform architecture', () => {
     expect(mobile).not.toContain('LiveEquipmentPanel')
   })
 
-  it('keeps shared controller free of platform presentation imports', () => {
-    const shared = read('src/equipment/shared/useEquipmentPanelController.ts')
-    expect(shared).not.toContain('/desktop/')
-    expect(shared).not.toContain('/mobile/')
-    expect(shared).not.toContain('EquipmentDesktop')
-    expect(shared).not.toContain('EquipmentMobile')
+  it('forbids cross-platform imports anywhere under desktop/mobile', () => {
+    for (const file of sourceFiles('src/equipment/desktop')) {
+      const content = read(file)
+      expect(content, `${file} must not import or reference mobile presentation`).not.toMatch(/(?:from\s+['"][^'"]*\/mobile\/|EquipmentMobile)/)
+    }
+    for (const file of sourceFiles('src/equipment/mobile')) {
+      const content = read(file)
+      expect(content, `${file} must not import or reference desktop presentation`).not.toMatch(/(?:from\s+['"][^'"]*\/desktop\/|EquipmentDesktop)/)
+    }
+  })
+
+  it('keeps shared code free of platform presentation imports and names', () => {
+    for (const file of sourceFiles('src/equipment/shared')) {
+      const content = read(file)
+      expect(content, `${file} must not import desktop presentation`).not.toMatch(/\/desktop\/|EquipmentDesktop/)
+      expect(content, `${file} must not import mobile presentation`).not.toMatch(/\/mobile\/|EquipmentMobile/)
+    }
+  })
+
+  it('keeps shared Equipment primitive styles free of viewport page-layout media queries', () => {
+    for (const file of ['src/Equipment.css', 'src/EquipmentSheetView.css']) {
+      const content = read(file)
+      expect(content, `${file} is shared primitive CSS and must not own viewport layout`).not.toMatch(/@media\s*\(/)
+    }
   })
 
   it('uses one explicit 901px platform boundary', () => {
@@ -39,8 +70,20 @@ describe('Equipment platform architecture', () => {
     const desktopCss = read('src/equipment/desktop/EquipmentDesktop.css')
     const mobileCss = read('src/equipment/mobile/EquipmentMobile.css')
 
-    expect(workspace).toContain("(min-width: 901px)")
+    expect(workspace).toContain('(min-width: 901px)')
     expect(desktopCss).toContain('(min-width:901px)')
     expect(mobileCss).toContain('(max-width:900px)')
+  })
+
+  it('documents the same platform contract in project rules', () => {
+    const agents = read('AGENTS.md')
+    const architecture = read('docs/FRONTEND_PLATFORM_ARCHITECTURE.md')
+    const skill = read('.agents/skills/platform-ui-architecture/SKILL.md')
+
+    for (const content of [agents, architecture, skill]) {
+      expect(content).toContain('901px')
+      expect(content).toContain('desktop')
+      expect(content).toContain('mobile')
+    }
   })
 })
