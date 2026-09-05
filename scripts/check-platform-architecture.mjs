@@ -40,7 +40,7 @@ for (const path of productionSourceFiles) {
   if (body.includes('LiveEquipmentPanel')) report(path, 'legacy mixed LiveEquipmentPanel reference is forbidden')
 
   for (const file of retiredRootStyles) {
-    if (body.includes(`'./${file}'`) || body.includes(`\"./${file}\"`) || body.includes(`'../${file}'`) || body.includes(`\"../${file}\"`) || body.includes(`'../../${file}'`) || body.includes(`\"../../${file}\"`)) {
+    if (body.includes(`'./${file}'`) || body.includes(`"./${file}"`) || body.includes(`'../${file}'`) || body.includes(`"../${file}"`) || body.includes(`'../../${file}'`) || body.includes(`"../../${file}"`)) {
       report(path, `${file} is retired; import equipment-owned styles directly`)
     }
   }
