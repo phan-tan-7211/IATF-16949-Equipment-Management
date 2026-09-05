@@ -137,10 +137,6 @@ export function LiveEquipmentInventoryPanel() {
   useEffect(() => {
     let active = true
     const existing = getEquipmentInventoryCacheSnapshot()
-    if (existing) {
-      setSnapshot(existing)
-      setLoading(false)
-    }
     void loadEquipmentInventory({ force: Boolean(existing) })
       .then((result) => {
         if (!active) return
@@ -274,9 +270,9 @@ export function LiveEquipmentInventoryPanel() {
         status,
         source: selectedSource,
         labelOk: labelOk ?? null,
-        actualArea: area || null,
-        actualLine: line || null,
-        note: note.trim() || null,
+        actualArea: area || undefined,
+        actualLine: line || undefined,
+        note: note.trim() || undefined,
       })
       refreshFromCache()
       setMessage(`Đã ghi ${selectedEquipment.equipmentId}: ${STATUS_LABEL[status]}.`)
@@ -321,7 +317,7 @@ export function LiveEquipmentInventoryPanel() {
     </div>
 
     {activeSession?.status === 'OPEN' ? <div className="equipment-inventory-workspace">
-      {mode === 'SCAN' ? <div className="equipment-inventory-scanner"><LiveQrScannerPanel key={scannerKey} onEquipmentScanned={(equipmentId) => selectEquipment(equipmentId, 'QR')} /></div> : <div className="equipment-inventory-manual">
+      {mode === 'SCAN' ? <div className="equipment-inventory-scanner"><LiveQrScannerPanel key={scannerKey} onOpenEquipment={(equipmentId: string) => selectEquipment(equipmentId, 'QR')} /></div> : <div className="equipment-inventory-manual">
         <input type="search" value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Tìm gần đúng: mã, tên máy, khu vực, line…" autoFocus />
         <div className="equipment-inventory-manual-results">
           {manualMatches.map((equipment) => {
@@ -352,6 +348,6 @@ export function LiveEquipmentInventoryPanel() {
       </aside> : null}
     </div> : <div className="equipment-inventory-closed-note">Kỳ này đã đóng. Chọn kỳ đang mở hoặc tạo kỳ mới để tiếp tục kiểm kê.</div>}
 
-    {abnormalResults.length ? <section className="equipment-inventory-abnormal"><h3>Bất thường gần nhất</h3><div>{abnormalResults.map((item) => <article key={item.resultId}><strong>{item.equipmentId}</strong><span>{STATUS_LABEL[item.status]}</span><small>{item.actualArea || item.actualLine ? `${item.actualArea || '—'} · ${item.actualLine || '—'}` : formatDate(item.checkedAt)}</small></article>)}</div></section> : null}
+    {abnormalResults.length ? <section className="equipment-inventory-abnormal"><h3>Bất thường gần nhất</h3><div>{abnormalResults.map((item) => <article key={`${item.sessionId}:${item.equipmentId}`}><strong>{item.equipmentId}</strong><span>{STATUS_LABEL[item.status]}</span><small>{item.actualArea || item.actualLine ? `${item.actualArea || '—'} · ${item.actualLine || '—'}` : formatDate(item.checkedAt)}</small></article>)}</div></section> : null}
   </section>
 }
