@@ -1,4 +1,4 @@
-import '../../equipment/desktop/EquipmentDesktop.css'
+import './EquipmentDesktop.css'
 import { LiveEquipmentRegistrationPanel } from '../../LiveEquipmentRegistrationPanel'
 import { LiveEquipmentPanel } from '../../LiveEquipmentPanel'
 
