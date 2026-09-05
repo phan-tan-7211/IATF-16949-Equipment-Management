@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LiveEquipment } from '../../data/liveEquipment'
 import {
   COLUMN_STORAGE_KEY,
-  COLUMNS,
   columnValue,
   includesQuery,
   loadVisibleColumns,
@@ -62,7 +61,7 @@ export function useEquipmentTableState(rows: LiveEquipment[]) {
     return true
   }), [rows, query, columnFilters])
 
-  const sortedRows = useMemo(() => [...filteredRows].sort((a, b) => {
+  const sortedRows = useMemo(() => filteredRows.toSorted((a, b) => {
     const result = columnValue(a, sortKey).localeCompare(columnValue(b, sortKey), 'vi', { numeric: true, sensitivity: 'base' })
     return sortDirection === 'asc' ? result : -result
   }), [filteredRows, sortKey, sortDirection])
@@ -81,7 +80,7 @@ export function useEquipmentTableState(rows: LiveEquipment[]) {
 
   function filterOptions(key: ColumnKey) {
     return Array.from(new Set(rows.map((row) => columnValue(row, key) || '—')))
-      .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true, sensitivity: 'base' }))
+      .toSorted((a, b) => a.localeCompare(b, 'vi', { numeric: true, sensitivity: 'base' }))
   }
 
   function toggleFilterValue(key: ColumnKey, value: string) {
